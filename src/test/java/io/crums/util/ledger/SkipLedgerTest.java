@@ -8,6 +8,7 @@ import static io.crums.util.ledger.SkipLedger.*;
 import static org.junit.Assert.*;
 
 import  org.junit.Test;
+
 /**
  * 
  */
@@ -52,6 +53,31 @@ public class SkipLedgerTest {
     
     assertEquals(sum, cellNumber(rowNumber));
   }
+  
+  
+  
+  @Test
+  public void testMaxRows() {
+    // making this value large doesn't make much difference in execution time;
+    // it gets jit'ed away
+    // LOL
+    final int maxCount = 100025;
+    for (int c = 0; c < maxCount; ++c)
+      testMaxRows(c);
+    
+    for (long c = Integer.MAX_VALUE, count = maxCount; count-- > 0; ++c)
+      testMaxRows(c);
+  }
+  
+  
+  private void testMaxRows(long cells) {
+    long rows = maxRows(cells);
+    assertTrue(cells >= cellNumber(rows + 1));
+    assertTrue(cells < cellNumber(rows + 2));
+  }
+  
+  
+  
   
 }
 

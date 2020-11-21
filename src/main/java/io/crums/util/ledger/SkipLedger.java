@@ -53,7 +53,8 @@ public abstract class SkipLedger {
   public final static int SHA256_WIDTH = 32;
   
   
-  private final static byte[] SHA256_SENTINEL_HASH = new byte[SHA256_WIDTH];
+  private final static ByteBuffer SHA256_SENTINEL_HASH =
+      ByteBuffer.allocate(SHA256_WIDTH).asReadOnlyBuffer();
   
   
   
@@ -79,7 +80,7 @@ public abstract class SkipLedger {
   }
   
   /**
-   * Returns the number of skip pointer at the given row number.
+   * Returns the number of skip pointers at the given row number.
    * 
    * @param rowNumber &gt; 0
    * @return &ge; 1 (with average value of 2)
@@ -99,8 +100,29 @@ public abstract class SkipLedger {
   
   
   
-  
-  
+  /**
+   * Returns the maximum number of rows that can be fitted in a ledger with the given number
+   * of cells.
+   *  
+   * @param cells &ge; 0
+   * 
+   * @return non-negative
+   */
+  public static long maxRows(long cells) {
+    
+    if (cells < 0)
+      throw new IllegalArgumentException("negative cells: " + cells);
+
+    // total number of cells never exceeds 3 times the number of rows
+    // so the following estimate is never too many
+    long rowsEstimate = cells / 3;
+    
+    // while the required number of cells for the *next higher estimate is <= cells
+    while (cellNumber(rowsEstimate + 2) <= cells)
+      ++rowsEstimate;
+    
+    return rowsEstimate;
+  }
   
   
   
@@ -112,7 +134,8 @@ public abstract class SkipLedger {
   
   /**
    * Returns the number of rows in this ledger. Recall the row numbers are one-based,
-   * so the return value also represents that last existing row number.
+   * so if the ledger is not empty, then the return value also represents that last existing
+   * row number.
    * 
    * @return &ge; 0
    */
@@ -171,7 +194,8 @@ public abstract class SkipLedger {
    * @param index the starting cell index (&ge; 0)
    * @param count the number of cells to return (&ge; 2)
    * 
-   * @return a contiguous block of memory
+   * @return a buffer with <tt>count * </tt> {@linkplain #hashWidth()} <em>remaining</em> bytes.
+   *    the returned buffer may be read-only
    */
   protected abstract ByteBuffer getCells(long index, int count);
   
@@ -186,98 +210,164 @@ public abstract class SkipLedger {
   
   
   
-  
-  public final ByteBuffer getRow(long rowNumber) {
+  /**
+   * Returns the given row. Each row consists of multiple [hash] cells (each
+   * {@linkplain #hashWidth()} bytes wide). The first cell contains the hash of
+   * the row's content (the hash of a row in a backing table, for example). The next cell
+   * contains a hash pointer to the previous row. There are as many hash pointers to previous
+   * rows as defined by {@linkplain #skipCount(long)}.
+   * 
+   * @param rowNumber positive (&gt; 0), since the sentinel row is <em>abstract</em> (a row
+   *                  whose hash is identically zero)
+   * 
+   * @return a possibly read-only buffer, not necessarily positioned at zero,
+   *  but with {@linkplain #hashWidth()} remaining bytes
+   */
+  public ByteBuffer getRow(long rowNumber) {
     long index = cellNumber(rowNumber);
     int count = 1 + skipCount(rowNumber);
     return getCells(index, count);
   }
   
   
-  
-  public final byte[] rowHash(long rowNumber) {
+  /**
+   * Returns the hash of the given row number.
+   * 
+   * @param rowNumber non-negative (&ge; 0), but note that row zero is a sentinel;
+   *        the effective row numbers are 1-based
+   * 
+   * @return a possibly read-only buffer
+   */
+  public ByteBuffer rowHash(long rowNumber) {
+    if (rowNumber < 1) {
+      if (rowNumber == 0)
+        return sentinelHash();
+      
+      throw new IllegalArgumentException("negative rowNumber: " + rowNumber);
+    }
     MessageDigest digest = digest();
     ByteBuffer row = getRow(rowNumber);
     return rowHash(row, digest);
   }
   
   
-  
-  public final long appendRowHashes(ByteBuffer rowHashes) {
-    int bytes = rowHashes.remaining();
-    int cellWidth = hashWidth();
-    if (bytes % cellWidth != 0)
-      throw new IllegalArgumentException(
-          "remaining bytes (" + bytes + ") not a multiple of hash width " + cellWidth);
-    
-    int newRows = bytes / cellWidth;
-    if (newRows == 0)
-      throw new IllegalArgumentException("empty rowHashes argument: " + rowHashes);
-    
-    
-    long firstRowNumber = size() + 1;
-    long lastRowNumber = firstRowNumber + newRows - 1;
-    long currentCellCount = cellNumber(firstRowNumber);
-    long finalCellCount = cellNumber(firstRowNumber + newRows);
-    
-    int newCells = (int) (finalCellCount - currentCellCount);
-    
-    ByteBuffer rowsWithPointers = ByteBuffer.allocate(newCells * cellWidth);
-    MessageDigest digest = digest();
-    
-    
-    for (long rowNumber = firstRowNumber; rowNumber <= lastRowNumber; ++rowNumber) {
-      rowHashes.limit(rowHashes.position() + cellWidth);
-      rowsWithPointers.put(rowHashes);
-      int skipPointers = skipCount(rowNumber);
-      long skipDelta = 1;
-      for (int p = 0; p < skipPointers; ++p, skipDelta <<= 1) {
-        long skipRowNumber = rowNumber - skipDelta;
-        byte[] hashPointer;
-        if (skipRowNumber < 1) {
-          if (skipRowNumber == 0)
-            hashPointer = SHA256_SENTINEL_HASH;
-          else
-            throw new RuntimeException("assertion failed: skipRowNumber = " + skipRowNumber);
-        } else {
-          ByteBuffer referencedRow = getRowSplitSource(rowNumber, firstRowNumber, rowsWithPointers);
-          hashPointer = rowHash(referencedRow, digest);
-        }
-        rowsWithPointers.put(hashPointer);
-      }
-    }
-    
-    assert !rowsWithPointers.hasRemaining();
-    
-    rowsWithPointers.flip();
-    
-    putCells(currentCellCount, rowsWithPointers);
-    
-    return lastRowNumber;
-  }
-  
-  
-  
-  private ByteBuffer getRowSplitSource(long rowNumber, long splitIndex, ByteBuffer splitSource) {
-    
-    long index = cellNumber(rowNumber);
 
-    int cellsInRow = 1 + skipCount(rowNumber);
+  /**
+   * Appends the given row, represented as a hash, to the end of the ledger.
+   * 
+   * @param rowHashes the hash of the <em>content</em> of the row (sans skip pointers).
+   * 
+   * @return the new size of the ledger, or equivalently, the row number of the last
+   * entry just added
+   * 
+   * @see #hashWidth()
+   */
+  public long appendNextRow(ByteBuffer contentHash) {
+    int cellWidth = hashWidth();
+    if (contentHash.remaining() != cellWidth)
+      throw new IllegalArgumentException(
+          "expected " + cellWidth + " remaining bytes: " + contentHash);
     
-    if (index < splitIndex)
-      return getCells(index, cellsInRow);
+    long nextRowNum = size() + 1;
     
-    int cellSize = hashWidth();
-    int offset = cellSize * (int) (index - splitIndex);
-    int bytes = cellSize * cellsInRow;
-    return splitSource.duplicate().clear().position(offset).limit(offset + bytes);
+    int skipCount = skipCount(nextRowNum);
+    
+    ByteBuffer nextRow = ByteBuffer.allocate((1 + skipCount) * cellWidth);
+    nextRow.put(contentHash);
+    for (int p = 0; p < skipCount; ++p) {
+      long referencedRowNum = nextRowNum - (1L << p);
+      ByteBuffer hashPtr = rowHash(referencedRowNum);
+      nextRow.put(hashPtr);
+    }
+    nextRow.flip();
+    
+    long cellNumber = cellNumber(nextRowNum);
+    
+    putCells(cellNumber, nextRow);
+    return nextRowNum;
   }
   
   
-  private byte[] rowHash(ByteBuffer row, MessageDigest digest) {
+  protected ByteBuffer sentinelHash() {
+    return SHA256_SENTINEL_HASH.duplicate();
+  }
+  
+  
+//  public long appendRowHashes(ByteBuffer rowHashes) {
+//    int bytes = rowHashes.remaining();
+//    int cellWidth = hashWidth();
+//    if (bytes % cellWidth != 0)
+//      throw new IllegalArgumentException(
+//          "remaining bytes (" + bytes + ") not a multiple of hash width " + cellWidth);
+//    
+//    int newRows = bytes / cellWidth;
+//    if (newRows == 0)
+//      throw new IllegalArgumentException("empty rowHashes argument: " + rowHashes);
+//    
+//    
+//    long firstRowNumber = size() + 1;
+//    long lastRowNumber = firstRowNumber + newRows - 1;
+//    long currentCellCount = cellNumber(firstRowNumber);
+//    long finalCellCount = cellNumber(firstRowNumber + newRows);
+//    
+//    int newCells = (int) (finalCellCount - currentCellCount);
+//    
+//    ByteBuffer rowsWithPointers = ByteBuffer.allocate(newCells * cellWidth);
+//    MessageDigest digest = digest();
+//    
+//    
+//    for (long rowNumber = firstRowNumber; rowNumber <= lastRowNumber; ++rowNumber) {
+//      rowHashes.limit(rowHashes.position() + cellWidth);
+//      rowsWithPointers.put(rowHashes);
+//      int skipPointers = skipCount(rowNumber);
+//      long skipDelta = 1;
+//      for (int p = 0; p < skipPointers; ++p, skipDelta <<= 1) {
+//        long skipRowNumber = rowNumber - skipDelta;
+//        byte[] hashPointer;
+//        if (skipRowNumber < 1) {
+//          if (skipRowNumber == 0)
+//            hashPointer = SHA256_SENTINEL_HASH;
+//          else
+//            throw new RuntimeException("assertion failed: skipRowNumber = " + skipRowNumber);
+//        } else {
+//          ByteBuffer referencedRow = getRowSplitSource(rowNumber, firstRowNumber, rowsWithPointers);
+//          hashPointer = rowHash(referencedRow, digest);
+//        }
+//        rowsWithPointers.put(hashPointer);
+//      }
+//    }
+//    
+//    assert !rowsWithPointers.hasRemaining();
+//    
+//    rowsWithPointers.flip();
+//    
+//    putCells(currentCellCount, rowsWithPointers);
+//    
+//    return lastRowNumber;
+//  }
+//  
+  
+  
+//  private ByteBuffer getRowSplitSource(long rowNumber, long splitIndex, ByteBuffer splitSource) {
+//    
+//    long index = cellNumber(rowNumber);
+//
+//    int cellsInRow = 1 + skipCount(rowNumber);
+//    
+//    if (index < splitIndex)
+//      return getCells(index, cellsInRow);
+//    
+//    int cellSize = hashWidth();
+//    int offset = cellSize * (int) (index - splitIndex);
+//    int bytes = cellSize * cellsInRow;
+//    return splitSource.duplicate().clear().position(offset).limit(offset + bytes);
+//  }
+  
+  
+  private ByteBuffer rowHash(ByteBuffer row, MessageDigest digest) {
     digest.reset();
     digest.update(row);
-    return digest.digest();
+    return ByteBuffer.wrap(digest.digest());
   }
   
 

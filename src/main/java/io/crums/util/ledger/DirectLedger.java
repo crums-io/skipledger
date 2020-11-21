@@ -46,9 +46,9 @@ public class DirectLedger extends SkipLedger implements Closeable {
   }
 
   @Override
-  public long size() {
+  public long size() throws UncheckedIOException {
     
-    final long cells;
+    long cells;
     
     try {
       cells = cellCount();
@@ -56,44 +56,11 @@ public class DirectLedger extends SkipLedger implements Closeable {
       throw new UncheckedIOException("on size()", iox);
     }
     
-    long rowsEstimate = cells / 3;
-    
-    final boolean descending;
-    {
-      long estimatedCells = cellNumber(rowsEstimate + 1);
-      
-      if (estimatedCells == cells)
-        return rowsEstimate;
-      
-      if (estimatedCells > cells) {
-        descending = true;
-        --rowsEstimate;
-      } else {
-        descending = false;
-        ++rowsEstimate;
-      }
-    }
-    
-    while (true) {
-      final long cellsEstimate = cellNumber(rowsEstimate + 1);
-      if (descending) {
-        if (cellsEstimate > cells)
-          --rowsEstimate;
-        else
-          return rowsEstimate;
-      } else {
-        if (cellsEstimate < cells)
-          ++rowsEstimate;
-        else if (cellsEstimate == cells)
-          return rowsEstimate;
-        else
-          return rowsEstimate - 1;
-      }
-    }
+    return maxRows(cells);
   }
 
   @Override
-  protected ByteBuffer getCells(long index, int count) {
+  protected ByteBuffer getCells(long index, int count) throws UncheckedIOException {
     int cellSize = hashWidth();
     long offset = index * cellSize;
     ByteBuffer cells = ByteBuffer.allocate(cellSize * count);
@@ -106,7 +73,7 @@ public class DirectLedger extends SkipLedger implements Closeable {
   }
 
   @Override
-  protected void putCells(long index, ByteBuffer cells) {
+  protected void putCells(long index, ByteBuffer cells) throws UncheckedIOException {
     try {
       long offset = index * hashWidth();
       ChannelUtils.writeRemaining(file, offset, cells);
@@ -116,9 +83,12 @@ public class DirectLedger extends SkipLedger implements Closeable {
   }
 
   @Override
-  public void close() throws IOException {
-    // TODO Auto-generated method stub
-    
+  public void close() throws UncheckedIOException {
+    try {
+      file.close();
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on closing " + this, iox);
+    }
   }
   
   
