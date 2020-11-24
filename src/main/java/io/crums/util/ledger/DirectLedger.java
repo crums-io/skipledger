@@ -24,21 +24,34 @@ public class DirectLedger extends SkipLedger implements Closeable {
   
   
   private final FileChannel file;
+  private final boolean readOnly;
+  
   
 
-  // nordicanalyticaws@gmail.com / Nordic420#1
+  // 
+  
+
+  public DirectLedger(File file) throws UncheckedIOException {
+    this(file, false);
+  }
+  
   
   /**
-   * 
+   * Create a new 
+   * @param file
+   * @param readOnly
+   * @throws UncheckedIOException
    */
   @SuppressWarnings("resource")
-  public DirectLedger(File file) throws UncheckedIOException {
+  public DirectLedger(File file, boolean readOnly) throws UncheckedIOException {
     try {
       
       if (!file.exists())
         file.createNewFile();
       
-      this.file = new RandomAccessFile(file, "rw").getChannel();
+      String mode = readOnly ? "r" : "rw";
+      this.file = new RandomAccessFile(file, mode).getChannel();
+      this.readOnly = readOnly;
     
     } catch (IOException iox) {
       throw new UncheckedIOException("on attempting " + file, iox);
@@ -57,6 +70,23 @@ public class DirectLedger extends SkipLedger implements Closeable {
     }
     
     return maxRows(cells);
+  }
+  
+  
+  /**
+   * Determines whether the ledger was opened in read-only mode.
+   */
+  public boolean isReadOnly() {
+    return readOnly;
+  }
+  
+  
+  public void commit() throws UncheckedIOException {
+    try {
+      file.force(false);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on commit: " + this, iox);
+    }
   }
 
   @Override
@@ -77,6 +107,7 @@ public class DirectLedger extends SkipLedger implements Closeable {
     try {
       long offset = index * hashWidth();
       ChannelUtils.writeRemaining(file, offset, cells);
+//      file.force(false);
     } catch (IOException iox) {
       throw new UncheckedIOException("on putCells(" + index + "," + cells + ")", iox);
     }

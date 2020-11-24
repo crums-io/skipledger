@@ -7,7 +7,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Layers in <tt>MessageDigest</tt> re-use via a thread-local.
+ * Layers in <tt>MessageDigest</tt> re-use via a thread-local. Unit tests
+ * indicate this is quite useless. Leaving this here as PoC.
  */
 public final class Sha256ThreadLocalLedger extends FilterLedger {
   

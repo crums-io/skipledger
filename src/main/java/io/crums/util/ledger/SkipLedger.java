@@ -7,6 +7,11 @@ package io.crums.util.ledger;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
+import java.util.List;
+
+import io.crums.util.EasyList;
+import io.crums.util.hash.Digest;
 
 /**
  * <p>
@@ -40,7 +45,7 @@ import java.security.NoSuchAlgorithmException;
  * @see #skipCount(long)
  * @see #cellNumber(long)
  */
-public abstract class SkipLedger {
+public abstract class SkipLedger implements Digest {
   
   /**
    * The default hashing algorithm is SHA-256.
@@ -80,14 +85,59 @@ public abstract class SkipLedger {
   }
   
   /**
-   * Returns the number of skip pointers at the given row number.
+   * <p>Returns the number of skip pointers at the given row number. The
+   * returned number is one plus the <em>exponent</em> in the highest power of 2 that is
+   * a factor of the row number. For odd row numbers, this is always 1 (since the highest
+   * factor here is 2<sup><small>0</small></sup>); for even numbers, it's always 2 or
+   * greater.</p>
+   * 
+   * <h3>Strict Law of Averages</h3>
+   * 
+   * <p>It can be shown that the <em>average</em> number of skip pointers per row is
+   * <em>never</em> more than twice the number of rows (proof not provided here).
+   * Equivalently, the total number of skip pointers up to (and including) a given row
+   * number, is never more than twice the row number.
+   * </p>
    * 
    * @param rowNumber &gt; 0
    * @return &ge; 1 (with average value of 2)
+   * 
+   * @see #maxRows(long)
    */
   public static int skipCount(long rowNumber) {
     checkRowNumber(rowNumber);
     return 1 + Long.numberOfTrailingZeros(rowNumber);
+  }
+  
+  
+  
+  public static List<Long> hiToLoNumberPath(long hi, long lo) {
+    if (lo < 0)
+      throw new IllegalArgumentException();
+    if (hi <= lo) {
+      if (hi == lo)
+        return Collections.singletonList(lo);
+      else
+        throw new IllegalArgumentException("hi " + hi + " < lo " + lo);
+    }
+    
+    // create the descending list of row numbers
+    EasyList<Long> path = new EasyList<>(16);
+    path.add(hi);
+    
+    for (long last = path.last(); last > lo; last = path.last()) {
+      
+      for (int base2Exponent = skipCount(last); base2Exponent-- > 0; ) {
+        long delta = 1L << base2Exponent;
+        long next = last - delta;
+        if (next >= lo) {
+          path.add(next);
+          break;
+        }
+      }
+    }
+    
+    return Collections.unmodifiableList(path);
   }
   
   
@@ -144,19 +194,19 @@ public abstract class SkipLedger {
   
   
   
-  /**
-   * Returns a new digest per the hashing algo.
-   * 
-   * @see #hashAlgo()
-   */
-  public MessageDigest newDigest() {
-    String algo = hashAlgo();
-    try {
-      return MessageDigest.getInstance(algo);
-    } catch (NoSuchAlgorithmException nsax) {
-      throw new RuntimeException("failed to create '" + algo + "' digest: " + nsax);
-    }
-  }
+//  /**
+//   * Returns a new digest per the hashing algo.
+//   * 
+//   * @see #hashAlgo()
+//   */
+//  public MessageDigest newDigest() {
+//    String algo = hashAlgo();
+//    try {
+//      return MessageDigest.getInstance(algo);
+//    } catch (NoSuchAlgorithmException nsax) {
+//      throw new RuntimeException("failed to create '" + algo + "' digest: " + nsax);
+//    }
+//  }
   
   
   /**
@@ -201,7 +251,9 @@ public abstract class SkipLedger {
   
   
   /**
-   * Writes the given cells to persistent storage.
+   * Writes the given cells to persistent storage. On return, the state instance is updated.
+   * (This is critical to the proper working of the {@linkplain FilterLedger} pattern used
+   * here.)
    * 
    * @param index the starting cell index (&ge; 0)
    * @param cells contiguous block of cells
@@ -293,75 +345,6 @@ public abstract class SkipLedger {
   }
   
   
-//  public long appendRowHashes(ByteBuffer rowHashes) {
-//    int bytes = rowHashes.remaining();
-//    int cellWidth = hashWidth();
-//    if (bytes % cellWidth != 0)
-//      throw new IllegalArgumentException(
-//          "remaining bytes (" + bytes + ") not a multiple of hash width " + cellWidth);
-//    
-//    int newRows = bytes / cellWidth;
-//    if (newRows == 0)
-//      throw new IllegalArgumentException("empty rowHashes argument: " + rowHashes);
-//    
-//    
-//    long firstRowNumber = size() + 1;
-//    long lastRowNumber = firstRowNumber + newRows - 1;
-//    long currentCellCount = cellNumber(firstRowNumber);
-//    long finalCellCount = cellNumber(firstRowNumber + newRows);
-//    
-//    int newCells = (int) (finalCellCount - currentCellCount);
-//    
-//    ByteBuffer rowsWithPointers = ByteBuffer.allocate(newCells * cellWidth);
-//    MessageDigest digest = digest();
-//    
-//    
-//    for (long rowNumber = firstRowNumber; rowNumber <= lastRowNumber; ++rowNumber) {
-//      rowHashes.limit(rowHashes.position() + cellWidth);
-//      rowsWithPointers.put(rowHashes);
-//      int skipPointers = skipCount(rowNumber);
-//      long skipDelta = 1;
-//      for (int p = 0; p < skipPointers; ++p, skipDelta <<= 1) {
-//        long skipRowNumber = rowNumber - skipDelta;
-//        byte[] hashPointer;
-//        if (skipRowNumber < 1) {
-//          if (skipRowNumber == 0)
-//            hashPointer = SHA256_SENTINEL_HASH;
-//          else
-//            throw new RuntimeException("assertion failed: skipRowNumber = " + skipRowNumber);
-//        } else {
-//          ByteBuffer referencedRow = getRowSplitSource(rowNumber, firstRowNumber, rowsWithPointers);
-//          hashPointer = rowHash(referencedRow, digest);
-//        }
-//        rowsWithPointers.put(hashPointer);
-//      }
-//    }
-//    
-//    assert !rowsWithPointers.hasRemaining();
-//    
-//    rowsWithPointers.flip();
-//    
-//    putCells(currentCellCount, rowsWithPointers);
-//    
-//    return lastRowNumber;
-//  }
-//  
-  
-  
-//  private ByteBuffer getRowSplitSource(long rowNumber, long splitIndex, ByteBuffer splitSource) {
-//    
-//    long index = cellNumber(rowNumber);
-//
-//    int cellsInRow = 1 + skipCount(rowNumber);
-//    
-//    if (index < splitIndex)
-//      return getCells(index, cellsInRow);
-//    
-//    int cellSize = hashWidth();
-//    int offset = cellSize * (int) (index - splitIndex);
-//    int bytes = cellSize * cellsInRow;
-//    return splitSource.duplicate().clear().position(offset).limit(offset + bytes);
-//  }
   
   
   private ByteBuffer rowHash(ByteBuffer row, MessageDigest digest) {

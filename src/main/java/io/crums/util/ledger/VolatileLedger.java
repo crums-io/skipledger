@@ -15,7 +15,11 @@ public class VolatileLedger extends SkipLedger {
   private final ByteBuffer cells;
   private final ByteBuffer view;
   
-  private int rows;
+  
+  
+  public VolatileLedger(int rows) {
+    this(ByteBuffer.allocate(rows * 3 * SHA256_WIDTH), 0);
+  }
   
   
   /**
@@ -43,8 +47,6 @@ public class VolatileLedger extends SkipLedger {
     this.cells = mem;
     this.view = mem.asReadOnlyBuffer();
     
-    this.rows = rows;
-    
     if (rows < 0)
       throw new IllegalArgumentException("negative rows: " + rows);
     
@@ -60,7 +62,8 @@ public class VolatileLedger extends SkipLedger {
 
   @Override
   public long size() {
-    return rows;
+    int cells = view.remaining() / hashWidth();
+    return maxRows(cells);
   }
   
   
@@ -70,11 +73,7 @@ public class VolatileLedger extends SkipLedger {
   }
   
   
-  @Override
-  public long appendNextRow(ByteBuffer contentHash) {
-    this.rows = (int) super.appendNextRow(contentHash);
-    return rows;
-  }
+  
 
   @Override
   protected ByteBuffer getCells(long index, int count) {

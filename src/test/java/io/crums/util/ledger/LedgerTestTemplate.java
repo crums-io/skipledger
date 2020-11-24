@@ -100,6 +100,16 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
   
   
   @Test
+  public void test1027() throws Exception {
+
+    int rows = 1027;
+    Object label = new Object() { };
+    testImpl(rows, label);
+  }
+  
+  
+  
+  @Test
   public void test1M_plus33() throws Exception {
 
     final int rows = 1024*1024 + 33;
