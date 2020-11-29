@@ -33,7 +33,7 @@ public class LinkedPath implements Digest {
   
   
   /**
-   * Constructs a shortest-path instance.
+   * Constructs a shortest-path (skip path) instance.
    * 
    * @param lo the low row number (inclusive)
    * @param hi the hi row number (inclusive)
@@ -205,10 +205,13 @@ public class LinkedPath implements Digest {
   
   
   /**
-   * Determines whether the skip path is in V-form. When in V-form the path described
-   * by the instance is the shortest possible between the rows.
+   * Determines whether this linked path is a skip path. A skip path describes
+   * the shortest possible path connecting the {@linkplain #loRowNumber()} from
+   * the {@linkplain #hiRowNumber()}.
+   * 
+   * @see SkipPath
    */
-  public boolean vForm() {
+  public boolean isSkipPath() {
     List<Long> vRowNumbers = SkipLedger.skipPathNumbers(
         path.get(0).rowNumber(),
         path.get(path.size() - 1).rowNumber());

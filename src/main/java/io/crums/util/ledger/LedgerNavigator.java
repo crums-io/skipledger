@@ -50,7 +50,7 @@ public class LedgerNavigator implements Digest {
   
   
   
-  public Vform vForm(long lo, long hi) {
+  public SkipPath vForm(long lo, long hi) {
     if (hi > size())
       throw new IllegalArgumentException("hi " + hi + " > size " + size());
     if (lo < 1)
@@ -62,12 +62,12 @@ public class LedgerNavigator implements Digest {
     for (int index = length; index-- > 0; )
       rows[index] = getEntry(rowNumPath.get(index));
     
-    return new Vform(Lists.asReadOnlyList(rows), newDigest());
+    return new SkipPath(Lists.asReadOnlyList(rows), newDigest());
   }
   
   
   
-  public Vform vForm() {
+  public SkipPath vForm() {
     long size = size();
     return size == 0 ? null : vForm(1, size);
   }

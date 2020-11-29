@@ -22,7 +22,7 @@ import io.crums.util.hash.Digests;
  * a skip path has a more compact serial representation, since then
  * its row numbers can be specified with only 2 numbers (lo and hi).
  */
-public class Vform extends LinkedPath {
+public class SkipPath extends LinkedPath {
   
   /**
    *  sizeof 2 longs
@@ -35,10 +35,10 @@ public class Vform extends LinkedPath {
    * 
    * {@link #serialize()}
    */
-  public static Vform load(ByteBuffer source) {
+  public static SkipPath load(ByteBuffer source) {
     long lo = source.getLong();
     long hi = source.getLong();
-    return new Vform(lo, hi, source);
+    return new SkipPath(lo, hi, source);
   }
   
   
@@ -49,7 +49,7 @@ public class Vform extends LinkedPath {
    * @see #load(InputStream)
    * {@link #serialize()}
    */
-  public static Vform load(File file) throws IOException {
+  public static SkipPath load(File file) throws IOException {
     try (FileInputStream in = new FileInputStream(file)) {
       return load(in.getChannel());
     }
@@ -63,7 +63,7 @@ public class Vform extends LinkedPath {
    * @see #load(ReadableByteChannel)
    * {@link #serialize()}
    */
-  public static Vform load(InputStream in) throws IOException {
+  public static SkipPath load(InputStream in) throws IOException {
     return load(ChannelUtils.asChannel(in));
   }
   
@@ -74,7 +74,7 @@ public class Vform extends LinkedPath {
    * @see #load(InputStream)
    * {@link #serialize()}
    */
-  public static Vform load(ReadableByteChannel in) throws IOException {
+  public static SkipPath load(ReadableByteChannel in) throws IOException {
     ByteBuffer nibble = ByteBuffer.allocate(ROW_NUMBER_DATA_LEN);
     ChannelUtils.readRemaining(in, nibble);
     long lo = nibble.flip().getLong();
@@ -82,7 +82,7 @@ public class Vform extends LinkedPath {
     int remainingBytes = serialByteSize(lo, hi) - ROW_NUMBER_DATA_LEN;
     ByteBuffer skipRows = ByteBuffer.allocate(remainingBytes);
     ChannelUtils.readRemaining(in, skipRows);
-    return new Vform(lo, hi, skipRows.flip(), false);
+    return new SkipPath(lo, hi, skipRows.flip(), false);
   }
   
 
@@ -109,7 +109,7 @@ public class Vform extends LinkedPath {
    * 
    * @param skipRows concatentation of rows
    */
-  public Vform(long lo, long hi, ByteBuffer skipRows) {
+  public SkipPath(long lo, long hi, ByteBuffer skipRows) {
     super(lo, hi, skipRows);
   }
 
@@ -122,14 +122,14 @@ public class Vform extends LinkedPath {
    * @param skipRows concatentation of rows
    * @param deepCopy if <tt>true</tt> the data is defensively copied.
    */
-  Vform(long lo, long hi, ByteBuffer skipRows, boolean deepCopy) {
+  SkipPath(long lo, long hi, ByteBuffer skipRows, boolean deepCopy) {
     super(lo, hi, skipRows, deepCopy);
   }
   
   /**
    * @see LinkedPath#SkipPath(List, MessageDigest)
    */
-  Vform(List<Row> path, MessageDigest digest) {
+  SkipPath(List<Row> path, MessageDigest digest) {
     super(path, digest);
     // TODO Auto-generated constructor stub
   }
@@ -139,7 +139,7 @@ public class Vform extends LinkedPath {
    * @return <tt>true</tt>
    */
   @Override
-  public boolean vForm() {
+  public boolean isSkipPath() {
     return true;
   }
   
