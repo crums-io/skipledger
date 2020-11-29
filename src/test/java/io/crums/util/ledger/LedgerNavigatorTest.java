@@ -74,7 +74,7 @@ public class LedgerNavigatorTest extends SelfAwareTestCase {
   }
   
   
-  private void print(SkipPath skipPath) {
+  private void print(LinkedPath skipPath) {
     System.out.println();
     
     for (Row row : skipPath.path())

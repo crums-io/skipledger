@@ -17,12 +17,12 @@ import io.crums.io.channels.ChannelUtils;
 import io.crums.util.hash.Digests;
 
 /**
- * A <tt>SkipPath</tt> in V-form. The base class also supports
+ * A <tt>LinkedPath</tt> in V-form. The base class also supports
  * this structure. The main value-add here is that when in V-form,
  * a skip path has a more compact serial representation, since then
  * its row numbers can be specified with only 2 numbers (lo and hi).
  */
-public class Vform extends SkipPath {
+public class Vform extends LinkedPath {
   
   /**
    *  sizeof 2 longs
@@ -127,7 +127,7 @@ public class Vform extends SkipPath {
   }
   
   /**
-   * @see SkipPath#SkipPath(List, MessageDigest)
+   * @see LinkedPath#SkipPath(List, MessageDigest)
    */
   Vform(List<Row> path, MessageDigest digest) {
     super(path, digest);

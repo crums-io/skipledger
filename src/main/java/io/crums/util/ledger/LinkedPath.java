@@ -25,7 +25,7 @@ import io.crums.util.hash.Digest;
  * every public constructor makes a defensive copy of its row inputs. The upshot of this
  * guarantee is that a reference to instance at runtime, is a reference to an immutable proof.
  */
-public class SkipPath implements Digest {
+public class LinkedPath implements Digest {
   
   
   
@@ -40,7 +40,7 @@ public class SkipPath implements Digest {
    * 
    * @param skipRows concatentation of rows
    */
-  public SkipPath(long lo, long hi, ByteBuffer skipRows) {
+  public LinkedPath(long lo, long hi, ByteBuffer skipRows) {
     this(lo, hi, skipRows, true);
   }
   
@@ -54,7 +54,7 @@ public class SkipPath implements Digest {
    * @param skipRows
    * @param deepCopy
    */
-  SkipPath(long lo, long hi, ByteBuffer skipRows, boolean deepCopy) {
+  LinkedPath(long lo, long hi, ByteBuffer skipRows, boolean deepCopy) {
     Objects.requireNonNull(skipRows, "null skipRows");
   
     List<Long> skipPathNumbers = SkipLedger.skipPathNumbers(lo, hi);
@@ -84,7 +84,7 @@ public class SkipPath implements Digest {
    * @param path non-empty list of rows with ascending row numbers, each row linked to
    *  from the next via one of its hash pointers
    */
-  public SkipPath(List<Row> path) {
+  public LinkedPath(List<Row> path) {
     Objects.requireNonNull(path, "null path");
     if (path.isEmpty())
       throw new IllegalArgumentException("empth path");
@@ -106,7 +106,7 @@ public class SkipPath implements Digest {
    * 
    * @param path read-only, immutable list
    */
-  SkipPath(List<Row> path, MessageDigest digest) {
+  LinkedPath(List<Row> path, MessageDigest digest) {
     this.path = Objects.requireNonNull(path, "null path");
     
     if (path.isEmpty())
@@ -218,7 +218,7 @@ public class SkipPath implements Digest {
   
   
   
-  public boolean intersects(SkipPath other) {
+  public boolean intersects(LinkedPath other) {
     List<Long> a = rowNumbers();
     List<Long> b = other.rowNumbers();
     
