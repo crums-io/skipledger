@@ -67,9 +67,9 @@ public class LedgerNavigatorTest extends SelfAwareTestCase {
 
     System.out.println();
     System.out.println("skip path 7 -> 625:");
-    print(nav.vForm(7, 625));
+    print(nav.skipPath(7, 625));
     System.out.println("V-form:");
-    print(nav.vForm());
+    print(nav.skipPath());
     System.out.println("== " + method(label) + ": [DONE]");
   }
   
