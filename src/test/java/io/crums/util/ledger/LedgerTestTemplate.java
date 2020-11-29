@@ -64,7 +64,7 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
     byte[] mockHash = new byte[HASH_WIDTH];
     random.nextBytes(mockHash);
     
-    long size = ledger.appendNextRow(ByteBuffer.wrap(mockHash));
+    long size = ledger.appendRow(ByteBuffer.wrap(mockHash));
     assertEquals(1, size);
     assertEquals(1, ledger.size());
     
@@ -132,7 +132,7 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
     for (int i = 0; i < rows; ++i) {
       mHashes[i] = new byte[HASH_WIDTH];
       random.nextBytes(mHashes[i]);
-      final long rowNum = ledger.appendNextRow(ByteBuffer.wrap(mHashes[i]));
+      final long rowNum = ledger.appendRow(ByteBuffer.wrap(mHashes[i]));
       assertEquals(i + 1, rowNum);
       assertEquals(rowNum, ledger.size());
       final int skipPtrCount = skipCount(rowNum);

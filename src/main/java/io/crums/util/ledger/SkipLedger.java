@@ -6,11 +6,14 @@ package io.crums.util.ledger;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import io.crums.util.EasyList;
+import io.crums.util.Lists;
 import io.crums.util.hash.Digest;
 
 /**
@@ -34,9 +37,22 @@ import io.crums.util.hash.Digest;
  * 
  * <p>This base class is stateless (it defines no instance fields, only methods).
  * A concrete implementation, of course does have state. This "statelessness", in turn,
- * is exploited in the {@linkplain FilterLedger} in order to layer-in message digest
- * re-use.
+ * is exploited in the {@linkplain FilterLedger} <strike>in order to layer-in message digest
+ * re-use</strike>.</p>
  * 
+ * <h3>Changing the Hash Function</h3>
+ * 
+ * <p>The default hash function (SHA-256) can be changed by overriding an implementation's
+ * following methods:
+ * <ol>
+ * <li>{@linkplain #hashWidth()}</li>
+ * <li>{@linkplain #hashAlgo()}</li>
+ * <li>{@linkplain #sentinelHash()}</li>
+ * </ol> 
+ * This information <em>could</em> be encoded in a single object, but it's still a reference
+ * I don't care to carry around per instance and its anscilliary objects.
+ * 
+ * </p>
  * <h4>I/O Methods</h4>
  * 
  * <p>These are {@linkplain #getCells(long, int)} and {@linkplain #putCells(long, ByteBuffer)}
@@ -69,7 +85,7 @@ public abstract class SkipLedger implements Digest {
    * 
    * @param rowNumber postive number (&gt; 0)
    * 
-   * @return a non-negative number (&ge; 0)
+   * @return a non-negative number (&ge; 0) and &le; <tt>2 * rowNumber - 1</tt>
    */
   public static long cellNumber(long rowNumber) {
     checkRowNumber(rowNumber);
@@ -88,15 +104,13 @@ public abstract class SkipLedger implements Digest {
    * <p>Returns the number of skip pointers at the given row number. The
    * returned number is one plus the <em>exponent</em> in the highest power of 2 that is
    * a factor of the row number. For odd row numbers, this is always 1 (since the highest
-   * factor here is 2<sup><small>0</small></sup>); for even numbers, it's always 2 or
-   * greater.</p>
+   * factor here is 2<sup><small>0</small></sup>).</p>
    * 
    * <h3>Strict Law of Averages</h3>
    * 
-   * <p>It can be shown that the <em>average</em> number of skip pointers per row is
-   * <em>never</em> more than twice the number of rows (proof not provided here).
+   * <p>The <em>average</em> number of skip pointers is <em>always</em> less than 2.
    * Equivalently, the total number of skip pointers up to (and including) a given row
-   * number, is never more than twice the row number.
+   * number, is always less than twice the row number.
    * </p>
    * 
    * @param rowNumber &gt; 0
@@ -110,10 +124,79 @@ public abstract class SkipLedger implements Digest {
   }
   
   
+  /**
+   * Returns the number of cells for the given row number. This is just
+   * one more than {@linkplain #skipCount(long)}
+   * @param rowNumber
+   * @return
+   */
+  public static int rowCells(long rowNumber) {
+    return 1 + skipCount(rowNumber);
+  }
   
-  public static List<Long> hiToLoNumberPath(long hi, long lo) {
-    if (lo < 0)
-      throw new IllegalArgumentException();
+  
+
+  /**
+   * Returns the rows <em>covered</em> by the specified 
+   * @param lo
+   * @param hi
+   * @return
+   */
+  public static SortedSet<Long> skipPathCoverage(long lo, long hi) {
+    
+    return coverage(skipPathNumbers(lo, hi));
+  }
+  
+  
+  
+  /**
+   * Returns the rows <em>covered</em> by the given row numbers. The returned
+   * ordered set contains both the given row numbers and the row numbers referenced
+   * in the rows at those row numbers. Altho its size is sensitive to its inputs,
+   * the returned list never blows up: it's size may grow at most by a factor that
+   * is no greater than the base 2 log of the highest row number in its input.
+   * 
+   * @param rowNumbers non-empty bag of positive (&ge; 1) numbers,
+   *        in whatever order, dups OK
+   * 
+   * @return non-empty set of row
+   */
+  public static SortedSet<Long> coverage(Collection<Long> rowNumbers) {
+
+    SortedSet<Long> covered = new TreeSet<>();
+    for (Long rowNumber : rowNumbers) {
+      covered.add(rowNumber);
+      int pointers = skipCount(rowNumber);
+      for (int e = 0; e < pointers; ++e) {
+        long delta = 1L << e;
+        long referencedRowNumber = rowNumber - delta;
+        assert referencedRowNumber >= 0;
+        if (referencedRowNumber != 0)
+          covered.add(referencedRowNumber);
+      }
+    }
+    
+    return Collections.unmodifiableSortedSet(covered);
+  }
+  
+  
+  /**
+   * Returns the structural path from a lower
+   * (older) row number to a higher (more recent) row number in a ledger.
+   * This is just the shortest structural path following the hash pointers in each
+   * row from the <tt>hi</tt> row number to the <tt>lo</tt> one. The returned list
+   * however is returned in reverse order, in keeping with the temporal order of
+   * ledgers.
+   * 
+   * @param hi row number &ge; <tt>lo</tt>
+   * @param lo row number &gt; 0
+   * 
+   * @return a monotonically ascending list of numbers from <tt>lo</tt> to </tt>hi</tt>,
+   *         inclusive
+   */
+  public static List<Long> skipPathNumbers(long lo, long hi) {
+    if (lo < 1)
+      throw new IllegalArgumentException("lo " + lo + " < 1");
     if (hi <= lo) {
       if (hi == lo)
         return Collections.singletonList(lo);
@@ -121,7 +204,7 @@ public abstract class SkipLedger implements Digest {
         throw new IllegalArgumentException("hi " + hi + " < lo " + lo);
     }
     
-    // create the descending list of row numbers
+    // create a descending list of row numbers (which we'll reverse)
     EasyList<Long> path = new EasyList<>(16);
     path.add(hi);
     
@@ -137,8 +220,10 @@ public abstract class SkipLedger implements Digest {
       }
     }
     
-    return Collections.unmodifiableList(path);
+    return Lists.reverse(path);
   }
+  
+  
   
   
   
@@ -193,20 +278,7 @@ public abstract class SkipLedger implements Digest {
   
   
   
-  
-//  /**
-//   * Returns a new digest per the hashing algo.
-//   * 
-//   * @see #hashAlgo()
-//   */
-//  public MessageDigest newDigest() {
-//    String algo = hashAlgo();
-//    try {
-//      return MessageDigest.getInstance(algo);
-//    } catch (NoSuchAlgorithmException nsax) {
-//      throw new RuntimeException("failed to create '" + algo + "' digest: " + nsax);
-//    }
-//  }
+ 
   
   
   /**
@@ -219,8 +291,6 @@ public abstract class SkipLedger implements Digest {
   
   
   /**
-   * Returns the hash width in bytes.
-   * 
    * @return 32
    */
   public int hashWidth() {
@@ -229,12 +299,17 @@ public abstract class SkipLedger implements Digest {
   
   
   /**
-   * Returns the hashing algorithm used in the ledger.
-   * 
    * @return SHA-256
    */
   public String hashAlgo() {
     return SHA256_ALGO;
+  }
+  
+  
+  
+  @Override
+  public ByteBuffer sentinelHash() {
+    return SHA256_SENTINEL_HASH.duplicate();
   }
   
   
@@ -303,29 +378,79 @@ public abstract class SkipLedger implements Digest {
   }
   
   
+  /**
+   * Returns a hash representing the current state of the ledger.
+   * 
+   * @return the hash of the last row, if not empty; the sentinel hash (all zeroes), if empty.
+   */
+  public ByteBuffer stateHash() {
+    long size = size();
+    return size == 0 ? sentinelHash() : rowHash(size);
+  }
+  
+  
+  /**
+   * Returns the rows whose pointers connect the given <tt>lo</tt> and <tt>hi</tt>
+   * row numbers. The returned rows are returned in ascending order.
+   * 
+   * @param lo row number &ge; 1
+   * @param hi row number &ge; <tt>lo</tt>
+   * 
+   * @return the skip rows as one contiguous block (you need to keep track of the 
+   *    input arguments in order to interpret the returned block)
+   * 
+   * @see #skipPathNumbers(long, long)
+   */
+  public ByteBuffer skipPathRows(long lo, long hi) {
+    long size = size();
+    if (hi > size)
+      throw new IllegalArgumentException("hi " + hi + " > size " + size );
+    if (lo < 1)
+      throw new IllegalArgumentException("lo " + lo + " < 1");
+    
+    List<Long> skipRowNumbers = skipPathNumbers(lo, hi);
+    
+    int totalCells = skipRowNumbers.stream().mapToInt(r -> 1 + skipCount(r)).sum();
+    int cellWidth = hashWidth();
+    
+    ByteBuffer skipRows = ByteBuffer.allocate(totalCells * cellWidth);
+    
+    for (long rowNum : skipRowNumbers) {
+      ByteBuffer row = getRow(rowNum);
+      skipRows.put(row);
+    }
+    
+    assert !skipRows.hasRemaining();
+    
+    return skipRows.flip();
+  }
+  
+  
 
   /**
    * Appends the given row, represented as a hash, to the end of the ledger.
    * 
-   * @param rowHashes the hash of the <em>content</em> of the row (sans skip pointers).
+   * @param entryHash the hash of the next <em>entry</em> in the ledger (sans skip pointers)
    * 
    * @return the new size of the ledger, or equivalently, the row number of the last
    * entry just added
    * 
    * @see #hashWidth()
+   * 
+   * @see #appendNextRows(ByteBuffer)
    */
-  public long appendNextRow(ByteBuffer contentHash) {
+  public long appendRow(ByteBuffer entryHash) {
     int cellWidth = hashWidth();
-    if (contentHash.remaining() != cellWidth)
+    if (entryHash.remaining() != cellWidth)
       throw new IllegalArgumentException(
-          "expected " + cellWidth + " remaining bytes: " + contentHash);
+          "expected " + cellWidth + " remaining bytes: " + entryHash);
     
     long nextRowNum = size() + 1;
     
     int skipCount = skipCount(nextRowNum);
     
     ByteBuffer nextRow = ByteBuffer.allocate((1 + skipCount) * cellWidth);
-    nextRow.put(contentHash);
+    nextRow.put(entryHash);
     for (int p = 0; p < skipCount; ++p) {
       long referencedRowNum = nextRowNum - (1L << p);
       ByteBuffer hashPtr = rowHash(referencedRowNum);
@@ -340,8 +465,40 @@ public abstract class SkipLedger implements Digest {
   }
   
   
-  protected ByteBuffer sentinelHash() {
-    return SHA256_SENTINEL_HASH.duplicate();
+  /**
+   * Appends the given entries <em>en bloc</em>.
+   * <h4>Implementation</h4>
+   * <p>The base class simply invokes {@linkplain #appendRow(ByteBuffer)} serially.</p>
+   * 
+   * @param entryHashes the hashes of multiple next <em>entries</em> in the ledger
+   *            (sans skip pointers)
+   *            
+   * @return the new size of the ledger, or equivalently, the row number of the last
+   *         entry added
+   *         
+   * @see #appendRow(ByteBuffer)
+   */
+  public long appendRowsEnBloc(ByteBuffer entryHashes) {
+    int cellWidth = hashWidth();
+    checkPositiveMultiple(entryHashes, cellWidth);
+    int count = entryHashes.remaining() / cellWidth;
+    
+    long size = 0;
+    for (int i = 0; i < count; ++i) {
+      int pos = i * cellWidth;
+      int limit = pos + cellWidth;
+      entryHashes.limit(limit).position(pos);
+      size = appendRow(entryHashes);
+    }
+    return size;
+  }
+  
+  
+  protected final void checkPositiveMultiple(ByteBuffer entryHashes, int cellWidth) {
+    if (entryHashes.remaining() % cellWidth != 0 || !entryHashes.hasRemaining())
+      throw new IllegalArgumentException(
+          "entryHashes remaining bytes (" + entryHashes.remaining() +
+          ") not a postive multiple of hashWidth " + cellWidth);
   }
   
   

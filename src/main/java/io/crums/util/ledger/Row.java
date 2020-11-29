@@ -11,47 +11,102 @@ import io.crums.util.IntegralStrings;
 import io.crums.util.hash.Digest;
 
 /**
- * 
+ * A row in a ledger, dressed up with a row number and methods to access
+ * its skip [hash] pointers. Instances are immutable.
  */
 public class Row implements Digest {
+  
 
   private final long rowNumber;
   private final ByteBuffer row;
   
   
+  /**
+   * Constructs a new instance. This does a defensive copy (since we want a runtime
+   * reference to be guarantee immutability).
+   * 
+   * @param rowNumber the row number
+   * @param row       the row's backing data (a sequence of cells representing hashes)
+   */
   public Row(long rowNumber, ByteBuffer row) {
-    this.rowNumber = rowNumber;
-    Objects.requireNonNull(row, "null row");
-    if (row.remaining() != row.capacity())
-      row = row.slice();
-    this.row = row;
-    
-    int cellsInRow = 1 + SkipLedger.skipCount(rowNumber);
-    int expectedBytes = cellsInRow * hashWidth();
-    if (this.row.remaining() != expectedBytes)
-      throw new IllegalArgumentException(
-          "expected " + expectedBytes + " bytes for rowNumber " + rowNumber + "; actual given is " + row);
+    this(rowNumber, ByteBuffer.allocate(row.remaining()).put(row).flip(), false);
   }
   
   
+  
+  /**
+   * Package-private shallow data copy constructor.
+   * 
+   * @param row unless unsliced, caller must not mess with positional info; if unsliced
+   *    (i.e. remaining &ne; capacity), then the constructor slices.
+   */
+  Row(long rowNumber, ByteBuffer row, boolean ignored) {
+    this.rowNumber = rowNumber; // (bounds checked below)
+    int remaining = Objects.requireNonNull(row, "null row").remaining();
+    if (remaining != row.capacity())
+      row = row.slice();
+    this.row = row;
+    
+    int cellsInRow = 1 + SkipLedger.skipCount(rowNumber); // (bounds checked)
+    int expectedBytes = cellsInRow * hashWidth();
+    if (remaining != expectedBytes)
+      throw new IllegalArgumentException(
+          "expected " + expectedBytes + " bytes for rowNumber " + rowNumber + "; actual given is " + row);
+    
+  }
+  
+  
+  /**
+   * Returns the ledger entry in raw form. This contains 1 +
+   * {@linkplain SkipLedger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
+   * {@linkplain #hashWidth()} many bytes wide.
+   * 
+   * @return read-only [shallow] copy
+   */
   public final ByteBuffer data() {
     return row.asReadOnlyBuffer();
   }
   
+  
+  
+  /**
+   * Returns the row number. Note this value does not figure in instance equality.
+   * 
+   * @see #equals(Object)
+   */
   public final long rowNumber() {
     return rowNumber;
   }
   
+  
+  /**
+   * Returns the entry (user-inputed) hash. This is the hash of the abstract object (whatever it is, we
+   * don't know).
+   * 
+   * @return non-null, {@linkplain #hashWidth()} bytes remaining, positioned at zero (but not sliced)
+   */
   public final ByteBuffer entryHash() {
     return data().limit(hashWidth());
   }
   
   
+  /**
+   * Returns the number of hash pointers in this row referencing previous rows.
+   * 
+   * @return &ge; 1
+   */
   public final int skipCount() {
     return SkipLedger.skipCount(rowNumber);
   }
   
   
+  /**
+   * Returns the hash of the row reference by the skip pointer at the given pointer-level.
+   * 
+   * @param pointerLevel &ge; 0 and &lt; {@linkplain #skipCount()}
+   * 
+   * @return non-null, {@linkplain #hashWidth()} bytes wide
+   */
   public final ByteBuffer skipPointer(int pointerLevel) {
     Objects.checkIndex(pointerLevel, skipCount());
     int cellWidth = hashWidth();
@@ -61,30 +116,29 @@ public class Row implements Digest {
   }
   
   
+  /**
+   * Returns the row number referenced by the skip pointer at the given pointer-level.
+   * 
+   * @param pointerLevel &ge; 0 and &lt; {@linkplain #skipCount()}
+   * 
+   * @return &ge; 0
+   */
   public final long skipRowNumber(int pointerLevel) {
     Objects.checkIndex(pointerLevel, skipCount());
     return rowNumber - (1L << pointerLevel);
   }
   
   
-//  public ByteBuffer hash(MessageDigest digest) {
-//    if (digest.getDigestLength() != hashWidth())
-//      throw new IllegalArgumentException("digest mismatch: " + digest);
-//    digest.reset();
-//    digest.update(row.asReadOnlyBuffer());
-//    return ByteBuffer.wrap(digest.digest());
-//  }
-  
   
   
   public int hashWidth() {
-    return SkipLedger.SHA256_WIDTH;
+    return Constants.DEF_DIGEST.hashWidth();
   }
   
   
   
   public String hashAlgo() {
-    return SkipLedger.SHA256_ALGO;
+    return Constants.DEF_DIGEST.hashAlgo();
   }
   
   
@@ -117,12 +171,16 @@ public class Row implements Digest {
     
     StringBuilder string;
     {
+      // estimate req builder cap
       int cellCount = skipCount + 1;
-      int len = 18 + cellCount * (hashWidth() * 2 + 1);
+      int len = 18 /* (row number + space) */ + cellCount * CELL_DISPLAY_LENGTH;
       string = new StringBuilder(len);
     }
     
-    string.append(rowNumber).append(' ');
+    string.append('[').append(rowNumber).append("] ");
+    while(string.length() < 8)
+      string.append(' ');
+    
     
     appendCellToString(entryHash(), string);
     
@@ -132,12 +190,17 @@ public class Row implements Digest {
     return string.toString();
   }
   
+  private final static int HEX_DISPLAY_BYTES = 3;
+  private final static String CELL_DISPLAY_PREFIX = "  ";
+  private final static String CELL_DISPLAY_POSTFIX = "..";
+  private final static int CELL_DISPLAY_LENGTH =
+      2 * HEX_DISPLAY_BYTES + CELL_DISPLAY_PREFIX.length() + CELL_DISPLAY_POSTFIX.length();
+  
   private void appendCellToString(ByteBuffer cell, StringBuilder string) {
-    int displayBytes = 5;
-    string.append("  ");
-    cell.limit(cell.position() + displayBytes);
+    string.append(CELL_DISPLAY_PREFIX);
+    cell.limit(cell.position() + HEX_DISPLAY_BYTES);
     IntegralStrings.appendHex(cell, string);
-    string.append("..");
+    string.append(CELL_DISPLAY_POSTFIX);
   }
 
 }

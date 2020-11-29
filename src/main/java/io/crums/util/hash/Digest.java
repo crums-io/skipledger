@@ -4,6 +4,7 @@
 package io.crums.util.hash;
 
 
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
@@ -30,13 +31,26 @@ public interface Digest {
   }
   
   
-  
+  /**
+   * Returns the number of bytes used to form a hash.
+   * 
+   * @see MessageDigest#getDigestLength()
+   */
   int hashWidth();
   
   
+  /**
+   * Returns the name of the hashing algorithm.
+   * 
+   * @see MessageDigest#getAlgorithm()
+   */
   String hashAlgo();
   
   
+  /**
+   * Creates and returns a new <tt>MessageDigest</tt>. The
+   * returned instance must match this specification.
+   */
   default MessageDigest newDigest() {
     String algo = hashAlgo();
     try {
@@ -49,6 +63,18 @@ public interface Digest {
     } catch (NoSuchAlgorithmException nsax) {
       throw new RuntimeException("on creating digest with algo " + algo, nsax);
     }
+  }
+  
+  
+  
+  /**
+   * Returns a read-only, buffer of zeroes with {@linkplain #hashWidth()}
+   * remaining bytes. The default implementation is needlessly inefficient;
+   * if this method is invoked often, consider overriding and returning a
+   * duplicate of the same instance.
+   */
+  default ByteBuffer sentinelHash() {
+    return ByteBuffer.allocate(hashWidth()).asReadOnlyBuffer();
   }
   
   

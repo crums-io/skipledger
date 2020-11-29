@@ -9,8 +9,12 @@ import static org.junit.Assert.*;
 
 import java.util.List;
 import java.util.Random;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import  org.junit.Test;
+
+import io.crums.util.Lists;
 
 /**
  * 
@@ -82,21 +86,21 @@ public class SkipLedgerTest {
   
   
   @Test
-  public void testHiToLoNumberPath() {
-    List<Long> zeroPath = hiToLoNumberPath(0, 0);
-    assertEquals(1, zeroPath.size());
-    assertEquals(0, zeroPath.get(0).longValue());
+  public void testSkipPathNumbers() {
     
-    List<Long> trivialPath = hiToLoNumberPath(1, 0);
-    assertEquals(2, trivialPath.size());
+//    List<Long> zeroPath = hiToLoNumberPath(0, 0);
+//    assertEquals(1, zeroPath.size());
+//    assertEquals(0, zeroPath.get(0).longValue());
+//    
+    List<Long> trivialPath = skipPathNumbers(1, 1);
+    assertEquals(1, trivialPath.size());
     assertEquals(1, trivialPath.get(0).longValue());
-    assertEquals(0, trivialPath.get(1).longValue());
-    
-    
-    testHiToLoNumberPath(9, 0);
-    testHiToLoNumberPath(9, 1);
-    testHiToLoNumberPath(9, 2);
-    testHiToLoNumberPath(9, 3);
+//    
+//    
+//    testSkipPathNumbers(9, 0);
+    testSkipPathNumbers(9, 1);
+    testSkipPathNumbers(9, 2);
+    testSkipPathNumbers(9, 3);
     
     Random random = new Random(-1);
     // The JIT's theorem prover agrees there's nothing to see here
@@ -110,7 +114,7 @@ public class SkipLedgerTest {
         b = a;
         a = c;
       }
-      testHiToLoNumberPath(a, b);
+      testSkipPathNumbers(a, b);
     }
     
     for (int count = 10_000; count-- > 0; ) {
@@ -121,13 +125,15 @@ public class SkipLedgerTest {
         b = a;
         a = c;
       }
-      testHiToLoNumberPath(a, b);
+      testSkipPathNumbers(a, b);
     }
   }
   
   
-  private void testHiToLoNumberPath(long hi, long lo) {
-    List<Long> path = hiToLoNumberPath(hi, lo);
+  private void testSkipPathNumbers(long hi, long lo) {
+    // the reversing below is an artifact of the fact in the initial
+    // design this was ordered in from hi row number to lo. 
+    List<Long> path = Lists.reverse(skipPathNumbers(lo, hi));
     assertFalse(path.isEmpty());
     assertEquals(hi, path.get(0).longValue());
     assertEquals(lo, path.get(path.size() - 1).longValue());
@@ -138,6 +144,51 @@ public class SkipLedgerTest {
       assertTrue(delta > 0);
       long maxDelta = 1L << (SkipLedger.skipCount(prevRow) - 1);
       assertTrue(maxDelta >= delta);
+    }
+  }
+  
+  
+  
+  @Test
+  public void testSkipPathCoverage() {
+    for (int r = 1; r < 33; ++r)
+      testSkipPathCoverage(1, r);
+    
+    int trials = 1000;
+    Random random = new Random(9);
+    
+    for (int count = trials; count-- > 0; ) {
+      long lo = random.nextInt(64 * 1024) + 1;
+      long hi = random.nextInt(1024 * 1024 * 512) + lo;
+      testSkipPathCoverage(lo, hi);
+    }
+  }
+  
+  
+  private void testSkipPathCoverage(long lo, long hi) {
+    SortedSet<Long> coveredRowNums = skipPathCoverage(lo, hi);
+    List<Long> pathRowNums = skipPathNumbers(lo, hi);
+    assertTrue(coveredRowNums.containsAll(pathRowNums));
+    TreeSet<Long> copy = new TreeSet<>(coveredRowNums);
+    copy.removeAll(pathRowNums);
+    for (Long n : copy) {
+      
+      boolean found = false;
+      for (Long r : pathRowNums) {
+        long delta = r - n;
+        assertTrue(delta != 0); // (test the test assumption)
+        if (delta < 0)
+          continue;
+        
+        if (delta == Long.highestOneBit(delta)) {
+          found = true;
+          break;
+        }
+      }
+      
+      assertTrue(
+          "(" + lo + ", " + hi + "): failed to find origin for covered row number " + n,
+          found);
     }
   }
   

@@ -39,13 +39,14 @@ public class LedgerNavigatorTest extends SelfAwareTestCase {
   
   
   @Test
-  public void testHiToLowPath() {
+  public void testSkipPath() {
     
     Object label = new Object() { };
     
     
-    final int rows = 128 * 1024 - 63;
+    final int rows = 1024 * 1024 + 63;
     System.out.println("== " + method(label) + "");
+    System.out.print("Generating ledger with " + rows + " random entries");
 
     SkipLedger ledger = new VolatileLedger(rows);
     LedgerNavigator nav = new LedgerNavigator(ledger);
@@ -64,7 +65,10 @@ public class LedgerNavigatorTest extends SelfAwareTestCase {
     assertEquals(rows, nav.size());
     
 
-    print(nav.hiToLowPath(500, 1));
+    System.out.println();
+    System.out.println("skip path 7 -> 625:");
+    print(nav.vForm(7, 625));
+    System.out.println("V-form:");
     print(nav.vForm());
     System.out.println("== " + method(label) + ": [DONE]");
   }
@@ -73,7 +77,7 @@ public class LedgerNavigatorTest extends SelfAwareTestCase {
   private void print(SkipPath skipPath) {
     System.out.println();
     
-    for (Row row : skipPath.rows())
+    for (Row row : skipPath.path())
       System.out.println(row);
 
     System.out.println();
