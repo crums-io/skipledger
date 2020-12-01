@@ -43,6 +43,12 @@ public class FilterLedger extends SkipLedger {
   }
   
   
+  @Override
+  public ByteBuffer sentinelHash() {
+    return ledger.sentinelHash();
+  }
+  
+  
   
   
 

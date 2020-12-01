@@ -7,7 +7,6 @@ package io.crums.util.ledger;
 import static org.junit.Assert.*;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Random;
 
 import org.junit.Test;

@@ -10,9 +10,12 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Objects;
+import java.util.SortedSet;
 
 import io.crums.util.Lists;
+import io.crums.util.Sets;
 import io.crums.util.hash.Digest;
+import io.crums.util.hash.Digests;
 
 /**
  * A list of connected rows in a {@linkplain SkipLedger} with strictly ascending row numbers.
@@ -222,28 +225,22 @@ public class LinkedPath implements Digest {
   
   
   public boolean intersects(LinkedPath other) {
-    List<Long> a = rowNumbers();
-    List<Long> b = other.rowNumbers();
+    if (!Digest.equal(this, other))
+      return false;
     
-    while (!a.isEmpty() && !b.isEmpty()) {
-      long headA = a.get(0);
-      long headB = b.get(0);
-      if (headA < headB)
-        a = a.subList(1, a.size());
-      else if (headA == headB)
-        return true;
-      else
-        b = b.subList(1, b.size());
-    }
     
-    // FIXME: there's actually a cool thing going on here
-    // The skip paths may actually be connected via common
-    // skip pointers.
-    return false;
+    SortedSet<Long> coverage = SkipLedger.coverage(rowNumbers());
+    SortedSet<Long> otherCoverage = SkipLedger.coverage(other.rowNumbers());
+    
+    return Sets.intersect(coverage, otherCoverage);
   }
   
   
-  
+  /**
+   * Returns the row numbers in the path.
+   * 
+   * @return non-empty, ascending list of row numbers
+   */
   public final List<Long> rowNumbers() {
     return Lists.map(path, r -> r.rowNumber());
   }
