@@ -4,8 +4,7 @@
 package io.crums.util.ledger;
 
 
-import static io.crums.util.ledger.SkipLedger.SHA256_WIDTH;
-import static io.crums.util.ledger.SkipLedger.skipCount;
+import static io.crums.util.ledger.SkipLedger.*;
 import static org.junit.Assert.*;
 
 import java.nio.ByteBuffer;
@@ -22,7 +21,7 @@ import com.gnahraf.test.IoTestCase;
  */
 public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCase {
   
-  public final static int HASH_WIDTH = SHA256_WIDTH;
+  public final static int HASH_WIDTH = SkipLedger.DEF_DIGEST.hashWidth();
   private final ByteBuffer SENTINEL_HASH = ByteBuffer.allocate(HASH_WIDTH).asReadOnlyBuffer();
 
   
@@ -110,11 +109,22 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
   
   
   @Test
+  public void test1027EnBloc() throws Exception {
+
+    int rows = 1027;
+    Object label = new Object() { };
+    testAppendEnBloc(rows, label, rows);
+  }
+  
+  
+  
+  @Test
   public void test1M_plus33() throws Exception {
 
     final int rows = 1024*1024 + 33;
+    final int blockSize = 16 * 1024;
     Object label = new Object() { };
-    testImpl(rows, label);
+    testAppendEnBloc(rows, label, blockSize);
   }
   
   
@@ -132,26 +142,78 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
     for (int i = 0; i < rows; ++i) {
       mHashes[i] = new byte[HASH_WIDTH];
       random.nextBytes(mHashes[i]);
-      final long rowNum = ledger.appendRow(ByteBuffer.wrap(mHashes[i]));
+      final long rowNum = ledger.appendRowsEnBloc(ByteBuffer.wrap(mHashes[i]));
       assertEquals(i + 1, rowNum);
       assertEquals(rowNum, ledger.size());
-      final int skipPtrCount = skipCount(rowNum);
-      ByteBuffer row = ledger.getRow(rowNum);
-      if (row.remaining() != row.capacity())
-        row = row.slice();
-      int expectedBytes = (1 + skipPtrCount) * HASH_WIDTH;
-      assertEquals(expectedBytes, row.remaining());
-      
-      assertEquals(ByteBuffer.wrap(mHashes[i]), row.duplicate().limit(HASH_WIDTH));
-      for (int p = 0; p < skipPtrCount; ++p) {
-        long referencedRowNum = rowNum - (1 << p);
-        int pos = (1 + p) * HASH_WIDTH;
-        int limit = pos + HASH_WIDTH;
-        ByteBuffer hashPtr = row.duplicate().position(pos).limit(limit);
-        ByteBuffer referencedRowHash = ledger.rowHash(referencedRowNum);
-        assertEquals(referencedRowHash, hashPtr);
-      }
+      assertRowPointers(ledger, rowNum, ByteBuffer.wrap(mHashes[i]));
     }
+    close(ledger);
+    System.out.println(" [DONE]");
+  }
+  
+  
+  private void assertRowPointers(SkipLedger ledger, long rowNumber, ByteBuffer entryHash) {
+    ByteBuffer row = ledger.getRow(rowNumber);
+    assertEquals(row.remaining(), rowCells(rowNumber) * ledger.hashWidth());
+    if (row.remaining() != row.capacity())
+      row = row.slice();
+    
+    if (entryHash != null) {
+      assertEquals(entryHash, row.duplicate().limit(HASH_WIDTH));
+    }
+    
+    final int skipPtrCount = skipCount(rowNumber);
+    for (int p = 0; p < skipPtrCount; ++p) {
+      long referencedRowNum = rowNumber - (1 << p);
+      int pos = (1 + p) * HASH_WIDTH;
+      int limit = pos + HASH_WIDTH;
+      ByteBuffer hashPtr = row.duplicate().limit(limit).position(pos);
+      ByteBuffer referencedRowHash = ledger.rowHash(referencedRowNum);
+      assertEquals(referencedRowHash, hashPtr);
+    }
+  }
+  
+  
+  protected void testAppendEnBloc(final int rows, Object label, int blockSize) throws Exception {
+    String method = method(label);
+    System.out.print("== " + method + ": " + rows + " rows, " + blockSize + " rows per block ");
+
+    int cells = 3 * rows;
+    Random random = new Random(cells);
+    
+    L ledger = newLedger(cells, label);
+    
+    byte[][] mHashes = new byte[rows][];
+    for (int i = 0; i < rows; ++i) {
+      mHashes[i] = new byte[HASH_WIDTH];
+      random.nextBytes(mHashes[i]);
+    }
+    
+    int wholeBlocks = rows / blockSize;
+    ByteBuffer entryBlock = ByteBuffer.allocate(blockSize * HASH_WIDTH);
+    for (int b = 0; b < wholeBlocks; ++b) {
+      entryBlock.clear();
+      int zeroIndex = b * blockSize;
+      for (int i = 0; i < blockSize; ++i) {
+        entryBlock.put(mHashes[zeroIndex + i]);
+      }
+      entryBlock.flip();
+      ledger.appendRowsEnBloc(entryBlock);
+    }
+    
+    entryBlock.clear();
+    for (int i = wholeBlocks * blockSize; i < rows; ++i)
+      entryBlock.put(mHashes[i]);
+    
+    if (entryBlock.flip().hasRemaining())
+      ledger.appendRowsEnBloc(entryBlock);
+    
+    for (int index = 0; index < rows; ++index) {
+      int rowNumber = index + 1;
+      ByteBuffer entryHash = ByteBuffer.wrap(mHashes[index]);
+      assertRowPointers(ledger, rowNumber, entryHash);
+    }
+    
     close(ledger);
     System.out.println(" [DONE]");
   }
@@ -159,8 +221,8 @@ public abstract class LedgerTestTemplate<L extends SkipLedger> extends IoTestCas
   
   /**
    * 
-   * @param cellsCapacity the maximum capacity of the 
-   * @param lablel
+   * @param cellsCapacity the maximum (cell) capacity of the returned ledger
+   * @param label
    * @return
    */
   protected abstract L newLedger(int cellsCapacity, Object label) throws Exception;

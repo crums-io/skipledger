@@ -13,7 +13,7 @@ public class Digests {
   
   
   /**
-   * SHA-256 specs.
+   * SHA-256 spec. Hash width: 32 bytes.
    */
   public final static Digest SHA_256 = new Digest() {
     

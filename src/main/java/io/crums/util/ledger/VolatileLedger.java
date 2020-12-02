@@ -8,9 +8,11 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * 
+ * In-memory ledger. TODO: Bridge to {@linkplain DirectLedger}.
  */
 public class VolatileLedger extends SkipLedger {
+  
+  // Not using ReadWriteBuffer because we're allowing read-only also
   
   private final ByteBuffer cells;
   private final ByteBuffer view;
@@ -18,7 +20,7 @@ public class VolatileLedger extends SkipLedger {
   
   
   public VolatileLedger(int rows) {
-    this(ByteBuffer.allocate(rows * 3 * SHA256_WIDTH), 0);
+    this(ByteBuffer.allocate(rows * 3 * DEF_DIGEST.hashWidth()), 0);
   }
   
   
@@ -60,10 +62,10 @@ public class VolatileLedger extends SkipLedger {
     view.limit(endOffset);
   }
 
+
   @Override
-  public long size() {
-    int cells = view.remaining() / hashWidth();
-    return maxRows(cells);
+  public long cellCount() {
+    return view.remaining() / hashWidth();
   }
   
   

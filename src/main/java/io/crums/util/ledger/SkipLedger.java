@@ -15,6 +15,7 @@ import java.util.TreeSet;
 import io.crums.util.EasyList;
 import io.crums.util.Lists;
 import io.crums.util.hash.Digest;
+import io.crums.util.hash.Digests;
 
 /**
  * <p>
@@ -37,8 +38,7 @@ import io.crums.util.hash.Digest;
  * 
  * <p>This base class is stateless (it defines no instance fields, only methods).
  * A concrete implementation, of course does have state. This "statelessness", in turn,
- * is exploited in the {@linkplain FilterLedger} <strike>in order to layer-in message digest
- * re-use</strike>.</p>
+ * is exploited in the {@linkplain FilterLedger} pattern.</p>
  * 
  * <h3>Changing the Hash Function</h3>
  * 
@@ -48,7 +48,8 @@ import io.crums.util.hash.Digest;
  * <li>{@linkplain #hashWidth()}</li>
  * <li>{@linkplain #hashAlgo()}</li>
  * <li>{@linkplain #sentinelHash()}</li>
- * </ol> 
+ * <li><b>Or equivalently:</b> by updating {@linkplain #DEF_DIGEST} and recompiling 🙃</li>
+ * </ol>
  * This information <em>could</em> be encoded in a single object, but it's still a reference
  * I don't care to carry around per instance and its anscilliary objects.
  * 
@@ -63,19 +64,15 @@ import io.crums.util.hash.Digest;
  */
 public abstract class SkipLedger implements Digest {
   
-  /**
-   * The default hashing algorithm is SHA-256.
-   */
-  public final static String SHA256_ALGO = "SHA-256";
   
   /**
-   * The hash width of the default hashing algorithm (SHA-256) is 32 bytes wide.
+   * The default hashing algorithm is set here. Currently SHA-256.
+   * 
+   * @see Digests#SHA_256
    */
-  public final static int SHA256_WIDTH = 32;
+  public final static Digest DEF_DIGEST = Digests.SHA_256;
   
   
-  private final static ByteBuffer SHA256_SENTINEL_HASH =
-      ByteBuffer.allocate(SHA256_WIDTH).asReadOnlyBuffer();
   
   
   
@@ -274,11 +271,15 @@ public abstract class SkipLedger implements Digest {
    * 
    * @return &ge; 0
    */
-  public abstract long size();
+  public long size() {
+    return maxRows(cellCount());
+  }
   
-  
-  
- 
+
+  /**
+   * Returns the total number of backing cells.
+   */
+  public abstract long cellCount();
   
   
   /**
@@ -294,7 +295,7 @@ public abstract class SkipLedger implements Digest {
    * @return 32
    */
   public int hashWidth() {
-    return SHA256_WIDTH;
+    return DEF_DIGEST.hashWidth();
   }
   
   
@@ -302,14 +303,14 @@ public abstract class SkipLedger implements Digest {
    * @return SHA-256
    */
   public String hashAlgo() {
-    return SHA256_ALGO;
+    return DEF_DIGEST.hashAlgo();
   }
   
   
   
   @Override
   public ByteBuffer sentinelHash() {
-    return SHA256_SENTINEL_HASH.duplicate();
+    return DEF_DIGEST.sentinelHash();
   }
   
   
@@ -479,26 +480,33 @@ public abstract class SkipLedger implements Digest {
    * @see #appendRow(ByteBuffer)
    */
   public long appendRowsEnBloc(ByteBuffer entryHashes) {
-    int cellWidth = hashWidth();
-    checkPositiveMultiple(entryHashes, cellWidth);
-    int count = entryHashes.remaining() / cellWidth;
     
-    long size = 0;
-    for (int i = 0; i < count; ++i) {
-      int pos = i * cellWidth;
-      int limit = pos + cellWidth;
-      entryHashes.limit(limit).position(pos);
-      size = appendRow(entryHashes);
-    }
-    return size;
+    SingleTxnLedger txn = new SingleTxnLedger(this);
+    txn.appendRowsEnBloc(entryHashes);
+    putCells(txn.newCellIndex(), txn.newCells());
+    return txn.size();
+    
+//    int cellWidth = hashWidth();
+//    int count = checkedEntryCount(entryHashes, cellWidth);
+//    
+//    long size = 0;
+//    for (int i = 0; i < count; ++i) {
+//      int pos = i * cellWidth;
+//      int limit = pos + cellWidth;
+//      entryHashes.limit(limit).position(pos);
+//      size = appendRow(entryHashes);
+//    }
+//    return size;
   }
   
   
-  protected final void checkPositiveMultiple(ByteBuffer entryHashes, int cellWidth) {
-    if (entryHashes.remaining() % cellWidth != 0 || !entryHashes.hasRemaining())
+  protected final int checkedEntryCount(ByteBuffer entryHashes, int cellWidth) {
+    int entries = entryHashes.remaining() / cellWidth;
+    if (entryHashes.remaining() % cellWidth != 0 || entries == 0)
       throw new IllegalArgumentException(
           "entryHashes remaining bytes (" + entryHashes.remaining() +
           ") not a postive multiple of hashWidth " + cellWidth);
+    return entries;
   }
   
   

@@ -15,7 +15,6 @@ import java.util.SortedSet;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
 import io.crums.util.hash.Digest;
-import io.crums.util.hash.Digests;
 
 /**
  * A list of connected rows in a {@linkplain SkipLedger} with strictly ascending row numbers.

@@ -57,20 +57,6 @@ public class DirectLedger extends SkipLedger implements Closeable {
       throw new UncheckedIOException("on attempting " + file, iox);
     }
   }
-
-  @Override
-  public long size() throws UncheckedIOException {
-    
-    long cells;
-    
-    try {
-      cells = cellCount();
-    } catch (IOException iox) {
-      throw new UncheckedIOException("on size()", iox);
-    }
-    
-    return maxRows(cells);
-  }
   
   
   /**
@@ -124,9 +110,13 @@ public class DirectLedger extends SkipLedger implements Closeable {
   
   
   
-  
-  private long cellCount() throws IOException {
-    return file.size() / hashWidth();
+  @Override
+  public long cellCount() throws UncheckedIOException {
+    try {
+      return file.size() / hashWidth();
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on cellCount()", iox);
+    }
   }
 
 }

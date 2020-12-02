@@ -20,11 +20,6 @@ public class FilterLedger extends SkipLedger {
   public FilterLedger(SkipLedger ledger) {
     this.ledger = Objects.requireNonNull(ledger, "null ledger");
   }
-
-  @Override
-  public long size() {
-    return ledger.size();
-  }
   
 
   @Override
@@ -46,6 +41,12 @@ public class FilterLedger extends SkipLedger {
   @Override
   public ByteBuffer sentinelHash() {
     return ledger.sentinelHash();
+  }
+  
+  
+  @Override
+  public long cellCount() {
+    return ledger.cellCount();
   }
   
   
