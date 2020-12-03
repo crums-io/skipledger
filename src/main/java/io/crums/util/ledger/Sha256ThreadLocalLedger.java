@@ -3,8 +3,8 @@
  */
 package io.crums.util.ledger;
 
+
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 import io.crums.util.hash.Digests;
 

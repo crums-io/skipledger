@@ -12,7 +12,7 @@ import io.crums.io.buffer.ReadWriteBuffer;
 /**
  * Implements transactional semantics for {@linkplain #appendRowsEnBloc(java.nio.ByteBuffer)}.
  */
-public class SingleTxnLedger extends FilterLedger {
+class SingleTxnLedger extends FilterLedger {
   
   private final long snapCellCount;
   

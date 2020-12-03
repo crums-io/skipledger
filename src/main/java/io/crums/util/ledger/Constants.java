@@ -15,6 +15,6 @@ public class Constants {
   
   
   
-  public final static Digest DEF_DIGEST = Digests.SHA_256;
+  public final static Digest DEF_DIGEST = SkipLedger.DEF_DIGEST;
 
 }
