@@ -19,8 +19,6 @@ import io.crums.io.channels.ChannelUtils;
  */
 public class DirectLedger extends SkipLedger implements Closeable {
   
-  public final static String FILE_EXT = ".sldg";
-  
   
   
   private final FileChannel file;
@@ -46,7 +44,7 @@ public class DirectLedger extends SkipLedger implements Closeable {
   public DirectLedger(File file, boolean readOnly) throws UncheckedIOException {
     try {
       
-      if (!file.exists())
+      if (!readOnly && !file.exists())
         file.createNewFile();
       
       String mode = readOnly ? "r" : "rw";

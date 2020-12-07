@@ -5,6 +5,7 @@ package io.crums.util.ledger;
 
 
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.util.Objects;
 
 import io.crums.util.IntegralStrings;
@@ -65,6 +66,19 @@ public class Row implements Digest {
    */
   public final ByteBuffer data() {
     return row.asReadOnlyBuffer();
+  }
+  
+  
+  /**
+   * Returns this row's hash.
+   * 
+   * @return the hash the {@linkplain data}
+   */
+  public final ByteBuffer rowHash() {
+    MessageDigest digest = newDigest();
+    digest.reset();
+    digest.update(data());
+    return ByteBuffer.wrap(digest.digest());
   }
   
   

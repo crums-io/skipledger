@@ -85,7 +85,7 @@ public abstract class SkipLedger implements Digest {
    * @return a non-negative number (&ge; 0) and &le; <tt>2 * rowNumber - 1</tt>
    */
   public static long cellNumber(long rowNumber) {
-    checkRowNumber(rowNumber);
+    checkRealRowNumber(rowNumber);
     
     // count the number of cells *before this row number
     --rowNumber;
@@ -116,7 +116,7 @@ public abstract class SkipLedger implements Digest {
    * @see #maxRows(long)
    */
   public static int skipCount(long rowNumber) {
-    checkRowNumber(rowNumber);
+    checkRealRowNumber(rowNumber);
     return 1 + Long.numberOfTrailingZeros(rowNumber);
   }
   
@@ -223,10 +223,28 @@ public abstract class SkipLedger implements Digest {
   
   
   
-  
-  private static void checkRowNumber(long rowNumber) {
-    if (rowNumber < 1)
-      throw new IllegalArgumentException("row number (" + rowNumber + ") not positive");
+  /**
+   * Throws an <tt>IllegalArgumentException</tt> if the given row number is not &ge; 1.
+   * If the row number is zero, the thrown exception details why row <tt>0</tt> is a bad
+   * argument.
+   * 
+   * @param rowNumber &ge; 1
+   * @throws IllegalArgumentException
+   */
+  public static void checkRealRowNumber(long rowNumber) throws IllegalArgumentException {
+    
+    if (rowNumber < 1) {
+      
+      String msg;
+      if (rowNumber == 0)
+        msg =
+            "row 0 is an *abstract row that hashes to zeroes; " +
+            "it doesn't have well-defined contents";
+      else
+        msg = "negative rowNumber " + rowNumber;
+      
+      throw new IllegalArgumentException(msg);
+    }
   }
   
   
@@ -468,8 +486,6 @@ public abstract class SkipLedger implements Digest {
   
   /**
    * Appends the given entries <em>en bloc</em>.
-   * <h4>Implementation</h4>
-   * <p>The base class simply invokes {@linkplain #appendRow(ByteBuffer)} serially.</p>
    * 
    * @param entryHashes the hashes of multiple next <em>entries</em> in the ledger
    *            (sans skip pointers)
@@ -485,18 +501,6 @@ public abstract class SkipLedger implements Digest {
     txn.appendRowsEnBloc(entryHashes);
     putCells(txn.newCellIndex(), txn.newCells());
     return txn.size();
-    
-//    int cellWidth = hashWidth();
-//    int count = checkedEntryCount(entryHashes, cellWidth);
-//    
-//    long size = 0;
-//    for (int i = 0; i < count; ++i) {
-//      int pos = i * cellWidth;
-//      int limit = pos + cellWidth;
-//      entryHashes.limit(limit).position(pos);
-//      size = appendRow(entryHashes);
-//    }
-//    return size;
   }
   
   
