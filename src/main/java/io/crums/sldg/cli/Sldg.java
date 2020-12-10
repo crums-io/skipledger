@@ -9,7 +9,7 @@ import static io.crums.util.main.Args.*;
 import java.io.File;
 import java.io.PrintStream;
 
-import io.crums.sldg.Db;
+import io.crums.sldg.db.Db;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.TablePrint;
 
