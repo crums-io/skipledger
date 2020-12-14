@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ConcurrentModificationException;
 
+import io.crums.io.Opening;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.Table;
 
@@ -23,28 +24,22 @@ public class FileTable implements Table {
   
   
   private final FileChannel file;
-  private final boolean readOnly;
 
   /**
    * 
    */
   @SuppressWarnings("resource")
   public FileTable(File file) throws IOException {
-    this(file, false);
+    this(file, Opening.CREATE_ON_DEMAND);
   }
 
   /**
    * 
    */
   @SuppressWarnings("resource")
-  public FileTable(File file, boolean readOnly) throws IOException {
-
-    if (!readOnly && !file.exists())
-      file.createNewFile();
+  public FileTable(File file, Opening mode) throws IOException {
     
-    String mode = readOnly ? "r" : "rw";
-    this.file = new RandomAccessFile(file, mode).getChannel();
-    this.readOnly = readOnly;
+    this.file = mode.openChannel(file);
   }
 
   @Override
@@ -114,14 +109,6 @@ public class FileTable implements Table {
   }
   
 
-  
-  
-  /**
-   * Determines whether the ledger was opened in read-only mode.
-   */
-  public boolean isReadOnly() {
-    return readOnly;
-  }
   
   
   public void commit() throws UncheckedIOException {

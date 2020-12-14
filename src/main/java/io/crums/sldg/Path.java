@@ -27,10 +27,11 @@ import io.crums.util.hash.Digest;
  * constraints on the possible row numbers.
  * 
  * <h3>Validation Guarantee</h3>
- * 
+ * <p>
  * Every instance's hash pointers are checked for validity at construction. Furthermore,
  * every public constructor makes a defensive copy of its row inputs. The upshot of this
  * guarantee is that a reference to instance at runtime, is a reference to an immutable proof.
+ * </p>
  */
 public class Path implements Digest {
   

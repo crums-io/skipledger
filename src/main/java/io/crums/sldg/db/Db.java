@@ -6,14 +6,13 @@ package io.crums.sldg.db;
 
 import static io.crums.sldg.SldgConstants.*;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -21,25 +20,19 @@ import java.util.TreeSet;
 import io.crums.client.Client;
 import io.crums.client.ClientException;
 import io.crums.client.repo.TrailRepo;
-import io.crums.io.FileUtils;
+import io.crums.io.Opening;
 import io.crums.model.CrumRecord;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Row;
+import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
-import io.crums.util.IntegralStrings;
+import io.crums.util.Lists;
+import io.crums.util.TaskStack;
 
 /**
  * 
  */
-public class Db {
-  
-  public final static int MAX_BLOCK_WITNESS_COUNT = 65;
-  
-  
-  public final static int MAX_WITNESS_EXPONENT = 62;
-  
-  
-  
+public class Db implements Closeable {
   
   private final File dir;
   private final Ledger ledger;
@@ -48,19 +41,25 @@ public class Db {
   /**
    * 
    */
-  public Db(File dir, boolean readOnly) throws IOException {
+  public Db(File dir, Opening mode) throws IOException {
     this.dir = Objects.requireNonNull(dir, "null directory");
-    if (!readOnly)
-      FileUtils.ensureDir(dir);
     
-    this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), readOnly);
-    this.witnessRepo = new TrailRepo(dir, readOnly);
+    this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), mode);
+    this.witnessRepo = new TrailRepo(dir, mode);
     
     // TODO: do some sanity checks we loaded plausible files
     //       delaying cuz it's sure break anyway, if so.
   }
   
-  
+
+
+
+
+  @Override
+  @SuppressWarnings("resource")
+  public void close() {
+    new TaskStack(this).pushClose(ledger).pushClose(witnessRepo).close();
+  }
   
   
   public File getDir() {
@@ -79,11 +78,44 @@ public class Db {
   }
   
   
-  public int witness(int exponent, boolean includeLast) {
+  
+  public WitnessReport witness() {
+    return witness(true);
+  }
+  
+  
+  public WitnessReport witness(boolean includeLast) {
+    
+    
+    final long unwitnessedRows;
+    {
+      long lastWitNum = lastWitnessNum();
+      unwitnessedRows = ledger.size() - lastWitNum;
+      
+      if (unwitnessedRows == 0)
+        return new WitnessReport(lastWitNum);
+      
+      else if (unwitnessedRows < 0)
+        throw new SldgException(
+            "size/lastWitnessNum : " + ledger.size() + "/" + lastWitNum);
+    }
+    
+    int toothExponent;
+    {
+      int p = 0;
+      for (; unwitnessedRows >> (p + 1) > SldgConstants.DEF_TOOTHED_WIT_COUNT; ++p);
+      toothExponent = p;
+    }
+    
+    return witness(toothExponent, true);
+  }
+  
+  
+  public WitnessReport witness(int exponent, boolean includeLast) {
 
     if (exponent < 0)
       throw new IllegalArgumentException("negatve exponent " + exponent);
-    if (exponent > MAX_WITNESS_EXPONENT)
+    if (exponent > SldgConstants.MAX_WITNESS_EXPONENT)
       throw new IllegalArgumentException("out of bounds exponent " + exponent);
     
     final long lastRowNum = ledger.size();
@@ -98,20 +130,23 @@ public class Db {
     
     
     
-    ArrayList<Row> rowsToWitness = new ArrayList<>(MAX_BLOCK_WITNESS_COUNT);
+    List<Row> rowsToWitness;
     {
+      ArrayList<Row> rows = new ArrayList<>(SldgConstants.MAX_BLOCK_WITNESS_COUNT);
       final int maxLoopCount =
-          includeUntoothed ? MAX_BLOCK_WITNESS_COUNT : MAX_BLOCK_WITNESS_COUNT - 1;
+          includeUntoothed ? SldgConstants.MAX_BLOCK_WITNESS_COUNT : SldgConstants.MAX_BLOCK_WITNESS_COUNT - 1;
       for (
           long toothedNum = lastWitNum + witNumDelta;
-          toothedNum <= lastRowNum && rowsToWitness.size() < maxLoopCount;
+          toothedNum <= lastRowNum && rows.size() < maxLoopCount;
           toothedNum += witNumDelta) {
         
-        rowsToWitness.add(ledger.getRow(toothedNum));
+        rows.add(ledger.getRow(toothedNum));
       }
       
       if (includeUntoothed)
-        rowsToWitness.add(ledger.getRow(lastRowNum));
+        rows.add(ledger.getRow(lastRowNum));
+      
+      rowsToWitness = Lists.reverse(rows);
     }
     
     
@@ -120,49 +155,40 @@ public class Db {
     
     List<CrumRecord> records = remote.getCrumRecords();
     
-    sanityCheckRemote(records, rowsToWitness);
+    List<WitnessRecord> zip = zip(records, rowsToWitness);
     
-    SortedSet<CrumRecord> trailedRecords = filterTrailed(records);
-    
-    Map<ByteBuffer, Row> hashMappedRows = toHashMappedRows(rowsToWitness);
+    SortedSet<WitnessRecord> trailedRecords = filterTrailed(zip);
     
     long witnessedRowNumber = 0;
-    int count = 0;
-    for (CrumRecord trailed : trailedRecords) {
-      ByteBuffer rowHash = trailed.crum().hash();
-      Row row = hashMappedRows.get(rowHash);
-      if (row == null)
-        throw new SldgException(
-            "assertion failure (1) on hash lookup " + IntegralStrings.toHex(rowHash));
+    
+    List<WitnessRecord> stored = new ArrayList<>(trailedRecords.size());
+    
+    for (WitnessRecord trailed : trailedRecords) {
       
-      long rn = row.rowNumber();
+      final long rn = trailed.row.rowNumber();
+      
+      assert rn > lastWitNum;
       
       if (rn <= witnessedRowNumber) {
-        if (rn == witnessedRowNumber)
-          throw new SldgException("assertion failure (2) row number " + rn);
-        else
-          continue;
+        assert rn != witnessedRowNumber;
+        continue;
       }
+      
       witnessedRowNumber = rn;
-      witnessRepo.putTrail(trailed.trail(), witnessedRowNumber);
-      ++count;
+      witnessRepo.putTrail(trailed.record.trail(), rn);
+      stored.add(trailed);
     }
-    return count;
-  }
-  
-  
-  private Map<ByteBuffer, Row> toHashMappedRows(ArrayList<Row> rowsToWitness) {
-    HashMap<ByteBuffer, Row> map = new HashMap<>(rowsToWitness.size());
-    rowsToWitness.forEach(r -> map.put(r.hash(), r));
-    return map;
+    
+    stored = stored.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(stored);
+    return new WitnessReport(Lists.reverse(zip), stored, lastWitNum);
   }
 
 
 
 
-  private SortedSet<CrumRecord> filterTrailed(List<CrumRecord> records) {
-    TreeSet<CrumRecord> trailed = new TreeSet<>(REC_UTC_COMP);
-    for (CrumRecord record : records)
+  private SortedSet<WitnessRecord> filterTrailed(Collection<WitnessRecord> records) {
+    TreeSet<WitnessRecord> trailed = new TreeSet<>();
+    for (WitnessRecord record : records)
       if (record.isTrailed())
         trailed.add(record);
     return trailed;
@@ -183,30 +209,127 @@ public class Db {
   }
   
   
-  private void sanityCheckRemote(List<CrumRecord> records, List<Row> rowsToWitness) {
+  
+  
+  
+  private List<WitnessRecord> zip(List<CrumRecord> records, List<Row> rowsToWitness) {
+
     if (records.size() != rowsToWitness.size())
       throw new ClientException(
           "response length mismatch: expected " + rowsToWitness.size() +
           "; actual was " + records.size());
     
-    for (int index = 0; index < records.size(); ++index) {
-      CrumRecord record = records.get(index);
-      Row row = rowsToWitness.get(index);
-      if (!row.hash().equals(record.crum().hash()))
-          throw new ClientException(
-              "hash mismatch from remote at index " + index +
-              ": " + record + " / " + row);
-    }
+    ArrayList<WitnessRecord> zip = new ArrayList<>(records.size());
+    for (int index = 0; index < records.size(); ++index)
+      zip.add(new WitnessRecord( rowsToWitness.get(index), records.get(index)) );
+    return zip;
   }
   
   
-  private final static Comparator<CrumRecord> REC_UTC_COMP = new Comparator<CrumRecord>() {
-
-    @Override
-    public int compare(CrumRecord a, CrumRecord b) {
-      return Long.compare(a.crum().utc(), b.crum().utc());
+  
+  public final static class WitnessRecord implements Comparable<WitnessRecord> {
+    
+    private final Row row;
+    private final CrumRecord record;
+    
+    private WitnessRecord(Row row, CrumRecord record) {
+      this.row = row;
+      this.record = record;
+      if (!record.crum().hash().equals(row.hash()))
+        throw new ClientException("hash mismatch from remote: " + record + " / " + row);
     }
-  };
+    
+    @Override
+    public int compareTo(WitnessRecord o) {
+      int comp = Long.compare(utc(), o.utc());
+      return comp == 0 ? - Long.compare(rowNum(), o.rowNum()) : comp;
+    }
+    
+    public long utc() {
+      return record.crum().utc();
+    }
+    
+    public long rowNum() {
+      return row.rowNumber();
+    }
+    
+    public boolean isTrailed() {
+      return record.isTrailed();
+    }
+    
+    
+    public Row row() {
+      return row;
+    }
+    
+    public CrumRecord record() {
+      return record;
+    }
+    
+    /**
+     * Equality semantics decided solely by {@linkplain #row}.
+     */
+    public boolean equals(Object o) {
+      return o == this || (o instanceof WitnessRecord) && ((WitnessRecord) o).row.equals(row);
+    }
+    
+    public int hashCode() {
+      return row.hashCode();
+    }
+    
+  }
+  
+  
+  /**
+   * Summary of a ledger {@linkplain Db#witness() witness} action.
+   */
+  public final static class WitnessReport {
+    
+    private final List<WitnessRecord> records;
+    private final List<WitnessRecord> stored;
+    
+    private final long prevLastWitNum;
+    
+    
+    private WitnessReport(long prevLastWitNum) {
+      records = stored = Collections.emptyList();
+      this.prevLastWitNum = prevLastWitNum;
+    }
+    
+    private WitnessReport(
+        List<WitnessRecord> records, List<WitnessRecord> stored, long prevLastWitNum) {
+      this.records = records;
+      this.stored = stored;
+      this.prevLastWitNum = prevLastWitNum;
+    }
+    
+    /**
+     * Returns the list of witnessed records.
+     */
+    public List<WitnessRecord> getRecords() {
+      return records;
+    }
+    
+    
+    /**
+     * Returns the list of witnessed records that were stored.
+     * 
+     * @return immutable ordered list
+     */
+    public List<WitnessRecord> getStored() {
+      return stored;
+    }
+    
+    
+    /**
+     * Returns the highest previously witnessed (and recorded) row number.
+     */
+    public long prevLastWitNum() {
+      return prevLastWitNum;
+    }
+    
+    
+  }
 
 }
 

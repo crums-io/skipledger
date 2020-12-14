@@ -101,14 +101,14 @@ public abstract class Row implements Digest {
   
 
   /**
-   * Equality semantics only depend on {@linkplain #data() data}, not on
+   * Equality semantics only depend on {@linkplain #hash() hash}, not on
    * {@linkplain #rowNumber() row number}.
    * 
    * @see #hashCode()
    */
   @Override
   public final boolean equals(Object o) {
-    return o == this || (o instanceof Row) && ((Row) o).data().equals(data());
+    return o == this || (o instanceof Row) && ((Row) o).hash().equals(hash());
   }
   
 
