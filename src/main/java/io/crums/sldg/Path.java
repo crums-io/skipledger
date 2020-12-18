@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.security.MessageDigest;
@@ -16,6 +17,7 @@ import java.util.Objects;
 import java.util.SortedSet;
 
 import io.crums.io.IoStateException;
+import io.crums.io.Serial;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -33,7 +35,7 @@ import io.crums.util.hash.Digest;
  * guarantee is that a reference to instance at runtime, is a reference to an immutable proof.
  * </p>
  */
-public class Path implements Digest {
+public class Path implements Digest, Serial {
   
   /**
    * The maximum number of rows in a path.
@@ -98,6 +100,30 @@ public class Path implements Digest {
   
   
   
+  
+  public static Path load(ByteBuffer in) throws BufferUnderflowException {
+    int count = in.getInt();
+
+    if (count < 1 || count > MAX_ROWS)
+      throw new IllegalArgumentException("read illegal count " + count + " from " + in);
+    
+    Row[] rows = new Row[count];
+    
+    for (int index = 0; index < count; ++index) {
+      
+      long rowNumber = in.getLong();
+      int rowCells = 1 + Ledger.skipCount(rowNumber);
+      
+      int savedLimit = in.limit();
+      int newLimit = in.position() + rowCells * SldgConstants.HASH_WIDTH;
+      
+      in.limit(newLimit);
+      rows[index] = new SerialRow(rowNumber, in);
+      in.limit(savedLimit).position(newLimit);
+    }
+    
+    return new Path(Lists.asReadOnlyList(rows), false);
+  }
   
   
   
@@ -186,15 +212,30 @@ public class Path implements Digest {
    * Returns the lowest (first) row number in the list of {@linkplain #path()}.
    */
   public final long loRowNumber() {
-    return path.get(0).rowNumber();
+    return first().rowNumber();
   }
   
+  
+  /**
+   * Returns the first row.
+   */
+  public final Row first() {
+    return path.get(0);
+  }
+  
+  
+  /**
+   * Returns the last row.
+   */
+  public final Row last() {
+    return path.get(path.size() - 1);
+  }
 
   /**
    * Returns the highest (last) row number in the list of {@linkplain #path()}.
    */
   public final long hiRowNumber() {
-    return path.get(path.size() - 1).rowNumber();
+    return last().rowNumber();
   }
   
   
@@ -238,30 +279,33 @@ public class Path implements Digest {
     return Lists.map(path, r -> r.rowNumber());
   }
   
-  
 
+  @Override
+  public int serialSize() {
+    int hashCells =
+        path.stream().mapToInt( r -> 1 + Ledger.skipCount(r.rowNumber()) ).sum();
+    int rowNumOverhead = 8 * path.size();
+    return ROW_COUNT_OVERHEAD + rowNumOverhead + hashCells * hashWidth();
+  }
+  
+  
   /**
-   * Returns a serial (binary) representation of this instance's state.
+   * Writes the {@linkplain #serialize() serial representation} of this instance
+   * to the given <tt>out</tt> buffer. The position of the buffer is advanced.
+   * 
+   * @throws BufferUnderflowException if <tt>out</tt> doesn't have adequate remaining
+   *          bytes
+   *          
+   * @return <tt>out</tt> (for invocation chaining)
    * 
    * @see #load(ByteBuffer)
+   * @see #serialize()
    */
-  public ByteBuffer serialize() {
-    
-    ByteBuffer out;
-    {
-      int hashCells =
-          path.stream().mapToInt( r -> 1 + Ledger.skipCount(r.rowNumber()) ).sum();
-      int rowNumOverhead = 8 * path.size();
-      int cap = ROW_COUNT_OVERHEAD + rowNumOverhead + hashCells * hashWidth();
-      out = ByteBuffer.allocate(cap);
-    }
-    
+  @Override
+  public ByteBuffer writeTo(ByteBuffer out) throws BufferUnderflowException {
     out.putInt(path.size());
     path.forEach(r -> out.putLong(r.rowNumber()).put(r.data()));
-
-    assert !out.hasRemaining();
-    
-    return out.flip();
+    return out;
   }
   
   

@@ -7,14 +7,26 @@ package io.crums.sldg.cli;
 import static io.crums.util.main.Args.*;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 import io.crums.io.Opening;
+import io.crums.model.CrumTrail;
+import io.crums.sldg.Nugget;
+import io.crums.sldg.Path;
+import io.crums.sldg.Row;
+import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
+import io.crums.sldg.SldgException;
 import io.crums.sldg.db.Db;
+import io.crums.sldg.json.NuggetParser;
+import io.crums.sldg.json.PathParser;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
@@ -25,34 +37,49 @@ import io.crums.util.main.TablePrint;
  * 
  */
 public class Sldg extends MainTemplate {
+
+  
+  // to minimize/organize class members
+  private static class WriteCommand {
+    private boolean add;
+    
+    private List<ByteBuffer> entryHashes;
+    
+    private boolean witness;
+    private int toothExponent;
+    private boolean witnessLast;
+  }
+  
+
+  // to minimize/organize class members
+  private static class ReadCommand {
+    private boolean state;
+    private boolean path;
+    
+    private boolean list;
+    private List<Long> rowNumbers;
+    
+    private boolean nug;
+    private boolean status;
+    
+    boolean takesRowNumbers() {
+      return path || list || nug;
+    }
+  }
   
   
-  private String[] args;
   
   private File dir;
   private Opening mode;
   
 //  private String command;
   
+  private WriteCommand writeCommand;
   
-  private boolean add;
+  private ReadCommand readCommand;
   
-  private List<ByteBuffer> entryHashes;
-  
-  private boolean witness;
-  private int toothExponent;
-  private boolean witnessLast;
   
   private boolean info;
-  
-  private boolean state;
-  
-  private boolean list;
-  private List<Long> rowNumbers;
-  
-  private boolean nug;
-  private boolean status;
-  
 
   private Db db;
   
@@ -73,7 +100,6 @@ public class Sldg extends MainTemplate {
 
   @Override
   protected void init(String[] args) throws IllegalArgumentException, Exception {
-    this.args = args;
     if (args.length == 0)
       throw new IllegalArgumentException("No arguments specified");
     
@@ -88,14 +114,27 @@ public class Sldg extends MainTemplate {
         !configureWriteCommands(argList) &&
         !configureReadCommands(argList);
     
-    if (noCommand && !configureReadCommands(argList) &&
-        mode != Opening.CREATE)
+    if (noCommand && mode != Opening.CREATE)
       throw new IllegalArgumentException("missing command");
     
     this.db = new Db(dir, mode);
     
+    
+    
     if (noCommand && info)
       System.out.println("ledger created at " + db.getDir());
+    
+    // check the maximum row number is not out-of-bounds
+    else if (readCommand != null && readCommand.takesRowNumbers()) {
+      
+      long maxRowNumber = readCommand.rowNumbers.stream().max(Comparator.naturalOrder()).get();
+      long max = db.size();
+      if (maxRowNumber > max) {
+        db.close();
+        throw new IllegalArgumentException(
+            "row number " + maxRowNumber + " > max row number in ledger (" + max + ")"); 
+      }
+    }
   }
 
   
@@ -105,35 +144,118 @@ public class Sldg extends MainTemplate {
     
     try (Db db = this.db) {
       
-      if (add) {
-        entryHashes.forEach(h -> db.getLedger().appendRows(h));
-        if (info) {
-          int count = entryHashes.size();
-          System.out.println(count + pluralize(" row", count) + " added");
+      // write command
+      if (writeCommand != null) {
+        if (writeCommand.add) {
+          writeCommand.entryHashes.forEach(h -> db.getLedger().appendRows(h));
+          if (info) {
+            int count = writeCommand.entryHashes.size();
+            System.out.println(count + pluralize(" row", count) + " added");
+          }
+        }
+        if (writeCommand.witness) {
+          Db.WitnessReport report =
+              writeCommand.toothExponent == -1 ?
+                  db.witness(writeCommand.witnessLast) :
+                    db.witness(writeCommand.toothExponent, writeCommand.witnessLast);
+          
+          int count = report.getStored().size();
+          String msg;
+          if (info) {
+            int witCount = report.getRecords().size();
+            msg = witCount + pluralize(" row", witCount) + " witnessed; " + count + pluralize(" crumtrail", count) + " stored";
+            
+          } else
+            msg = String.valueOf(count);
+          System.out.println(msg);
+        }
+        
+
+      // read command
+      } else if (readCommand != null) {
+        
+        if (readCommand.state) {
+          SkipPath statePath = db.getLedger().statePath();
+          printPath(statePath);
+        } else if (readCommand.list) {
+          List<Row> rows = new ArrayList<>(readCommand.rowNumbers.size());
+          for (long rowNumber : readCommand.rowNumbers)
+            rows.add(db.getLedger().getRow(rowNumber));
+          printRows(rows);
+        } else if (readCommand.nug) {
+          long rowNumber = readCommand.rowNumbers.get(0);
+          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
+          printNugget(nuggetOpt);
+        } else if (readCommand.status) {
+          printStatus();
         }
       }
-      if (witness) {
-        Db.WitnessReport report =
-            toothExponent == -1 ?
-                db.witness(witnessLast) :
-                  db.witness(toothExponent, witnessLast);
-        
-        int count = report.getStored().size();
-        String msg;
-        if (info) {
-          int witCount = report.getRecords().size();
-          msg = witCount + pluralize(" row", witCount) + " witnessed; " + count + pluralize(" crumtrail", count) + " stored";
-          
-        } else
-          msg = String.valueOf(count);
-        System.out.println(msg);
-      }
-      if (add || witness)
-        return;
-      
-      
     }
   }
+  
+  
+  
+  private void printStatus() {
+    long size = db.size();
+    List<Long> witnessed = db.getRowNumbersWitnessed();
+    int witCount = witnessed.size();
+    DecimalFormat format = new DecimalFormat("#,###.###");
+    System.out.println(
+        format.format(size) + pluralize(" row", size) + "; " +
+        format.format(witCount) + pluralize(" row", witCount) + " witnessed");
+    if (witCount == 1) {
+      CrumTrail trail = db.getCrumTrail(0);
+      long witnessedRow = witnessed.get(0);
+      System.out.println(
+          "first (and last) row witnessed: [" + format.format(witnessedRow) + "] " +
+          new Date(trail.crum().utc()));
+    } else if (witCount > 1) {
+      long firstRow = witnessed.get(0);
+      long lastRow = witnessed.get(witnessed.size() - 1);
+      
+      CrumTrail firstTrail = db.getCrumTrail(0);
+      CrumTrail lastTrail = db.getCrumTrail(witnessed.size() - 1);
+      
+      if (firstTrail.crum().utc() > lastTrail.crum().utc())
+        throw new SldgException("corrupt repo: " + db.getDir());
+      
+      System.out.println(
+          "first row witnessed: [" + format.format(firstRow) + "] " + new Date(firstTrail.crum().utc()));
+      System.out.println(
+          "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastTrail.crum().utc()));
+    }
+    System.out.println("OK");
+    System.out.println();
+  }
+
+
+
+  private void printNugget(Optional<Nugget> nuggetOpt) {
+    String output =
+        nuggetOpt.isEmpty() ?
+            "{}" :
+              NuggetParser.INSTANCE.toJsonObject(nuggetOpt.get()).toString();
+    
+    System.out.println(output);
+  }
+
+
+
+  private void printRows(List<Row> rows) {
+    System.out.println(PathParser.INSTANCE.toJsonArray(rows));
+  }
+
+
+
+  private void printPath(Path path) {
+    if (path == null)
+      System.out.println("{}");
+    else
+      System.out.println(PathParser.INSTANCE.toJsonArray(path));
+  }
+  
+  
+  
   
   
   private void configureCommon(ArgList argList) {
@@ -141,7 +263,7 @@ public class Sldg extends MainTemplate {
   }
   
   
-  private String pluralize(String single, int count) {
+  private String pluralize(String single, long count) {
     return count == 1 ? single : single + "s";
   }
 
@@ -149,7 +271,7 @@ public class Sldg extends MainTemplate {
 
   private boolean configureReadCommands(ArgList argList) {
     
-    List<String> readCommands = argList.removedContained(STATE, LIST, NUG, STATUS);
+    List<String> readCommands = argList.removedContained(STATE, PATH, LIST, NUG, STATUS);
     switch (readCommands.size()) {
     case 0:   return false;
     case 1:   break;
@@ -158,65 +280,83 @@ public class Sldg extends MainTemplate {
           "duplicate commands in '" + argList.getArgString() + "'");
     }
     
+    this.readCommand = new ReadCommand();
     String command = readCommands.get(0);
-    this.state = STATE.equals(command);
-    this.list = LIST.equals(command);
-    this.nug = NUG.equals(command);
-    this.status = STATUS.equals(command);
+    readCommand.state = STATE.equals(command);
+    readCommand.path = PATH.equals(command);
+    readCommand.list = LIST.equals(command);
+    readCommand.nug = NUG.equals(command);
+    readCommand.status = STATUS.equals(command);
     
-    if (list || nug) {
-      this.rowNumbers = argList.popNumbers();
-      if (rowNumbers.isEmpty())
+    if (readCommand.takesRowNumbers()) {
+      readCommand.rowNumbers = argList.popNumbers();
+      if (readCommand.rowNumbers.isEmpty())
         throw new IllegalArgumentException(
             "missing row number[s] in arguments: " + argList.getArgString());
+      if (readCommand.path && readCommand.rowNumbers.size() != 2)
+        throw new IllegalArgumentException(
+            (readCommand.rowNumbers.size() > 2 ? "too many" : "missing") +
+            " row numbers in arguments: " + argList.getArgString());
+      
+      long minRowNum = readCommand.rowNumbers.stream().min(Comparator.naturalOrder()).get();
+      if (minRowNum < 1)
+        throw new IllegalArgumentException("one or more row numbers < 1: " + argList.getArgString());
+      
+      if (readCommand.nug && readCommand.rowNumbers.size() != 1)
+        throw new IllegalArgumentException(
+            NUG + " command takes a single row number. Too many given: " + argList.getArgString());
     }
+    
     return true;
   }
+  
+  
   
   private boolean configureWriteCommands(ArgList argList) {
 
     List<String> writeCommands = argList.removedContained(ADD, WIT);
     switch (writeCommands.size()) {
     case 0:
-      break;
+      return false;
     case 1:
-      this.add = ADD.equals(writeCommands.get(0));
-      this.witness = !this.add;
+      this.writeCommand = new WriteCommand();
+      writeCommand.add = ADD.equals(writeCommands.get(0));
+      writeCommand.witness = !writeCommand.add;
       break;
     case 2:
-      this.add = this.witness = true;
+      this.writeCommand = new WriteCommand();
+      writeCommand.add = writeCommand.witness = true;
       break;
     default:
       throw new IllegalArgumentException(
           "duplicate commands in '" + argList.getArgString() + "'");
     }
     
-    if (add) {
-      this.entryHashes = getHashes(argList);
-      if (entryHashes.isEmpty())
+    if (writeCommand.add) {
+      writeCommand.entryHashes = getHashes(argList);
+      if (writeCommand.entryHashes.isEmpty())
         throw new IllegalArgumentException(
             "missing entry hashes for " + ADD + " command: " + argList.getArgString());
     }
     
     
-    if (witness) {
+    if (writeCommand.witness) {
       long e = argList.popLong(TEX, Long.MIN_VALUE);
       if (e == Long.MIN_VALUE) {
-        this.toothExponent = -1;
+        writeCommand.toothExponent = -1;
       } else {
         if (e < 0 || e > SldgConstants.MAX_WITNESS_EXPONENT)
           throw new IllegalArgumentException("out of bounds " + TEX + "=" + e);
-        this.toothExponent = (int) e;
+        writeCommand.toothExponent = (int) e;
       }
-      this.witnessLast = argList.popBoolean(WSTATE, true);
+      writeCommand.witnessLast = argList.popBoolean(WSTATE, true);
     }
     
     
-    boolean configured = add || witness;
-    if (configured && !argList.isEmpty())
+    if (!argList.isEmpty())
       throw new IllegalArgumentException("illegal arguments / combination: " + argList.getArgString());
     
-    return configured;
+    return true;
   }
   
   
@@ -234,11 +374,6 @@ public class Sldg extends MainTemplate {
   
   
   
-  private Db getDb(ArgList args) throws IOException {
-    File dir = new File(args.popRequiredValue(DIR));
-    Opening mode = getMode(args);
-    return new Db(dir, mode);
-  }
   
 
   // NOTE: this code may belong in Opening
@@ -265,8 +400,31 @@ public class Sldg extends MainTemplate {
   protected void printDescription() {
     System.out.println();
     System.out.println("DESCRIPTION:");
-    System.out.println();
+    System.out.println(); // 105
     System.out.println("Command line tool for accessing a skip ledger on the file system.");
+    System.out.println();
+    System.out.println("A skip ledger is a tamper-proof, append-only list of SHA-256 hashes added by its");
+    System.out.println("user. Since hashes are opaque, a skip ledger itself conveys little information.");
+    System.out.println("If paired with the actual object whose hash matches the entry (e) in a given row");
+    System.out.println("however, then it is evidence the object belongs in the ledger at the advertised");
+    System.out.println("row number. Ledgers also support maintaining the times they are modified by");
+    System.out.println("calling out the SHA-256 hash of their latest row to the crums.io hash/witness");
+    System.out.println("time service. (See https://crums.io/docs/rest.html )");
+    System.out.println();
+    System.out.println("Representations:");
+    System.out.println();
+    System.out.println("Besides thru sharing it in its entirety, the state of a ledger may optionally");
+    System.out.println("advertised compactly. The most compact of all is to just advertise the hash of");
+    System.out.println("the last row in the ledger. A more detailed, but still compact representation is");
+    System.out.println("achieved by enumerating a list of rows whose SHA-256 hashpointers connect the");
+    System.out.println("last (latest) row to the first. The number of rows in this list grows by the log");
+    System.out.println("of the size of the ledger, so it's always compact. (See '" + STATE + "' command)");
+    System.out.println();
+    System.out.println("This same structure is also used to provide a compact proof that an item at a");
+    System.out.println("a specific row number is indeed in the ledger. I.e. a list of rows that connect");
+    System.out.println("the latest row to the row of interest. If the row (or any row after it) has been");
+    System.out.println("witnessed, then the crumtrail witness evidence together with these rows can be");
+    System.out.println("packaged as a \"nugget\". (See '" + NUG + "' command)");
     System.out.println();
     
   }
@@ -276,7 +434,10 @@ public class Sldg extends MainTemplate {
     out.println();
     out.println("USAGE:");
     out.println();
-    out.println("Arguments are specified as 'name=value' pairs.");
+    out.println("Arguments that are specified as 'name=value' pairs are designated in the form");
+    out.println("'name=*' below. A required argument is marked '" + REQ + "' in the rightmost column;");
+    out.println("one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' accepts either as a" );
+    out.println("required one-of-many, or an addition to 'above'." );
     out.println();
     
 
@@ -321,7 +482,7 @@ public class Sldg extends MainTemplate {
     subTable.printRow(           MODE_RW,  "read/write existing (DEFAULT)");
     subTable.printRow(           MODE_CRW, "read/write, create if doesn't exist");
     subTable.printRow(           MODE_C,   "create a new DB (must not exist)");
-    subTable.printRow(           null,     "(to create an empty DB supply no additional arguments)");
+    subTable.printRow(           null,     "(to create an empty DB provide no additional arguments");
 
     out.println();
     table.printHorizontalTableEdge('-');
@@ -352,9 +513,9 @@ public class Sldg extends MainTemplate {
     table.printHorizontalTableEdge('-');
     out.println();
 
-    table.printRow(STATE ,      "prints or outputs abbreviated evidence of the state the ledger", REQ_CH);
-    table.printRow(null,        "by outputing the shortest path of rows connnecting the 1st row", null);
-    table.printRow(null,        "to the last thru their hashpointers, i.e. the nugget for row # 1", null);
+    table.printRow(STATE ,      "prints or outputs abbreviated evidence of the state the ledger by", REQ_CH);
+    table.printRow(null,        "outputing the shortest path of rows that connnect to the first row", null);
+    table.printRow(null,        "from the last thru the rows' hashpointers", null);
     out.println();
     table.printRow(LIST ,       "lists (prints or outputs) the numbered rows", REQ_CH);
     out.println();
@@ -364,6 +525,14 @@ public class Sldg extends MainTemplate {
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     out.println();
+    
+//    out.println();
+//    table.printHorizontalTableEdge('-');
+//    table.printlnCenteredSpread("OUTPUT FORMATS", 2);
+//    table.printHorizontalTableEdge('-');
+//    out.println();
+    
+    
   }
 
 
@@ -382,8 +551,6 @@ public class Sldg extends MainTemplate {
   private final static String MODE_C = "c";
   
   
-  private final static String OUT = "out";
-  private final static String LIMIT = "limit";
   
 
 
@@ -395,6 +562,7 @@ public class Sldg extends MainTemplate {
   
 
   private final static String STATE = "state";
+  private final static String PATH = "path";
   private final static String STATUS = "status";
   private final static String LIST = "list";
   private final static String NUG = "nug";

@@ -101,14 +101,20 @@ public abstract class Row implements Digest {
   
 
   /**
-   * Equality semantics only depend on {@linkplain #hash() hash}, not on
+   * Equality semantics depend on {@linkplain #hash() hash}, and
    * {@linkplain #rowNumber() row number}.
    * 
    * @see #hashCode()
    */
   @Override
   public final boolean equals(Object o) {
-    return o == this || (o instanceof Row) && ((Row) o).hash().equals(hash());
+    if (o == this)
+      return true;
+    else if (o instanceof Row) {
+      Row other = (Row) o;
+      return other.rowNumber() == rowNumber() && other.hash().equals(hash());
+    } else
+      return false;
   }
   
 
@@ -118,7 +124,7 @@ public abstract class Row implements Digest {
    */
   @Override
   public final int hashCode() {
-    return inputHash().hashCode();
+    return Long.hashCode(rowNumber());
   }
   
   
@@ -145,12 +151,8 @@ public abstract class Row implements Digest {
     
     return string.toString();
   }
-
-  private final static int HEX_DISPLAY_BYTES = 3;
-  private final static String CELL_DISPLAY_PREFIX = "  ";
-  private final static String CELL_DISPLAY_POSTFIX = "..";
-  private final static int CELL_DISPLAY_LENGTH =
-      2 * HEX_DISPLAY_BYTES + CELL_DISPLAY_PREFIX.length() + CELL_DISPLAY_POSTFIX.length();
+  
+  
   
   private void appendCellToString(ByteBuffer cell, StringBuilder string) {
     string.append(CELL_DISPLAY_PREFIX);
@@ -158,6 +160,15 @@ public abstract class Row implements Digest {
     IntegralStrings.appendHex(cell, string);
     string.append(CELL_DISPLAY_POSTFIX);
   }
+  
+  
+
+
+  private final static int HEX_DISPLAY_BYTES = 3;
+  private final static String CELL_DISPLAY_PREFIX = "  ";
+  private final static String CELL_DISPLAY_POSTFIX = "..";
+  private final static int CELL_DISPLAY_LENGTH =
+      2 * HEX_DISPLAY_BYTES + CELL_DISPLAY_PREFIX.length() + CELL_DISPLAY_POSTFIX.length();
 
 }
 

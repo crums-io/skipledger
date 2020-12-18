@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -22,10 +23,14 @@ import io.crums.client.ClientException;
 import io.crums.client.repo.TrailRepo;
 import io.crums.io.Opening;
 import io.crums.model.CrumRecord;
+import io.crums.model.CrumTrail;
 import io.crums.sldg.Ledger;
+import io.crums.sldg.Nugget;
 import io.crums.sldg.Row;
+import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.TrailedPath;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 
@@ -70,8 +75,75 @@ public class Db implements Closeable {
   public Ledger getLedger() {
     return ledger;
   }
-
-
+  
+  
+  
+  public long size() {
+    return ledger.size();
+  }
+  
+  
+  
+  
+  public Optional<Nugget> getNugget(long rowNumber) {
+    Optional<TrailedPath> trailOpt = getTrail(rowNumber);
+    if (trailOpt.isEmpty())
+      return Optional.empty();
+    SkipPath path = ledger.skipPath(rowNumber, ledger.size());
+    Nugget nug = new Nugget(path, trailOpt.get());
+    return Optional.of(nug);
+  }
+  
+  
+  
+  /**
+   * Returns a <tt>TrailedPath</tt> to the given row number, if there is yet
+   * evidence (a {@linkplain CrumTrail}) that it has been witnessed . (There
+   * is no evidence that a row number has been witnessed until either that row
+   * or a subsequent row is witnessed.)
+   * 
+   * @param rowNumber &ge; 1 and &lte; {@linkplain #size()}
+   */
+  public Optional<TrailedPath> getTrail(long rowNumber) {
+    
+    // find the oldest (smallest) row number that is 
+    // greater than or equal to rowNumber
+    final int witnessedIndex;
+    final long witnessedRowNumber;
+    {
+      List<Long> witnessedRows = witnessRepo.getIds();
+      int wIndex = Collections.binarySearch(witnessedRows, rowNumber);
+      if (wIndex < 0) {
+        int insertionIndex = -1 - wIndex;
+        if (insertionIndex == witnessedRows.size())
+          return Optional.empty();
+        wIndex = insertionIndex;
+      }
+      witnessedIndex = wIndex;
+      witnessedRowNumber = witnessedRows.get(witnessedIndex);
+    }
+    
+    CrumTrail trail = witnessRepo.getTrail(witnessedIndex);
+    SkipPath path = ledger.skipPath(rowNumber, witnessedRowNumber);
+    
+    return Optional.of(new TrailedPath(path, trail));
+  }
+  
+  
+  
+  public CrumTrail getCrumTrail(int index) {
+    return witnessRepo.getTrail(index);
+  }
+  
+  
+  
+  
+  public List<Long> getRowNumbersWitnessed() {
+    return witnessRepo.getIds();
+  }
+  
+  
+  
   public long lastWitnessNum() {
     List<Long> ids = witnessRepo.getIds();
     return ids.isEmpty() ? 0 : ids.get(ids.size() - 1);
