@@ -31,6 +31,7 @@ import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
+import io.crums.util.main.PrintSupport;
 import io.crums.util.main.TablePrint;
 
 /**
@@ -225,7 +226,6 @@ public class Sldg extends MainTemplate {
           "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastTrail.crum().utc()));
     }
     System.out.println("OK");
-    System.out.println();
   }
 
 
@@ -394,79 +394,87 @@ public class Sldg extends MainTemplate {
   
   
   
+  private final static int RM = 80;
+  private final static int INDENT = 1;
 
 
   @Override
   protected void printDescription() {
-    System.out.println();
+    PrintSupport printer = new PrintSupport();
+    printer.setIndentation(INDENT);
+    printer.println();
     System.out.println("DESCRIPTION:");
-    System.out.println(); // 105
-    System.out.println("Command line tool for accessing a skip ledger on the file system.");
-    System.out.println();
-    System.out.println("A skip ledger is a tamper-proof, append-only list of SHA-256 hashes added by its");
-    System.out.println("user. Since hashes are opaque, a skip ledger itself conveys little information.");
-    System.out.println("If paired with the actual object whose hash matches the entry (e) in a given row");
-    System.out.println("however, then it is evidence the object belongs in the ledger at the advertised");
-    System.out.println("row number. Ledgers also support maintaining the times they are modified by");
-    System.out.println("calling out the SHA-256 hash of their latest row to the crums.io hash/witness");
-    System.out.println("time service. (See https://crums.io/docs/rest.html )");
-    System.out.println();
+    printer.println(); // 105
+    printer.printParagraph("Command line tool for accessing and maintaining a skip ledger stored on the file system.", RM);
+    printer.println();
+    String paragraph =
+        "A skip ledger is a tamper-proof, append-only list of SHA-256 hashes added by its " +
+        "user. Since hashes are opaque, a skip ledger itself conveys little information. " +
+        "If paired with the actual object whose hash matches the entry (e) in a given row " +
+        "however, then it is evidence the object belongs in the ledger at the advertised " +
+        "row number. Ledgers also support maintaining the times they are modified by " +
+        "calling out the SHA-256 hash of their latest row to the crums.io hash/witness " +
+        "time service. (See https://crums.io/docs/rest.html )";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
     System.out.println("Representations:");
-    System.out.println();
-    System.out.println("Besides thru sharing it in its entirety, the state of a ledger may optionally");
-    System.out.println("advertised compactly. The most compact of all is to just advertise the hash of");
-    System.out.println("the last row in the ledger. A more detailed, but still compact representation is");
-    System.out.println("achieved by enumerating a list of rows whose SHA-256 hashpointers connect the");
-    System.out.println("last (latest) row to the first. The number of rows in this list grows by the log");
-    System.out.println("of the size of the ledger, so it's always compact. (See '" + STATE + "' command)");
-    System.out.println();
-    System.out.println("This same structure is also used to provide a compact proof that an item at a");
-    System.out.println("a specific row number is indeed in the ledger. I.e. a list of rows that connect");
-    System.out.println("the latest row to the row of interest. If the row (or any row after it) has been");
-    System.out.println("witnessed, then the crumtrail witness evidence together with these rows can be");
-    System.out.println("packaged as a \"nugget\". (See '" + NUG + "' command)");
-    System.out.println();
+    printer.println();
+    paragraph =
+        "Besides thru sharing it in its entirety, the state of a ledger can optionally be " +
+        "advertised compactly. The most compact of all is to just advertise the hash of " +
+        "the last row in the ledger. A more detailed, but still compact representation is " +
+        "achieved by enumerating a list of rows whose SHA-256 hashpointers connect the " +
+        "last (latest) row to the first. The number of rows in this list grows by the log " +
+        "of the size of the ledger, so it's always compact. (See '" + STATE + "' command)";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
+    paragraph =
+        "This same structure is also used to provide a compact proof that an item at a " +
+        "specific row number is indeed in the ledger. I.e. a list of rows that connect " +
+        "the latest row to the row of interest. If the row (or any row after it) has been " +
+        "witnessed, then the crumtrail witness evidence together with these rows can be" +
+        "packaged as a \"nugget\". (See '" + NUG + "' command)";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
     
   }
 
   @Override
   protected void printUsage(PrintStream out) {
-    out.println();
+    PrintSupport printer = new PrintSupport(out);
+    printer.setIndentation(INDENT);
+    printer.println();
     out.println("USAGE:");
-    out.println();
-    out.println("Arguments that are specified as 'name=value' pairs are designated in the form");
-    out.println("'name=*' below. A required argument is marked '" + REQ + "' in the rightmost column;");
-    out.println("one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' accepts either as a" );
-    out.println("required one-of-many, or an addition to 'above'." );
-    out.println();
+    printer.println();
+    String paragraph =
+        "Arguments that are specified as 'name=value' pairs are designated in the form " +
+        "'name=*' below, with '*' standing for user input. A required argument is marked '" + REQ + "' in the rightmost column; " +
+        "one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' accepts either as a " +
+        "required one-of-many, or an addition to 'above'.";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
     
 
     TablePrint table, subTable, subWideKeyTable;
-    {
-      int console = 80;
-      
+    { 
       int fcw = 8;
       int lcw = 2;
-      int mcw;
-      
-      
-      int indent = 1;
-      mcw = console - fcw - lcw - indent;
+      int mcw = RM - fcw - lcw - INDENT;
       
       int subFcw = 7;
-      int subLcw = console - fcw - subFcw;
+      int subLcw = RM - fcw - subFcw;
       
       int subWkFcw = 13;
-      int subWkLcw = console - fcw - subWkFcw;
+      int subWkLcw = RM - fcw - subWkFcw;
       
       
       table = new TablePrint(out, fcw, mcw, lcw);
       subTable = new TablePrint(out, subFcw, subLcw);
       subWideKeyTable = new TablePrint(out, subWkFcw, subWkLcw);
       
-      table.setIndentation(indent);
-      subTable.setIndentation(fcw + indent);
-      subWideKeyTable.setIndentation(fcw + indent);
+      table.setIndentation(INDENT);
+      subTable.setIndentation(fcw + INDENT);
+      subWideKeyTable.setIndentation(fcw + INDENT);
     }
 
     table.printHorizontalTableEdge('=');
@@ -482,7 +490,7 @@ public class Sldg extends MainTemplate {
     subTable.printRow(           MODE_RW,  "read/write existing (DEFAULT)");
     subTable.printRow(           MODE_CRW, "read/write, create if doesn't exist");
     subTable.printRow(           MODE_C,   "create a new DB (must not exist)");
-    subTable.printRow(           null,     "(to create an empty DB provide no additional arguments");
+    subTable.printRow(           null,     "(to create an empty DB provide no more arguments)");
 
     out.println();
     table.printHorizontalTableEdge('-');
@@ -504,6 +512,7 @@ public class Sldg extends MainTemplate {
     subWideKeyTable.printRow(null,       "up to 8 tooth-included rows to witness");
     out.println();
     subWideKeyTable.printRow(WSTATE + "=true",  "witness last row, even if its number is not toothed");
+    subWideKeyTable.printRow(null,              "Valid values: 'true' or 'false' (sans quotes)");
     subWideKeyTable.printRow(null,              "DEFAULT: true");
 
 
@@ -517,20 +526,17 @@ public class Sldg extends MainTemplate {
     table.printRow(null,        "outputing the shortest path of rows that connnect to the first row", null);
     table.printRow(null,        "from the last thru the rows' hashpointers", null);
     out.println();
-    table.printRow(LIST ,       "lists (prints or outputs) the numbered rows", REQ_CH);
+    table.printRow(LIST ,       "lists (prints or outputs) the given numbered rows", REQ_CH);
     out.println();
-    table.printRow(NUG,         "prints or outputs nuggets. A nugget proves that the hash of a given", REQ_CH);
+    table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
+    table.printRow(null,        "numbered rows", null);
+    out.println();
+    table.printRow(NUG,         "prints or outputs a nugget. A nugget proves that the hash of a given", REQ_CH);
     table.printRow(null,        "entry is on a numbered row that is linked from the last row in its", null);
-    table.printRow(null,        "ledger.", null);
+    table.printRow(null,        "ledger. It also contains evidence that sets the row's minimum age.", null);
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     out.println();
-    
-//    out.println();
-//    table.printHorizontalTableEdge('-');
-//    table.printlnCenteredSpread("OUTPUT FORMATS", 2);
-//    table.printHorizontalTableEdge('-');
-//    out.println();
     
     
   }

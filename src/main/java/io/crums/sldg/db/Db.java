@@ -194,6 +194,9 @@ public class Db implements Closeable {
     
     final long lastWitNum = lastWitnessNum();
     
+    if (lastWitNum == lastRowNum)
+      return new WitnessReport(lastWitNum);
+    
     sanityCheckWitNum(lastWitNum, lastRowNum);
     
     final long witNumDelta = 1L << exponent;
@@ -208,7 +211,8 @@ public class Db implements Closeable {
       final int maxLoopCount =
           includeUntoothed ? SldgConstants.MAX_BLOCK_WITNESS_COUNT : SldgConstants.MAX_BLOCK_WITNESS_COUNT - 1;
       for (
-          long toothedNum = lastWitNum + witNumDelta;
+          long toothedNum = ((lastWitNum + witNumDelta) / witNumDelta) * witNumDelta;
+          // i.e. toothedNum % witNumDelta == 0
           toothedNum <= lastRowNum && rows.size() < maxLoopCount;
           toothedNum += witNumDelta) {
         
@@ -218,6 +222,10 @@ public class Db implements Closeable {
       if (includeUntoothed)
         rows.add(ledger.getRow(lastRowNum));
       
+      
+      if (rows.isEmpty())
+        return new WitnessReport(lastWitNum);
+            
       rowsToWitness = Lists.reverse(rows);
     }
     
@@ -362,7 +370,11 @@ public class Db implements Closeable {
     
     private final long prevLastWitNum;
     
-    
+    /**
+     * Empty instance.
+     * 
+     * @param prevLastWitNum
+     */
     private WitnessReport(long prevLastWitNum) {
       records = stored = Collections.emptyList();
       this.prevLastWitNum = prevLastWitNum;
@@ -390,6 +402,11 @@ public class Db implements Closeable {
      */
     public List<WitnessRecord> getStored() {
       return stored;
+    }
+    
+    
+    public boolean nothingDone() {
+      return records.isEmpty();
     }
     
     
