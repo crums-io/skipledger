@@ -237,6 +237,12 @@ public class Db implements Closeable {
     
     List<WitnessRecord> zip = zip(records, rowsToWitness);
     
+    // FIXME: it's possible to setup an attack that deliberately fails
+    // this algorithm (the upshot being that the crumtrails in the
+    // repo no longer being ordered by time). This would not be a real data "corruption";
+    // instead it would be a broken index that would need mending. Kicking this
+    // can down the road, but it's worthwhile to note the fix, if a bit tedious,
+    // is still not complicated.
     SortedSet<WitnessRecord> trailedRecords = filterTrailed(zip);
     
     long witnessedRowNumber = 0;

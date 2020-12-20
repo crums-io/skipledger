@@ -405,7 +405,8 @@ public class Sldg extends MainTemplate {
     printer.println();
     System.out.println("DESCRIPTION:");
     printer.println(); // 105
-    printer.printParagraph("Command line tool for accessing and maintaining a skip ledger stored on the file system.", RM);
+    printer.printParagraph(
+        "Command line tool for accessing and maintaining a skip ledger stored on the file system.", RM);
     printer.println();
     String paragraph =
         "A skip ledger is a tamper-proof, append-only list of SHA-256 hashes added by its " +
@@ -420,7 +421,7 @@ public class Sldg extends MainTemplate {
     System.out.println("Representations:");
     printer.println();
     paragraph =
-        "Besides thru sharing it in its entirety, the state of a ledger can optionally be " +
+        "Beside thru sharing it in its entirety, the state of a ledger can optionally be " +
         "advertised compactly. The most compact of all is to just advertise the hash of " +
         "the last row in the ledger. A more detailed, but still compact representation is " +
         "achieved by enumerating a list of rows whose SHA-256 hashpointers connect the " +
@@ -429,11 +430,30 @@ public class Sldg extends MainTemplate {
     printer.printParagraph(paragraph, RM);
     printer.println();
     paragraph =
-        "This same structure is also used to provide a compact proof that an item at a " +
-        "specific row number is indeed in the ledger. I.e. a list of rows that connect " +
+        "This same structure is also used to provide a compact, standalone proof that an item at a " +
+        "specific row number is indeed inside the ledger. I.e. a list of rows that connect " +
         "the latest row to the row of interest. If the row (or any row after it) has been " +
         "witnessed, then the crumtrail witness evidence together with these rows can be" +
         "packaged as a \"nugget\". (See '" + NUG + "' command)";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
+    System.out.println("Row Age & Witness Evidence:");
+    printer.println();
+    paragraph =
+        "A row's minimum age is established by storing a crumtrail of the row's hash. (The row's hash is not " +
+        "exactly the user-input hash: it's the hash of that plus the row's hash pointers.) A crumtrail is a tamper-proof hash structure that leads to a unitary root hash that is published every minute or so " +
+        "by crums.io and is also maintained at multiple 3rd party sites: it is evidence of witnessing a hash in a small window of time. " +
+        "Since the hash of every row in a skip ledger is dependent on the hash of every row before it, " +
+        "witnessing a given row number also means effectively witnessing all its predecessors.";
+    printer.printParagraph(paragraph, RM);
+    printer.println();
+    paragraph =
+        "The witnessing algorithm then only witnesses [the hashes of] monotonically increasing row numbers. " +
+        "The default behavior when there are unwitnessed rows is to always witness the next few subsequent rows that can't be matched with an " +
+        "already stored crumtrail as well as the last row. This is because crumtrails are not generated right away: they're typically generated " +
+        "a few minutes after the service first witnesses a hash. By default, up to 9 unwitnessed rows are submitted: 8 " +
+        "'evenly' spaced at row numbers that are multiples of a power of 2, and the last unwitnessed row. The " +
+        "exponent of this power of 2 for witnessing is called tooth-exponent. (See '" + WIT + "' command)";
     printer.printParagraph(paragraph, RM);
     printer.println();
     
@@ -447,7 +467,7 @@ public class Sldg extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Arguments that are specified as 'name=value' pairs are designated in the form " +
+        "Arguments that are specified as name/value pairs are designated in the form " +
         "'name=*' below, with '*' standing for user input. A required argument is marked '" + REQ + "' in the rightmost column; " +
         "one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' accepts either as a " +
         "required one-of-many, or an addition to 'above'.";
