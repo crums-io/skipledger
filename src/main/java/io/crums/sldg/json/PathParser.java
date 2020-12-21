@@ -4,8 +4,6 @@
 package io.crums.sldg.json;
 
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 import org.json.simple.JSONArray;
@@ -14,13 +12,17 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import io.crums.sldg.Path;
-import io.crums.sldg.Row;
 
 /**
  * Parses both lists of rows and paths. The representations are exactly the
  * same; paths involve constraints on both the order and the row numbers.
  */
-public class PathParser {
+public class PathParser implements JsonEntityParser<Path> {
+  
+  /**
+   * The rows tag
+   */
+  public final static String ROWS = "rows";
   
   
   public final static PathParser INSTANCE = new PathParser();
@@ -43,25 +45,14 @@ public class PathParser {
   
   
   @SuppressWarnings("unchecked")
-  public JSONArray toJsonArray(Path path) {
+  @Override
+  public JSONObject toJsonObject(Path path) {
     
-    JSONArray jPath = new JSONArray();
-    for (Row row : path.path())
-      jPath.add(rowParser.toJsonObject(row));
+    JSONArray jPath = rowParser.toJsonArray(path.path());
     
-    return jPath;
-  }
-  
-  
-  
-  @SuppressWarnings("unchecked")
-  public JSONArray toJsonArray(List<Row> rows) {
-
-    JSONArray jRows = new JSONArray();
-    for (Row row : rows)
-      jRows.add(rowParser.toJsonObject(row));
-    
-    return jRows;
+    JSONObject jObj = new JSONObject();
+    jObj.put(ROWS, jPath);
+    return jObj;
   }
   
   
@@ -69,7 +60,7 @@ public class PathParser {
   public Path toPath(String json) {
     try {
       
-      return toPath((JSONArray) new JSONParser().parse(json));
+      return toPath((JSONObject) new JSONParser().parse(json));
     
     } catch (ParseException px) {
       throw new IllegalArgumentException("malformed json: " + json);
@@ -78,24 +69,21 @@ public class PathParser {
   
   
   
-  public Path toPath(JSONArray jArray) {
-    return new Path(toRows(jArray));
-  }
-  
-  
-  
-  public List<Row> toRows(JSONArray jArray) {
-    int size = jArray.size();
-    ArrayList<Row> rows = new ArrayList<>(size);
-    for (int index = 0; index < size; ++index)
-      rows.add( rowParser.toRow((JSONObject) jArray.get(index)) );
-    return rows;
+  public Path toPath(JSONObject jObj) {
+    JSONArray jArray = (JSONArray) jObj.get(ROWS);
+    return new Path(rowParser.toRows(jArray));
   }
   
   
   
   public RowParser getRowParser() {
     return rowParser;
+  }
+
+
+  @Override
+  public Path toEntity(JSONObject jObj) {
+    return toPath(jObj);
   }
   
 

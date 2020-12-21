@@ -16,6 +16,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
+import org.json.simple.JSONObject;
+
 import io.crums.io.Opening;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.Nugget;
@@ -25,8 +27,11 @@ import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.db.Db;
+import io.crums.sldg.db.Format;
+import io.crums.sldg.db.VersionedSerializers;
 import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
+import io.crums.sldg.json.RowParser;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
@@ -63,8 +68,25 @@ public class Sldg extends MainTemplate {
     private boolean nug;
     private boolean status;
     
+    private File file;
+    private Format format = Format.BINARY;
+    private boolean enforceExt = true;
+    
     boolean takesRowNumbers() {
       return path || list || nug;
+    }
+    
+    boolean supportsFileOutput() {
+      return state || path || nug;
+    }
+    
+    
+    boolean isPathResponse( ) {
+      return state || path;
+    }
+    
+    boolean toFile() {
+      return file != null;
     }
   }
   
@@ -177,16 +199,47 @@ public class Sldg extends MainTemplate {
         
         if (readCommand.state) {
           SkipPath statePath = db.getLedger().statePath();
-          printPath(statePath);
+          if (readCommand.toFile())
+            outputState(statePath);
+          else
+            printPath(statePath);
+        
+        } else if (readCommand.nug) {
+          long rowNumber = readCommand.rowNumbers.get(0);
+          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
+          
+          if (readCommand.toFile())
+            outputNug(nuggetOpt);
+          else
+            printNugget(nuggetOpt);
+        
+        } else if (readCommand.path) {
+          
+          long lo, hi;
+          {
+            long one = readCommand.rowNumbers.get(0);
+            long another = readCommand.rowNumbers.get(1);
+            if (one < another) {
+              lo = one;
+              hi = another;
+            } else {
+              lo = another;
+              hi = one;
+            }
+          }
+          SkipPath path = db.getLedger().skipPath(lo, hi);
+          
+          if (readCommand.toFile())
+            outputPath(path);
+          else
+            printPath(path);
+          
         } else if (readCommand.list) {
           List<Row> rows = new ArrayList<>(readCommand.rowNumbers.size());
           for (long rowNumber : readCommand.rowNumbers)
             rows.add(db.getLedger().getRow(rowNumber));
           printRows(rows);
-        } else if (readCommand.nug) {
-          long rowNumber = readCommand.rowNumbers.get(0);
-          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
-          printNugget(nuggetOpt);
+        
         } else if (readCommand.status) {
           printStatus();
         }
@@ -195,6 +248,65 @@ public class Sldg extends MainTemplate {
   }
   
   
+  private void outputPath(SkipPath path) {
+    
+    File out;
+    if (readCommand.file.isDirectory()) {
+      String file = FilenamingConvention.INSTANCE.pathFilename(path, readCommand.format);
+      out = new File(readCommand.file, file);
+      if (out.exists()) {
+        System.err.println("[ERROR] file already exists: " + out);
+        return;
+      }
+    } else
+      out = readCommand.file;
+    
+    VersionedSerializers.PATH_SERIALIZER.write(path, out, readCommand.format);
+    System.out.println("path written to " + out);
+  }
+
+
+
+  private void outputNug(Optional<Nugget> nuggetOpt) {
+    
+    if (nuggetOpt.isEmpty()) {
+      System.err.println("[ERROR] row as yet untrailed (no crumtrail)");
+      return;
+    }
+    
+    Nugget nugget = nuggetOpt.get();
+    
+    File out;
+    if (readCommand.file.isDirectory()) {
+      String file = FilenamingConvention.INSTANCE.nuggetFilename(nugget, readCommand.format);
+      out = new File(readCommand.file, file);
+    } else
+      out = readCommand.file;
+    
+    VersionedSerializers.NUGGET_SERIALIZER.write(nugget, out, readCommand.format);
+    System.out.println("nugget written to " + out);
+  }
+
+
+
+  private void outputState(SkipPath statePath) {
+    
+    File out;
+    if (readCommand.file.isDirectory()) {
+      String file = FilenamingConvention.INSTANCE.stateFilename(statePath, readCommand.format);
+      out = new File(readCommand.file, file);
+    } else
+      out = readCommand.file;
+    
+    VersionedSerializers.PATH_SERIALIZER.write(statePath, out, readCommand.format);
+    System.out.println("state-path written to " + out);
+  }
+  
+  
+  
+
+
+
   
   private void printStatus() {
     long size = db.size();
@@ -234,7 +346,7 @@ public class Sldg extends MainTemplate {
     String output =
         nuggetOpt.isEmpty() ?
             "{}" :
-              NuggetParser.INSTANCE.toJsonObject(nuggetOpt.get()).toString();
+              injectVersion(NuggetParser.INSTANCE.toJsonObject(nuggetOpt.get())).toString();
     
     System.out.println(output);
   }
@@ -242,7 +354,7 @@ public class Sldg extends MainTemplate {
 
 
   private void printRows(List<Row> rows) {
-    System.out.println(PathParser.INSTANCE.toJsonArray(rows));
+    System.out.println(RowParser.INSTANCE.toJsonArray(rows));
   }
 
 
@@ -251,7 +363,14 @@ public class Sldg extends MainTemplate {
     if (path == null)
       System.out.println("{}");
     else
-      System.out.println(PathParser.INSTANCE.toJsonArray(path));
+      System.out.println(injectVersion(PathParser.INSTANCE.toJsonObject(path)));
+  }
+  
+  
+  @SuppressWarnings("unchecked")
+  private JSONObject injectVersion(JSONObject obj) {
+    obj.put(SldgConstants.VERSION_TAG, SldgConstants.VERSION);
+    return obj;
   }
   
   
@@ -305,6 +424,57 @@ public class Sldg extends MainTemplate {
       if (readCommand.nug && readCommand.rowNumbers.size() != 1)
         throw new IllegalArgumentException(
             NUG + " command takes a single row number. Too many given: " + argList.getArgString());
+      
+      String outpath = argList.popValue(FILE);
+      if (outpath != null) {
+        // 
+        if (!readCommand.supportsFileOutput())
+          throw new IllegalArgumentException(
+              FILE + "=" + outpath + " does not apply to '" + command + "'");
+        readCommand.file = new File(outpath);
+        String fmt = argList.popValue(FMT, BINARY);
+        if (BINARY.equals(fmt))
+          readCommand.format = Format.BINARY;
+        else if (JSON.equalsIgnoreCase(fmt))
+          readCommand.format = Format.JSON;
+        else
+          throw new IllegalArgumentException(
+              "illegal setting " + FMT + "=" + fmt + " in arg list: " + argList.getArgString());
+        
+        readCommand.enforceExt = argList.popBoolean(EXT, true);
+        
+        if (readCommand.file.isDirectory()) {
+          if (!readCommand.enforceExt)
+            throw new IllegalArgumentException(
+                "illegal setting " + EXT + "=false while file=" + outpath + " is a directory");
+        } else if (readCommand.file.exists())
+          throw new IllegalArgumentException("file already exist: " + outpath);
+        else {
+          // not a directory; and doesn't exist
+          // check the parent directory exists
+          File parent = readCommand.file.getParentFile();
+          if (parent != null && !parent.exists())
+            throw new IllegalArgumentException(
+                "'" + FILE + "=" + outpath + "': first create parent dir " + parent);
+          
+          if (readCommand.enforceExt) {
+            String name = readCommand.file.getName();
+            String normalizedName;
+            if (readCommand.isPathResponse())
+              normalizedName = FilenamingConvention.INSTANCE.
+                normalizePathFilename(name, readCommand.format);
+            else
+              normalizedName = FilenamingConvention.INSTANCE.
+                normalizeNuggetFilename(name, readCommand.format);
+            if (!normalizedName.equals(name)) {
+              readCommand.file = new File(parent, normalizedName);
+              if (readCommand.file.exists())
+                throw new IllegalArgumentException(
+                    "normalized file path " + readCommand.file + " already exists");
+            }
+          }
+        }
+      }
     }
     
     return true;
@@ -510,7 +680,7 @@ public class Sldg extends MainTemplate {
     subTable.printRow(           MODE_RW,  "read/write existing (DEFAULT)");
     subTable.printRow(           MODE_CRW, "read/write, create if doesn't exist");
     subTable.printRow(           MODE_C,   "create a new DB (must not exist)");
-    subTable.printRow(           null,     "(to create an empty DB provide no more arguments)");
+    subTable.printRow(           null,     "(To create an empty DB provide no additional arguments.)");
 
     out.println();
     table.printHorizontalTableEdge('-');
@@ -532,7 +702,7 @@ public class Sldg extends MainTemplate {
     subWideKeyTable.printRow(null,       "up to 8 tooth-included rows to witness");
     out.println();
     subWideKeyTable.printRow(WSTATE + "=true",  "witness last row, even if its number is not toothed");
-    subWideKeyTable.printRow(null,              "Valid values: 'true' or 'false' (sans quotes)");
+    subWideKeyTable.printRow(null,              "Valid values: 'true' or 'false'");
     subWideKeyTable.printRow(null,              "DEFAULT: true");
 
 
@@ -546,7 +716,7 @@ public class Sldg extends MainTemplate {
     table.printRow(null,        "outputing the shortest path of rows that connnect to the first row", null);
     table.printRow(null,        "from the last thru the rows' hashpointers", null);
     out.println();
-    table.printRow(LIST ,       "lists (prints or outputs) the given numbered rows", REQ_CH);
+    table.printRow(LIST ,       "prints the given numbered rows", REQ_CH);
     out.println();
     table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
     table.printRow(null,        "numbered rows", null);
@@ -556,8 +726,25 @@ public class Sldg extends MainTemplate {
     table.printRow(null,        "ledger. It also contains evidence that sets the row's minimum age.", null);
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
-    out.println();
-    
+    table.println();
+    table.printHorizontalTableEdge('_');
+    table.printlnCentered("File Output Options:");
+    table.println();
+    table.printRow(FILE + "=*", "outputs to the specified path", null);
+    table.printRow(null,        "If the given path is an existing directory (recommended!), then the", null);
+    table.printRow(null,        "filename is dynamically generated. Otherwise, unless overriden (see", null);
+    table.printRow(null,        "next), if the pathname doesn't already sport the standard extension,", null);
+    table.printRow(null,        "the extension is appended.", null);
+    table.println();
+    table.printRow(EXT + "=*",  "if 'false', then no extension is appended to the '" + FILE + "'", null);
+    table.printRow(null,        "given. (Applies only if '" + FILE + "' is not a directory)", null);
+    table.printRow(null,        "Valid values: 'true' or 'false'", null);
+    table.printRow(null,        "DEFAULT: true", null);
+    table.println();
+    table.printRow(FMT + "=*",  "sets the format for the file output", null);
+    table.printRow(null,        "Valid values: '" + JSON + "' or '" + BINARY + "'", null);
+    table.printRow(null,        "DEFAULT: " + BINARY, null);
+    table.println();
     
   }
 
@@ -595,6 +782,17 @@ public class Sldg extends MainTemplate {
   
 
   private final static String INFO = "info";
+  private final static String FILE = "file";
+  private final static String EXT = "ext";
+  private final static String FMT = "fmt";
+  private final static String JSON = "json";
+  private final static String BINARY = "binary";
+  
+  
+  public final static String PATH_EXT = ".spath";
+  public final static String STATE_EXT = "." + STATE + PATH_EXT;
+  public final static String NUG_EXT = "." + NUG;
+  
   
   
   

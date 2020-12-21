@@ -4,10 +4,9 @@
 package io.crums.sldg;
 
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -24,18 +23,34 @@ public class Nugget implements Serial {
   
   
   
-  public static Nugget load(File file) throws IOException {
-    try (FileInputStream in = new FileInputStream(file)) {
-      return load(in.getChannel());
-    }
-  }
   
-  
+
+  /**
+   * Loads and returns a new instance from its serial form.
+   * 
+   * {@link #serialize()}
+   */
   public static Nugget load(InputStream in) throws IOException {
     return load(ChannelUtils.asChannel(in));
   }
+
+  /**
+   * Unchecked {@linkplain #load(InputStream) load} more suitable for functional idioms.
+   */
+  public static Nugget loadUnchecked(InputStream in) throws UncheckedIOException {
+    try {
+      return load(in);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
+  }
   
-  
+
+  /**
+   * Loads and returns a new instance from its serial form.
+   * 
+   * {@link #serialize()}
+   */
   public static Nugget load(ReadableByteChannel in) throws IOException {
     return load(in, ByteBuffer.allocate(16));
   }
@@ -46,6 +61,7 @@ public class Nugget implements Serial {
     TrailedPath firstWitness = TrailedPath.load(in, work);
     return new Nugget(path, firstWitness);
   }
+  
   
   
   public static Nugget load(ByteBuffer in) throws BufferUnderflowException {

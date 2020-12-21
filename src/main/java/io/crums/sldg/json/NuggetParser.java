@@ -3,9 +3,9 @@
  */
 package io.crums.sldg.json;
 
+
 import java.util.Objects;
 
-import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -15,9 +15,9 @@ import io.crums.sldg.Path;
 import io.crums.sldg.TrailedPath;
 
 /**
- * 
+ * Parses and generates JSON for {@linkplain Nugget}s.
  */
-public class NuggetParser {
+public class NuggetParser implements JsonEntityParser<Nugget> {
   
   public final static String PATH = "path";
   public final static String WIT = "wit";
@@ -48,12 +48,12 @@ public class NuggetParser {
   
   
   
-  
+  @Override
   @SuppressWarnings("unchecked")
   public JSONObject toJsonObject(Nugget nugget) {
     
     JSONObject jNug = new JSONObject();
-    jNug.put(PATH, parser.getPathParser().toJsonArray(nugget.ledgerPath()));
+    jNug.put(PATH, parser.getPathParser().toJsonObject(nugget.ledgerPath()));
     jNug.put(WIT, parser.toJsonObject(nugget.firstWitness()));
     
     return jNug;
@@ -69,11 +69,17 @@ public class NuggetParser {
     }
   }
   
+
+  @Override
+  public Nugget toEntity(JSONObject jObj) {
+    return toNugget(jObj);
+  }
+  
   
   
   public Nugget toNugget(JSONObject jObj) {
     
-    Path path = parser.getPathParser().toPath((JSONArray) jObj.get(PATH));
+    Path path = parser.getPathParser().toPath((JSONObject) jObj.get(PATH));
     TrailedPath firstWitness = parser.toTrailedPath((JSONObject) jObj.get(WIT));
     
     return new Nugget(path, firstWitness);

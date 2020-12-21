@@ -6,7 +6,6 @@ package io.crums.sldg.json;
 
 import java.util.Objects;
 
-import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -53,7 +52,7 @@ public class TrailedPathParser {
   public JSONObject toJsonObject(TrailedPath tp) {
     
     JSONObject jTrailed = new JSONObject();
-    jTrailed.put(PATH, pathParser.toJsonArray(tp.path()));
+    jTrailed.put(PATH, pathParser.toJsonObject(tp.path()));
     jTrailed.put(TRAIL, trailParser.toJsonObject(tp.trail()));
     
     return jTrailed;
@@ -74,7 +73,7 @@ public class TrailedPathParser {
   
   public TrailedPath toTrailedPath(JSONObject jTrailed) {
     
-    Path path = pathParser.toPath((JSONArray) jTrailed.get(PATH));
+    Path path = pathParser.toPath((JSONObject) jTrailed.get(PATH));
     CrumTrail trail = trailParser.toCrumTrail((JSONObject) jTrailed.get(TRAIL));
     
     return new TrailedPath(path, trail);

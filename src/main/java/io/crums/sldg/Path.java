@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -47,7 +48,8 @@ public class Path implements Digest, Serial {
   
   /**
    * Loads and returns a new instance from its serial form.  Since the data is self-delimiting,
-   * any trailing data in the file is ignored.
+   * any trailing data in the file is ignored. Note, this method does not account for the
+   * version byte header.
    * 
    * {@link #serialize()}
    */
@@ -64,6 +66,18 @@ public class Path implements Digest, Serial {
    */
   public static Path load(InputStream in) throws IOException {
     return load(ChannelUtils.asChannel(in));
+  }
+  
+  
+  /**
+   * Unchecked {@linkplain #load(InputStream) load} more suitable for functional idioms.
+   */
+  public static Path loadUnchecked(InputStream in) throws UncheckedIOException {
+    try {
+      return load(in);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
   }
   
 

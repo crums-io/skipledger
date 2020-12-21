@@ -41,7 +41,69 @@ public class SldgConstants {
   public final static int MAX_WITNESS_EXPONENT = 62;
 
   public final static int MAX_BLOCK_WITNESS_COUNT = 65;
+  
+  /**
+   * Version byte used in file headers.
+   */
+  public final static byte VERSION_BYTE = 1;
+  
+  /**
+   * Version number used in json files.
+   */
+  public final static int VERSION = VERSION_BYTE;
+  
+  /**
+   * Used in json.
+   */
+  public final static String VERSION_TAG = "version";
+
+  
+  /**
+   * Nugget binary file extension (includes the dot).
+   */
+  public final static String NUG_EXT = ".nug";
+  
+  
+  /**
+   * Path binary file extension (includes the dot).
+   */
+  public final static String SPATH_EXT = ".spath";
+  
+  
+  /**
+   * JSON file extension (includes the dot). The JSON version of an entity
+   * has this extension appended to its binary-version extension.
+   */
+  public final static String JSON_EXT = ".json";
+  
+
+  public static final String NUG_JSON_EXT = NUG_EXT + JSON_EXT;
+  
+
+  public static final String SPATH_JSON_EXT = SPATH_EXT + JSON_EXT;
+  
+  
+  
+  
+  
 
   private SldgConstants() {  }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

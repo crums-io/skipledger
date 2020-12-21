@@ -5,6 +5,8 @@ package io.crums.sldg.json;
 
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -25,7 +27,7 @@ public class RowParser {
   /**
    * Row number tag.
    */
-  public final static String RN = "rn";
+  public final static String RN = "n";
   
   /**
    * Entry hash tag.
@@ -92,6 +94,32 @@ public class RowParser {
     } catch (RuntimeException rx) {
       throw new IllegalArgumentException("row json: " + jObj, rx);
     }
+  }
+  
+
+  
+  
+  
+  @SuppressWarnings("unchecked")
+  public JSONArray toJsonArray(List<Row> rows) {
+
+    JSONArray jRows = new JSONArray();
+    for (Row row : rows)
+      jRows.add(toJsonObject(row));
+    
+    return jRows;
+  }
+  
+
+  
+  
+  
+  public List<Row> toRows(JSONArray jArray) {
+    int size = jArray.size();
+    ArrayList<Row> rows = new ArrayList<>(size);
+    for (int index = 0; index < size; ++index)
+      rows.add( toRow((JSONObject) jArray.get(index)) );
+    return rows;
   }
   
   
