@@ -9,6 +9,8 @@ import static io.crums.sldg.SldgConstants.*;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -17,13 +19,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Function;
 
 import io.crums.client.Client;
 import io.crums.client.ClientException;
 import io.crums.client.repo.TrailRepo;
 import io.crums.io.Opening;
+import io.crums.io.store.table.Table;
 import io.crums.model.CrumRecord;
 import io.crums.model.CrumTrail;
+import io.crums.model.TreeRef;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Nugget;
 import io.crums.sldg.Row;
@@ -31,6 +36,7 @@ import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.TrailedPath;
+import io.crums.util.CachingList;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 
@@ -39,21 +45,46 @@ import io.crums.util.TaskStack;
  */
 public class Db implements Closeable {
   
+
+
+  
+  /**
+   * Fixed width index table filename.
+   * (Created under {@linkplain #getDir() dir}.)
+   */
+  public final static String BEACON_TBL = "bn_idx";
+  
+  private final static int BEACON_TBL_WIDTH = 2 * Long.BYTES;
+  
   private final File dir;
   private final Ledger ledger;
   private final TrailRepo witnessRepo;
+  
+  private final Table beaconTable;
 
   /**
    * 
    */
   public Db(File dir, Opening mode) throws IOException {
     this.dir = Objects.requireNonNull(dir, "null directory");
-    
-    this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), mode);
-    this.witnessRepo = new TrailRepo(dir, mode);
+
+    try (TaskStack onFail = new TaskStack(this)) {
+      
+      this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), mode);
+      onFail.pushClose(ledger);
+      
+      this.witnessRepo = new TrailRepo(dir, mode);
+      onFail.pushClose(witnessRepo);
+      
+      this.beaconTable = Table.newSansKeystoneInstance(
+          mode.openChannel(new File(dir, BEACON_TBL)), BEACON_TBL_WIDTH);
+      
+      onFail.clear();
+    }
     
     // TODO: do some sanity checks we loaded plausible files
-    //       delaying cuz it's sure break anyway, if so.
+    //       delaying cuz if we load garbage it's sure to break anyway
+    //       (most any structure validates at constuction and is immutable)
   }
   
 
@@ -61,9 +92,10 @@ public class Db implements Closeable {
 
 
   @Override
-  @SuppressWarnings("resource")
   public void close() {
-    new TaskStack(this).pushClose(ledger).pushClose(witnessRepo).close();
+    try (TaskStack closer = new TaskStack(this)) {
+      closer.pushClose(ledger).pushClose(witnessRepo).pushClose(beaconTable);
+    }
   }
   
   
@@ -267,6 +299,73 @@ public class Db implements Closeable {
     
     stored = stored.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(stored);
     return new WitnessReport(Lists.reverse(zip), stored, lastWitNum);
+  }
+  
+  
+  /**
+   * Gets the beacon (the latest published {@linkplain TreeRef} at crums.io),
+   * adds its hash as the next entry in the ledger and returns its row number.
+   * The beacon's {@linkplain TreeRef#maxUtc() maxUtc} and ledger row number are
+   * maintained are in a separate table for fast lookup.
+   */
+  public long addBeacon() {
+    Client remote = new Client();
+    TreeRef beacon = remote.getBeacon();
+    long beaconRowNumber = ledger.appendRows(beacon.hash());
+
+    ByteBuffer row = ByteBuffer.allocate(BEACON_TBL_WIDTH);
+    row.putLong(beacon.maxUtc()).putLong(beaconRowNumber).flip();
+    
+    try {
+      beaconTable.append(row);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
+    return beaconRowNumber;
+  }
+  
+  
+  
+  public int getBeaconCount() {
+    try {
+      long count = beaconTable.getRowCount();
+      if (count > Integer.MAX_VALUE)
+        throw new SldgException(
+            "beacon table size " +  count + " beyond max capacity");
+      return (int) count;
+    
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on getBeaconCount(): " + iox.getMessage(), iox);
+    }
+  }
+  
+  
+  
+  public List<Long> getBeaconUtcs() {
+    return beaconSnapshot(r -> r.getLong(0));
+  }
+  
+  
+  
+  public List<Long> getBeaconRowNumbers() {
+    return beaconSnapshot(r -> r.getLong(8));
+  }
+  
+  
+  private List<Long> beaconSnapshot(Function<ByteBuffer, Long> fun) {
+    try {
+      
+      if (beaconTable.isEmpty())
+        return Collections.emptyList();
+      
+      List<ByteBuffer> snapshot = beaconTable.getListSnapshot();
+      
+      return CachingList.cache(Lists.map(snapshot, fun));
+      
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
   }
 
 

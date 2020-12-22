@@ -51,6 +51,8 @@ public class Sldg extends MainTemplate {
     
     private List<ByteBuffer> entryHashes;
     
+    private boolean addBeacon;
+    
     private boolean witness;
     private int toothExponent;
     private boolean witnessLast;
@@ -144,7 +146,7 @@ public class Sldg extends MainTemplate {
     
     
     
-    if (noCommand && info)
+    if (mode == Opening.CREATE)
       System.out.println("ledger created at " + db.getDir());
     
     // check the maximum row number is not out-of-bounds
@@ -169,6 +171,11 @@ public class Sldg extends MainTemplate {
       
       // write command
       if (writeCommand != null) {
+        if (writeCommand.addBeacon) {
+          System.out.print("beacon hash");
+          long rowNumber = db.addBeacon();
+          System.out.println(" entered in row [" + rowNumber + "]");
+        }
         if (writeCommand.add) {
           writeCommand.entryHashes.forEach(h -> db.getLedger().appendRows(h));
           if (info) {
@@ -474,7 +481,10 @@ public class Sldg extends MainTemplate {
             }
           }
         }
-      }
+      } // if
+      
+
+      enforceNoRemainingArgs(argList);
     }
     
     return true;
@@ -484,23 +494,23 @@ public class Sldg extends MainTemplate {
   
   private boolean configureWriteCommands(ArgList argList) {
 
-    List<String> writeCommands = argList.removedContained(ADD, WIT);
+    List<String> writeCommands = argList.removedContained(ADD, ADDB, WIT);
     switch (writeCommands.size()) {
     case 0:
       return false;
     case 1:
-      this.writeCommand = new WriteCommand();
-      writeCommand.add = ADD.equals(writeCommands.get(0));
-      writeCommand.witness = !writeCommand.add;
-      break;
     case 2:
-      this.writeCommand = new WriteCommand();
-      writeCommand.add = writeCommand.witness = true;
+    case 3:
       break;
     default:
       throw new IllegalArgumentException(
           "duplicate commands in '" + argList.getArgString() + "'");
     }
+    
+    this.writeCommand = new WriteCommand();
+    writeCommand.add = writeCommands.contains(ADD);
+    writeCommand.addBeacon = writeCommands.contains(ADDB);
+    writeCommand.witness = writeCommands.contains(WIT);
     
     if (writeCommand.add) {
       writeCommand.entryHashes = getHashes(argList);
@@ -523,10 +533,17 @@ public class Sldg extends MainTemplate {
     }
     
     
-    if (!argList.isEmpty())
-      throw new IllegalArgumentException("illegal arguments / combination: " + argList.getArgString());
+    enforceNoRemainingArgs(argList);
     
     return true;
+  }
+  
+  
+  
+  private void enforceNoRemainingArgs(ArgList argList) {
+    if (!argList.isEmpty())
+      throw new IllegalArgumentException(
+          "illegal arguments / combination: " + argList.getArgString());
   }
   
   
@@ -639,8 +656,8 @@ public class Sldg extends MainTemplate {
     String paragraph =
         "Arguments that are specified as name/value pairs are designated in the form " +
         "'name=*' below, with '*' standing for user input. A required argument is marked '" + REQ + "' in the rightmost column; " +
-        "one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' accepts either as a " +
-        "required one-of-many, or an addition to 'above'.";
+        "one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' satisfies either as a " +
+        "required one-of-many, or may be grouped with adjacently documented " + REQ_PLUS + " commands.";
     printer.printParagraph(paragraph, RM);
     printer.println();
     
@@ -688,12 +705,22 @@ public class Sldg extends MainTemplate {
     table.printHorizontalTableEdge('-');
     out.println();
     
-    table.printRow(ADD ,  "adds one or more hexidecimal SHA-256 hash entries", REQ_CH);
+    table.printRow(ADD ,  "adds one or more hexidecimal SHA-256 hash entries in the order", REQ_PLUS);
+    table.printRow(null,  "entered", null);
+    out.println();
+    
+    table.printRow(ADDB , "adds the latest beacon hash as the next SHA-256 entry", REQ_PLUS);
+    table.printRow(null,  "Establishes how new (!) subsequent rows in the ledger are.", null);
+    table.printRow(null,  "If combined with other commands, then this command executes", null);
+    table.printRow(null,  "first.", null);
     out.println();
     
     table.printRow(WIT ,  "witnesses the last row and/or previous unwitnessed rows whose", REQ_PLUS);
-    table.printRow(null,  "numbers match the tooth-exponent. Outputs the number of rows", null);
-    table.printRow(null,  "witnessed. Options (inclusive):", null);
+    table.printRow(null,  "numbers match the tooth-exponent", null);
+    table.printRow(null,  "Establishes how old the latest rows in the ledger are.", null);
+    table.printRow(null,  "If combined with other commands, then this command executes", null);
+    table.printRow(null,  "last.", null);
+    table.printRow(null,  "Options (inclusive):", null);
     out.println();
     subWideKeyTable.printRow(TEX + "=*", "witness numbered rows that are multiples of");
     subWideKeyTable.printRow(null,       "2 raised to the power of this number.");
@@ -728,7 +755,8 @@ public class Sldg extends MainTemplate {
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     table.println();
     table.printHorizontalTableEdge('_');
-    table.printlnCentered("File Output Options:");
+    table.printlnCenteredSpread("Output Options:", 1);
+    table.printHorizontalTableEdge('-');
     table.println();
     table.printRow(FILE + "=*", "outputs to the specified path", null);
     table.printRow(null,        "If the given path is an existing directory (recommended!), then the", null);
@@ -736,8 +764,8 @@ public class Sldg extends MainTemplate {
     table.printRow(null,        "next), if the pathname doesn't already sport the standard extension,", null);
     table.printRow(null,        "the extension is appended.", null);
     table.println();
-    table.printRow(EXT + "=*",  "if 'false', then no extension is appended to the '" + FILE + "'", null);
-    table.printRow(null,        "given. (Applies only if '" + FILE + "' is not a directory)", null);
+    table.printRow(EXT + "=*",  "if 'false', then no extension is appended to the given '" + FILE + "'", null);
+    table.printRow(null,        "(Valid only if '" + FILE + "' is not a directory)", null);
     table.printRow(null,        "Valid values: 'true' or 'false'", null);
     table.printRow(null,        "DEFAULT: true", null);
     table.println();
@@ -768,6 +796,7 @@ public class Sldg extends MainTemplate {
 
 
   private final static String ADD = "add";
+  private final static String ADDB = "addb";
   
   private final static String WIT = "wit";
   private final static String TEX = "tex";
