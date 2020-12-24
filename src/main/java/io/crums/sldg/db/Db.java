@@ -41,7 +41,9 @@ import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 
 /**
- * 
+ * A directory containing a {@linkplain Ledger skip ledger}, a {@linkplain TrailRepo crumtrail repo}
+ * (establishing how old) and a table identifying which rows contain beacon hashes (establishing
+ * how young). 
  */
 public class Db implements Closeable {
   
@@ -61,16 +63,36 @@ public class Db implements Closeable {
   private final TrailRepo witnessRepo;
   
   private final Table beaconTable;
+  
+  
+  
+
 
   /**
+   * Creates a lazy-loading instance.
    * 
+   * @param dir root directory
+   * @param mode opening mode (non-null)
    */
   public Db(File dir, Opening mode) throws IOException {
+    this(dir, mode, true);
+  }
+  
+  
+
+  /**
+   * Full param constructor.
+   * 
+   * @param dir root directory
+   * @param mode opening mode (non-null)
+   * @param lazy if <tt>true</tt>, then the ledger rows are loaded lazily
+   */
+  public Db(File dir, Opening mode, boolean lazy) throws IOException {
     this.dir = Objects.requireNonNull(dir, "null directory");
 
     try (TaskStack onFail = new TaskStack(this)) {
       
-      this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), mode);
+      this.ledger = new CompactFileLedger(new File(dir, DB_LEDGER), mode, true);
       onFail.pushClose(ledger);
       
       this.witnessRepo = new TrailRepo(dir, mode);

@@ -27,6 +27,7 @@ import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.db.Db;
+import io.crums.sldg.db.Finder;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
 import io.crums.sldg.json.NuggetParser;
@@ -37,6 +38,7 @@ import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.PrintSupport;
+import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
@@ -58,6 +60,14 @@ public class Sldg extends MainTemplate {
     private boolean witnessLast;
   }
   
+  private final static int DEFAULT_LIMIT = 8;
+  
+  private static class FindCommand {
+    private ByteBuffer prefix;
+    private long startRn;
+    private int limit = DEFAULT_LIMIT;
+  }
+  
 
   // to minimize/organize class members
   private static class ReadCommand {
@@ -66,6 +76,8 @@ public class Sldg extends MainTemplate {
     
     private boolean list;
     private List<Long> rowNumbers;
+    
+    private FindCommand find;
     
     private boolean nug;
     private boolean status;
@@ -142,7 +154,7 @@ public class Sldg extends MainTemplate {
     if (noCommand && mode != Opening.CREATE)
       throw new IllegalArgumentException("missing command");
     
-    this.db = new Db(dir, mode);
+    this.db = new Db(dir, mode, true);  // (lazy=true)
     
     
     
@@ -245,10 +257,26 @@ public class Sldg extends MainTemplate {
           List<Row> rows = new ArrayList<>(readCommand.rowNumbers.size());
           for (long rowNumber : readCommand.rowNumbers)
             rows.add(db.getLedger().getRow(rowNumber));
-          printRows(rows);
+          listRows(rows);
+          int count = rows.size();
+          System.out.println(count + pluralize(" row", count) + ".");
         
         } else if (readCommand.status) {
           printStatus();
+          
+        } else if (readCommand.find != null) {
+          Finder finder = new Finder(db.getLedger());
+          List<Row> rows =finder.byEntryPrefix(
+              readCommand.find.prefix,
+              readCommand.find.startRn,
+              readCommand.find.limit);
+          listRows(rows);
+          int count = rows.size();
+          System.out.print(count + pluralize(" row", count) + " found.");
+          if (count == readCommand.find.limit)
+            System.out.println(" (limit=" + count + ")");
+          else
+            System.out.println();
         }
       }
     }
@@ -261,10 +289,7 @@ public class Sldg extends MainTemplate {
     if (readCommand.file.isDirectory()) {
       String file = FilenamingConvention.INSTANCE.pathFilename(path, readCommand.format);
       out = new File(readCommand.file, file);
-      if (out.exists()) {
-        System.err.println("[ERROR] file already exists: " + out);
-        return;
-      }
+      exitIfExists(out);
     } else
       out = readCommand.file;
     
@@ -277,7 +302,8 @@ public class Sldg extends MainTemplate {
   private void outputNug(Optional<Nugget> nuggetOpt) {
     
     if (nuggetOpt.isEmpty()) {
-      System.err.println("[ERROR] row as yet untrailed (no crumtrail)");
+      System.err.println("[ERROR] untrailed row (no crumtrail yet for this or later row number)");
+      StdExit.ILLEGAL_ARG.exit();
       return;
     }
     
@@ -287,21 +313,38 @@ public class Sldg extends MainTemplate {
     if (readCommand.file.isDirectory()) {
       String file = FilenamingConvention.INSTANCE.nuggetFilename(nugget, readCommand.format);
       out = new File(readCommand.file, file);
+      exitIfExists(out);
     } else
       out = readCommand.file;
     
     VersionedSerializers.NUGGET_SERIALIZER.write(nugget, out, readCommand.format);
     System.out.println("nugget written to " + out);
   }
+  
+  
+  
+  private void exitIfExists(File out) {
+    if (!out.exists())
+      return;
+    
+    System.err.println("[ERROR] file already exists: " + out);
+    StdExit.ILLEGAL_ARG.exit();
+  }
 
 
 
   private void outputState(SkipPath statePath) {
     
+    if (statePath == null) {
+      System.err.println("[ERROR] empty ledger has no state");
+      StdExit.ILLEGAL_ARG.exit();
+    }
+    
     File out;
     if (readCommand.file.isDirectory()) {
       String file = FilenamingConvention.INSTANCE.stateFilename(statePath, readCommand.format);
       out = new File(readCommand.file, file);
+      exitIfExists(out);
     } else
       out = readCommand.file;
     
@@ -319,10 +362,21 @@ public class Sldg extends MainTemplate {
     long size = db.size();
     List<Long> witnessed = db.getRowNumbersWitnessed();
     int witCount = witnessed.size();
+    int bnCount = db.getBeaconCount();
     DecimalFormat format = new DecimalFormat("#,###.###");
     System.out.println(
-        format.format(size) + pluralize(" row", size) + "; " +
-        format.format(witCount) + pluralize(" row", witCount) + " witnessed");
+        format.format(size) + pluralize(" row", size) + ", " +
+        format.format(bnCount) + pluralize(" of which are beacon", bnCount) + "; " +
+        format.format(witCount) + pluralize(" crumtrail", witCount) + " attached");
+
+    if (bnCount != 0) {
+      List<Long> bnRowNums = db.getBeaconRowNumbers();
+      List<Long> bnUtcs = db.getBeaconUtcs();
+      long bnRowNum = bnRowNums.get(0);
+      long bnUtc = bnUtcs.get(0);
+      System.out.println("row [" + format.format(bnRowNum) + "] created after " + new Date(bnUtc));
+    }
+    
     if (witCount == 1) {
       CrumTrail trail = db.getCrumTrail(0);
       long witnessedRow = witnessed.get(0);
@@ -344,6 +398,7 @@ public class Sldg extends MainTemplate {
       System.out.println(
           "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastTrail.crum().utc()));
     }
+    
     System.out.println("OK");
   }
 
@@ -360,8 +415,31 @@ public class Sldg extends MainTemplate {
 
 
 
-  private void printRows(List<Row> rows) {
-    System.out.println(RowParser.INSTANCE.toJsonArray(rows));
+  private void listRows(List<Row> rows) {
+//  System.out.println(RowParser.INSTANCE.toJsonArray(rows));
+    if (!rows.isEmpty()) {
+      
+      // make it pretty: align hex column
+      final int hexStartPos;
+      {
+        long maxRowNum =
+            rows.stream().max((a, b) -> Long.compare(a.rowNumber(), b.rowNumber()))
+            .get().rowNumber();
+        String proto = String.valueOf(maxRowNum);
+        // >[proto] <
+        hexStartPos = proto.length() + 3;
+      }
+
+      for (Row row : rows) {
+        System.out.print('[');
+        String value = String.valueOf(row.rowNumber());
+        System.out.print(value);
+        System.out.print(']');
+        for (int index = value.length() + 2; index < hexStartPos; ++index)
+          System.out.print(' ');
+        System.out.println(IntegralStrings.toHex(row.inputHash()));
+      }
+    }
   }
 
 
@@ -397,7 +475,7 @@ public class Sldg extends MainTemplate {
 
   private boolean configureReadCommands(ArgList argList) {
     
-    List<String> readCommands = argList.removedContained(STATE, PATH, LIST, NUG, STATUS);
+    List<String> readCommands = argList.removedContained(STATE, PATH, LIST, FIND, NUG, STATUS);
     switch (readCommands.size()) {
     case 0:   return false;
     case 1:   break;
@@ -414,6 +492,18 @@ public class Sldg extends MainTemplate {
     readCommand.nug = NUG.equals(command);
     readCommand.status = STATUS.equals(command);
     
+    if (FIND.equals(command)) {
+      readCommand.find = new FindCommand();
+      
+      readCommand.find.prefix = getHashPrefix(argList);
+      
+      readCommand.find.limit = (int) argList.popLong(LIMIT, DEFAULT_LIMIT);
+      if (readCommand.find.limit < 1)
+        throw new IllegalArgumentException(LIMIT + "=" + readCommand.find.limit + " < 1");
+      
+      readCommand.find.startRn = argList.popLong(START, 1);
+    }
+    
     if (readCommand.takesRowNumbers()) {
       readCommand.rowNumbers = argList.popNumbers();
       if (readCommand.rowNumbers.isEmpty())
@@ -421,8 +511,8 @@ public class Sldg extends MainTemplate {
             "missing row number[s] in arguments: " + argList.getArgString());
       if (readCommand.path && readCommand.rowNumbers.size() != 2)
         throw new IllegalArgumentException(
-            (readCommand.rowNumbers.size() > 2 ? "too many" : "missing") +
-            " row numbers in arguments: " + argList.getArgString());
+            (readCommand.rowNumbers.size() > 2 ? "too many row numbers" : "missing row number") +
+            " in arguments: " + argList.getArgString());
       
       long minRowNum = readCommand.rowNumbers.stream().min(Comparator.naturalOrder()).get();
       if (minRowNum < 1)
@@ -431,63 +521,82 @@ public class Sldg extends MainTemplate {
       if (readCommand.nug && readCommand.rowNumbers.size() != 1)
         throw new IllegalArgumentException(
             NUG + " command takes a single row number. Too many given: " + argList.getArgString());
-      
-      String outpath = argList.popValue(FILE);
-      if (outpath != null) {
-        // 
-        if (!readCommand.supportsFileOutput())
-          throw new IllegalArgumentException(
-              FILE + "=" + outpath + " does not apply to '" + command + "'");
-        readCommand.file = new File(outpath);
-        String fmt = argList.popValue(FMT, BINARY);
-        if (BINARY.equals(fmt))
-          readCommand.format = Format.BINARY;
-        else if (JSON.equalsIgnoreCase(fmt))
-          readCommand.format = Format.JSON;
-        else
-          throw new IllegalArgumentException(
-              "illegal setting " + FMT + "=" + fmt + " in arg list: " + argList.getArgString());
-        
-        readCommand.enforceExt = argList.popBoolean(EXT, true);
-        
-        if (readCommand.file.isDirectory()) {
-          if (!readCommand.enforceExt)
-            throw new IllegalArgumentException(
-                "illegal setting " + EXT + "=false while file=" + outpath + " is a directory");
-        } else if (readCommand.file.exists())
-          throw new IllegalArgumentException("file already exist: " + outpath);
-        else {
-          // not a directory; and doesn't exist
-          // check the parent directory exists
-          File parent = readCommand.file.getParentFile();
-          if (parent != null && !parent.exists())
-            throw new IllegalArgumentException(
-                "'" + FILE + "=" + outpath + "': first create parent dir " + parent);
-          
-          if (readCommand.enforceExt) {
-            String name = readCommand.file.getName();
-            String normalizedName;
-            if (readCommand.isPathResponse())
-              normalizedName = FilenamingConvention.INSTANCE.
-                normalizePathFilename(name, readCommand.format);
-            else
-              normalizedName = FilenamingConvention.INSTANCE.
-                normalizeNuggetFilename(name, readCommand.format);
-            if (!normalizedName.equals(name)) {
-              readCommand.file = new File(parent, normalizedName);
-              if (readCommand.file.exists())
-                throw new IllegalArgumentException(
-                    "normalized file path " + readCommand.file + " already exists");
-            }
-          }
-        }
-      } // if
-      
-
-      enforceNoRemainingArgs(argList);
     }
     
+
+    configureOutput(argList);
+    
+    
+
+    enforceNoRemainingArgs(argList);
+    
+    
+    
     return true;
+  }
+  
+  
+  
+  private void configureOutput(ArgList argList) {
+
+    String outpath = argList.popValue(FILE);
+    if (outpath == null)
+      return;
+
+    if (!readCommand.supportsFileOutput())
+      throw new IllegalArgumentException(
+          FILE + "=" + outpath + " does not apply: " + argList.getArgString());
+    
+    readCommand.file = new File(outpath);
+    
+    // set the format
+    String fmt = argList.popValue(FMT, BINARY);
+    if (BINARY.equals(fmt))
+      readCommand.format = Format.BINARY;
+    else if (JSON.equalsIgnoreCase(fmt))
+      readCommand.format = Format.JSON;
+    else
+      throw new IllegalArgumentException(
+          "illegal setting " + FMT + "=" + fmt + " in arg list: " + argList.getArgString());
+    
+    readCommand.enforceExt = argList.popBoolean(EXT, true);
+    
+    // if file is a directory (auto-naming), check other settings aren't wonkie
+    if (readCommand.file.isDirectory()) {
+      
+      if (!readCommand.enforceExt)
+        throw new IllegalArgumentException(
+            "illegal setting " + EXT + "=false while file=" + outpath + " is a directory");
+    
+    // check we don't overwrite
+    } else if (readCommand.file.exists()) {
+      throw new IllegalArgumentException("file already exist: " + outpath);
+    
+    } else {
+      // not a directory; and doesn't exist
+      
+      // check the parent directory exists
+      File parent = readCommand.file.getParentFile();
+      if (parent != null && !parent.exists())
+        throw new IllegalArgumentException(
+            "'" + FILE + "=" + outpath + "': first create parent dir " + parent);
+      
+      // normalize the filename, if it requires an extension
+      if (readCommand.enforceExt) {
+        String name = readCommand.file.getName();
+        String normalizedName;
+        if (readCommand.isPathResponse())
+          normalizedName = FilenamingConvention.INSTANCE.normalizePathFilename(name, readCommand.format);
+        else
+          normalizedName = FilenamingConvention.INSTANCE.normalizeNuggetFilename(name, readCommand.format);
+        if (!normalizedName.equals(name)) {
+          readCommand.file = new File(parent, normalizedName);
+          if (readCommand.file.exists())
+            throw new IllegalArgumentException(
+                "normalized file path " + readCommand.file + " already exists");
+        }
+      }
+    }
   }
   
   
@@ -547,6 +656,21 @@ public class Sldg extends MainTemplate {
   }
   
   
+  private ByteBuffer getHashPrefix(ArgList args) {
+    
+    List<String> prefix = args.removeMatched(s -> isHashPrefix(s));
+    
+    switch (prefix.size()) {
+    case 0:
+      throw new IllegalArgumentException("'" + FIND + "' command requires a search key (in hex)");
+    case 1:
+      break;
+    default:
+      throw new IllegalArgumentException("only one search key may be provided; parsed these: " + prefix);
+    }
+    
+    return ByteBuffer.wrap(IntegralStrings.hexToBytes(prefix.get(0)));
+  }
   
   
   private List<ByteBuffer> getHashes(ArgList args) {
@@ -557,6 +681,11 @@ public class Sldg extends MainTemplate {
   
   private boolean isHash(String arg) {
     return IntegralStrings.isHex(arg) && arg.length() == 2 * SldgConstants.HASH_WIDTH;
+  }
+  
+  private boolean isHashPrefix(String arg) {
+    int len = arg.length();
+    return len > 1 && (len & 1) == 0 && len <= 2 * SldgConstants.HASH_WIDTH && IntegralStrings.isHex(arg);
   }
   
   
@@ -643,6 +772,12 @@ public class Sldg extends MainTemplate {
         "exponent of this power of 2 for witnessing is called tooth-exponent. (See '" + WIT + "' command)";
     printer.printParagraph(paragraph, RM);
     printer.println();
+    paragraph =
+        "In order to establish the maximum age of entries in a ledger a beacon hash entry may be added. This hash is just " +
+        "the root of the latest Merkle tree published at crums.io every minute or so. Since it's value cannot be predicted in advance, and it comes with a UTC timestamp, " +
+        "it can be used to establish \"freshness\". The recommended practice is to simplify the evolution of row numbers by either (i) add only a single beacon as the very first row, " +
+        "or (ii) add beacons at row numbers that are always a multiple of some constant that is a power of 2.  (See '" + ADDB + "' command)";
+    printer.printParagraph(paragraph, RM);
     
   }
 
@@ -745,11 +880,21 @@ public class Sldg extends MainTemplate {
     out.println();
     table.printRow(LIST ,       "prints the given numbered rows", REQ_CH);
     out.println();
+    table.printRow(FIND,        "finds and prints rows whose entry hash (e) match the given", REQ_CH);
+    table.printRow(null,        "hexadecimal prefix (must have an even number of hex digits)", null);
+    table.printRow(null,        "Options (inclusive):", null);
+    out.println();
+    subWideKeyTable.printRow(START + "=*", "starting row number to begin the search");
+    subWideKeyTable.printRow(null,         "DEFAULT: 1");
+    out.println();
+    subWideKeyTable.printRow(LIMIT + "=*", "maximum number of rows returned");
+    subWideKeyTable.printRow(null,         "DEFAULT: " + DEFAULT_LIMIT);
+    out.println();
     table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
     table.printRow(null,        "numbered rows", null);
     out.println();
     table.printRow(NUG,         "prints or outputs a nugget. A nugget proves that the hash of a given", REQ_CH);
-    table.printRow(null,        "entry is on a numbered row that is linked from the last row in its", null);
+    table.printRow(null,        "entry is on a numbered row that is linked from the last row in the", null);
     table.printRow(null,        "ledger. It also contains evidence that sets the row's minimum age.", null);
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
@@ -807,7 +952,9 @@ public class Sldg extends MainTemplate {
   private final static String PATH = "path";
   private final static String STATUS = "status";
   private final static String LIST = "list";
+  private final static String FIND = "find";
   private final static String NUG = "nug";
+  
   
 
   private final static String INFO = "info";
@@ -816,6 +963,9 @@ public class Sldg extends MainTemplate {
   private final static String FMT = "fmt";
   private final static String JSON = "json";
   private final static String BINARY = "binary";
+  private final static String LIMIT = "limit";
+  private final static String START = "start";
+  
   
   
   public final static String PATH_EXT = ".spath";
