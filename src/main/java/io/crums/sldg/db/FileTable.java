@@ -27,7 +27,6 @@ public class FileTable implements Table {
   /**
    * 
    */
-  @SuppressWarnings("resource")
   public FileTable(File file) throws IOException {
     this(file, Opening.CREATE_ON_DEMAND);
   }
@@ -35,7 +34,6 @@ public class FileTable implements Table {
   /**
    * 
    */
-  @SuppressWarnings("resource")
   public FileTable(File file, Opening mode) throws IOException {
     
     this.file = mode.openChannel(file);

@@ -32,7 +32,6 @@ import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
 import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
-import io.crums.sldg.json.RowParser;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
