@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,16 +30,21 @@ import io.crums.io.store.table.Table;
 import io.crums.model.CrumRecord;
 import io.crums.model.CrumTrail;
 import io.crums.model.TreeRef;
+import io.crums.sldg.CamelPath;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Nugget;
+import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.TargetPath;
 import io.crums.sldg.TrailedPath;
 import io.crums.util.CachingList;
 import io.crums.util.Lists;
+import io.crums.util.Sets;
 import io.crums.util.TaskStack;
+import io.crums.util.Tuple;
 
 /**
  * A directory containing a {@linkplain Ledger skip ledger}, a {@linkplain TrailRepo crumtrail repo}
@@ -138,12 +144,82 @@ public class Db implements Closeable {
   
   
   
+  public Path beaconedPath(long lo, long hi) {
+    SkipPath vanilla = ledger.skipPath(lo, hi);
+    return makeBeaconed(vanilla);
+  }
+  
+  
+  public Path beaconedStatePath() {
+    return makeBeaconed(ledger.statePath());
+  }
+  
+  
+  
+  
+  private Path makeBeaconed(Path vanilla) {
+    List<Tuple<Long,Long>> beacons;
+    List<Long> bcnRowNumbers = getBeaconRowNumbers();
+    List<Long> bcnUtcs = getBeaconUtcs();
+    List<Long> pathNumbers = vanilla.rowNumbers();
+    Iterator<Long> i = Sets.intersectionIterator(bcnRowNumbers, pathNumbers);
+    if (!i.hasNext())
+      return vanilla;
+
+    beacons = new ArrayList<>();
+    do {
+      
+      Long rn = i.next();
+      int index = Collections.binarySearch(bcnRowNumbers, rn);
+      // index >= 0;
+      Long utc = bcnUtcs.get(index);
+      beacons.add(new Tuple<>(rn, utc));
+      
+    } while (i.hasNext());
+    
+    return vanilla.isTargeted()? new TargetPath(vanilla, beacons) : new Path(vanilla, beacons);
+  }
+  
+  
   
   public Optional<Nugget> getNugget(long rowNumber) {
+    return getNugget(rowNumber, true);
+  }
+  
+  
+  public Optional<Nugget> getNugget(long rowNumber, boolean withBeaconDate) {
     Optional<TrailedPath> trailOpt = getTrail(rowNumber);
     if (trailOpt.isEmpty())
       return Optional.empty();
-    SkipPath path = ledger.skipPath(rowNumber, ledger.size());
+    
+    Path path;
+    if (withBeaconDate) {
+      List<Long> bcnRowNums = getBeaconRowNumbers();
+      System.out.println("[Db] beacon row nums " + bcnRowNums);
+      int bindex = Collections.binarySearch(bcnRowNums, rowNumber);
+      System.out.println("[Db] bindex " + bindex);
+      if (bindex < 0) { // usual path
+        bindex = -1 - bindex;
+        if (bindex == 0) {
+          withBeaconDate = false;
+          path = ledger.skipPath(rowNumber, ledger.size());
+        } else {
+          long bcnRowNumber = bcnRowNums.get(bindex - 1);
+          SkipPath head = ledger.skipPath(bcnRowNumber, rowNumber);
+          SkipPath tail = ledger.skipPath(rowNumber, ledger.size());
+          path = CamelPath.concatInstance(head, tail);
+          System.out.println("[Db] " + path);
+        }
+      } else {  // the row itself is a beacon (?) .. ok, we don't disallow it
+        assert rowNumber == bcnRowNums.get(bindex).longValue();
+        path = ledger.skipPath(rowNumber, ledger.size());
+      }
+    } else
+      path = ledger.skipPath(rowNumber, ledger.size());
+    
+    if (withBeaconDate)
+      path = makeBeaconed(path);
+    
     Nugget nug = new Nugget(path, trailOpt.get());
     return Optional.of(nug);
   }

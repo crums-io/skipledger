@@ -10,10 +10,15 @@ import java.io.UncheckedIOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import io.crums.io.Serial;
 import io.crums.io.channels.ChannelUtils;
+import io.crums.util.Lists;
+import io.crums.util.Tuple;
 
 /**
  * Packages compact evidence of a row in a ledger, together with evidence
@@ -86,18 +91,77 @@ public class Nugget implements Serial {
   }
 
   private void verify() {
-    if (!path.first().equals(firstWitness.target())) {
+    if (!path.target().equals(firstWitness.target())) {
       throw new IllegalArgumentException(
-          "path.first() not equal to first.target(): " + path + " <> " + firstWitness);
+          "path.target() not equal to firstWitness.target(): " + path + " <> " + firstWitness);
     }
   }
   
   
+  /**
+   * Returns the target row.
+   * 
+   * @return {@linkplain #ledgerPath()}.{@linkplain Path#first() first()}
+   */
   public final Row target() {
-    return path.first();
+    return path.target();
   }
   
   
+  /**
+   * Returns the optional date <em>after</em> which the target row
+   * was created.
+   */
+  public Optional<Long> afterUtc() {
+    if (path.hasBeacon()) {
+      // search for a beacon row at or before the target
+      long targetRn = target().rowNumber();
+      List<Tuple<Long, Long>> beacons = path.beacons();
+      List<Long> bcRowNumbers = Lists.map(beacons, t -> t.a);
+      int index = Collections.binarySearch(bcRowNumbers, targetRn);
+      if (index < 0) {
+        // the usual case (why build a nugget to a beacon row?)
+        index = -1 - index;
+        if (index != 0)
+          return Optional.of(beacons.get(index - 1).b);
+      } else
+        return Optional.of(beacons.get(index).b);
+    }
+    return Optional.empty();
+  }
+  
+  
+  
+  
+  public Optional<Tuple<Row,Long>> timestampRow() {
+    if (path.hasBeacon()) {
+      // search for a beacon row at or before the target
+      long targetRn = target().rowNumber();
+      List<Long> bcRowNumbers = Lists.map(path.beacons(), t -> t.a);
+      int index = Collections.binarySearch(bcRowNumbers, targetRn);
+      if (index < 0) {
+        // the usual case 
+        index = -1 - index;
+        if (index != 0) {
+          return Optional.of(path.beaconRows().get(index - 1));
+        }
+      } else {
+        // (why build a nugget to a beacon row?)
+        // dunno, but we allow it
+        return Optional.of(path.beaconRows().get(index));
+      }
+    }
+    return Optional.empty();
+    
+  }
+  
+  
+  
+  /**
+   * Returns the UTC time of the {@linkplain #firstWitness first recorded witness}.
+   * 
+   * @return {@linkplain #firstWitness()}.utc()
+   */
   public final long utc() {
     return firstWitness.utc();
   }
@@ -108,6 +172,9 @@ public class Nugget implements Serial {
   }
   
   
+  /**
+   * Returns the evidence for the time it was first witnessed.
+   */
   public final TrailedPath firstWitness() {
     return firstWitness;
   }

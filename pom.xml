@@ -27,11 +27,24 @@
         <version>2.1.0</version>
         
         <configuration>
+        
+          <platforms>
+            <platform>unix</platform>
+          </platforms>
+          
+          <repositoryLayout>flat</repositoryLayout>
+        
+        
           <programs>
             
             <program>
               <mainClass>io.crums.sldg.cli.Sldg</mainClass>
               <id>sldg</id>
+            </program>
+            
+            <program>
+              <mainClass>io.crums.sldg.cli.Nug</mainClass>
+              <id>nug</id>
             </program>
             
             

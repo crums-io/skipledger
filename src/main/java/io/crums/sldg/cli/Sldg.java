@@ -41,7 +41,7 @@ import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * 
+ * Manages a {@linkplain Db} from the command line.
  */
 public class Sldg extends MainTemplate {
 
@@ -141,7 +141,7 @@ public class Sldg extends MainTemplate {
     
     ArgList argList = new ArgList(args);
     
-    this.dir = new File(argList.popRequiredValue(DIR));
+    this.dir = new File(argList.removeRequiredValue(DIR));
     this.mode = getMode(argList);
 
     configureCommon(argList);
@@ -216,7 +216,7 @@ public class Sldg extends MainTemplate {
       } else if (readCommand != null) {
         
         if (readCommand.state) {
-          SkipPath statePath = db.getLedger().statePath();
+          Path statePath = db.beaconedStatePath();
           if (readCommand.toFile())
             outputState(statePath);
           else
@@ -332,7 +332,7 @@ public class Sldg extends MainTemplate {
 
 
 
-  private void outputState(SkipPath statePath) {
+  private void outputState(Path statePath) {
     
     if (statePath == null) {
       System.err.println("[ERROR] empty ledger has no state");
@@ -462,7 +462,7 @@ public class Sldg extends MainTemplate {
   
   
   private void configureCommon(ArgList argList) {
-    this.info = argList.popBoolean(INFO, true);
+    this.info = argList.removeBoolean(INFO, true);
   }
   
   
@@ -474,7 +474,7 @@ public class Sldg extends MainTemplate {
 
   private boolean configureReadCommands(ArgList argList) {
     
-    List<String> readCommands = argList.removedContained(STATE, PATH, LIST, FIND, NUG, STATUS);
+    List<String> readCommands = argList.removeContained(STATE, PATH, LIST, FIND, NUG, STATUS);
     switch (readCommands.size()) {
     case 0:   return false;
     case 1:   break;
@@ -496,15 +496,15 @@ public class Sldg extends MainTemplate {
       
       readCommand.find.prefix = getHashPrefix(argList);
       
-      readCommand.find.limit = (int) argList.popLong(LIMIT, DEFAULT_LIMIT);
+      readCommand.find.limit = (int) argList.removeLong(LIMIT, DEFAULT_LIMIT);
       if (readCommand.find.limit < 1)
         throw new IllegalArgumentException(LIMIT + "=" + readCommand.find.limit + " < 1");
       
-      readCommand.find.startRn = argList.popLong(START, 1);
+      readCommand.find.startRn = argList.removeLong(START, 1);
     }
     
     if (readCommand.takesRowNumbers()) {
-      readCommand.rowNumbers = argList.popNumbers();
+      readCommand.rowNumbers = argList.removeNumbers();
       if (readCommand.rowNumbers.isEmpty())
         throw new IllegalArgumentException(
             "missing row number[s] in arguments: " + argList.getArgString());
@@ -538,7 +538,7 @@ public class Sldg extends MainTemplate {
   
   private void configureOutput(ArgList argList) {
 
-    String outpath = argList.popValue(FILE);
+    String outpath = argList.removeValue(FILE);
     if (outpath == null)
       return;
 
@@ -549,7 +549,7 @@ public class Sldg extends MainTemplate {
     readCommand.file = new File(outpath);
     
     // set the format
-    String fmt = argList.popValue(FMT, BINARY);
+    String fmt = argList.removeValue(FMT, BINARY);
     if (BINARY.equals(fmt))
       readCommand.format = Format.BINARY;
     else if (JSON.equalsIgnoreCase(fmt))
@@ -558,7 +558,7 @@ public class Sldg extends MainTemplate {
       throw new IllegalArgumentException(
           "illegal setting " + FMT + "=" + fmt + " in arg list: " + argList.getArgString());
     
-    readCommand.enforceExt = argList.popBoolean(EXT, true);
+    readCommand.enforceExt = argList.removeBoolean(EXT, true);
     
     // if file is a directory (auto-naming), check other settings aren't wonkie
     if (readCommand.file.isDirectory()) {
@@ -602,7 +602,7 @@ public class Sldg extends MainTemplate {
   
   private boolean configureWriteCommands(ArgList argList) {
 
-    List<String> writeCommands = argList.removedContained(ADD, ADDB, WIT);
+    List<String> writeCommands = argList.removeContained(ADD, ADDB, WIT);
     switch (writeCommands.size()) {
     case 0:
       return false;
@@ -624,12 +624,12 @@ public class Sldg extends MainTemplate {
       writeCommand.entryHashes = getHashes(argList);
       if (writeCommand.entryHashes.isEmpty())
         throw new IllegalArgumentException(
-            "missing entry hashes for " + ADD + " command: " + argList.getArgString());
+            "missing entry hashes for '" + ADD + "' command: " + argList.getArgString());
     }
     
     
     if (writeCommand.witness) {
-      long e = argList.popLong(TEX, Long.MIN_VALUE);
+      long e = argList.removeLong(TEX, Long.MIN_VALUE);
       if (e == Long.MIN_VALUE) {
         writeCommand.toothExponent = -1;
       } else {
@@ -637,7 +637,7 @@ public class Sldg extends MainTemplate {
           throw new IllegalArgumentException("out of bounds " + TEX + "=" + e);
         writeCommand.toothExponent = (int) e;
       }
-      writeCommand.witnessLast = argList.popBoolean(WSTATE, true);
+      writeCommand.witnessLast = argList.removeBoolean(WSTATE, true);
     }
     
     
@@ -693,7 +693,7 @@ public class Sldg extends MainTemplate {
 
   // NOTE: this code may belong in Opening
   private Opening getMode(ArgList args) {
-    String mi = args.popValue(MODE, MODE_RW);
+    String mi = args.removeValue(MODE, MODE_RW);
     String m = orderCharOptions(mi, MODE_CRW);
     if (MODE_R.equals(m))
       return Opening.READ_ONLY;
@@ -724,8 +724,8 @@ public class Sldg extends MainTemplate {
         "Command line tool for accessing and maintaining a skip ledger stored on the file system.", RM);
     printer.println();
     String paragraph =
-        "A skip ledger is a tamper-proof, append-only list of SHA-256 hashes added by its " +
-        "user. Since hashes are opaque, a skip ledger itself conveys little information. " +
+        "A skip ledger is a tamper-proof, append-only list of SHA-256 hashes that are added by its " +
+        "user[s]. Since hashes are opaque, a skip ledger itself conveys little information. " +
         "If paired with the actual object whose hash matches the entry (e) in a given row " +
         "however, then it is evidence the object belongs in the ledger at the advertised " +
         "row number. Ledgers also support maintaining the times they are modified by " +

@@ -3,6 +3,9 @@
  */
 package io.crums.sldg.db;
 
+
+import static io.crums.util.IntegralStrings.*;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -33,13 +36,18 @@ class VersionedEntitySerializer<T extends Serial> implements EntitySerializer<T>
   
   private final JsonEntityParser<T> jsonParser;
   private final Function<InputStream, T> binaryLoader;
+  
+  private final byte entityType;
 
   /**
    * 
    */
-  public VersionedEntitySerializer(JsonEntityParser<T> jsonParser, Function<InputStream, T> binaryLoader) {
+  public VersionedEntitySerializer(
+      JsonEntityParser<T> jsonParser,
+      Function<InputStream, T> binaryLoader, byte entityType) {
     this.jsonParser = Objects.requireNonNull(jsonParser, "null jsonParser");
     this.binaryLoader = Objects.requireNonNull(binaryLoader, "null binaryLoader");
+    this.entityType = entityType;
   }
 
   @Override
@@ -61,13 +69,21 @@ class VersionedEntitySerializer<T extends Serial> implements EntitySerializer<T>
   @Override
   public T loadBinary(File file) {
     int version = 256;  // 1 + max byte value
+    int type;
     try (FileInputStream fis = new FileInputStream(file)){
       // read, but o.w. skip over, the version byte
       version = fis.read();
-      return binaryLoader.apply(fis);
+      type = fis.read();
+      if (type == entityType)
+        return binaryLoader.apply(fis);
+      
     } catch (Exception x) {
       throw new SldgException("on loading " + file + " (version byte '" + version + "')", x);
     }
+    
+    throw new IllegalArgumentException(
+        "expected entity code <" + toHex(entityType) +
+        ">; actual in file " + file + " is <" + toHex((byte) type) + ">");
   }
 
   @SuppressWarnings("unchecked")
@@ -91,6 +107,7 @@ class VersionedEntitySerializer<T extends Serial> implements EntitySerializer<T>
     try (FileOutputStream out = new FileOutputStream(file)) {
       
       out.write(SldgConstants.VERSION_BYTE);
+      out.write(entityType);
       ChannelUtils.writeRemaining(out.getChannel(), entity.serialize());
     
     } catch (IOException iox) {

@@ -64,7 +64,7 @@ public class SkipPathTest extends SelfAwareTestCase {
   private void print(Path skipPath) {
     System.out.println();
     
-    for (Row row : skipPath.path())
+    for (Row row : skipPath.rows())
       System.out.println(row);
 
     System.out.println();

@@ -92,6 +92,12 @@ public abstract class Ledger implements Digest, Closeable {
    * in the rows at those row numbers. Altho its size is sensitive to its inputs,
    * the returned list never blows up: it's size may grow at most by a factor that
    * is no greater than the base 2 log of the highest row number in its input.
+   * <p>
+   * <em>Note the returned set may (and likely does) contain the sentinel row number 0 (zero).
+   * </em> The reason why is that the returned set, is the set of row numbers whose
+   * hashes are needed to compute the hashes of the given row numbers. And while the contents
+   * of the sentinel row are undefined, it's hash <em>is</em>.
+   * </p>
    * 
    * @param rowNumbers non-empty bag of positive (&ge; 1) numbers,
    *        in whatever order, dups OK
@@ -108,8 +114,7 @@ public abstract class Ledger implements Digest, Closeable {
         long delta = 1L << e;
         long referencedRowNumber = rowNumber - delta;
         assert referencedRowNumber >= 0;
-        if (referencedRowNumber != 0)
-          covered.add(referencedRowNumber);
+        covered.add(referencedRowNumber);
       }
     }
     
@@ -125,8 +130,8 @@ public abstract class Ledger implements Digest, Closeable {
    * however is returned in reverse order, in keeping with the temporal order of
    * ledgers.
    * 
-   * @param hi row number &ge; <tt>lo</tt>
    * @param lo row number &gt; 0
+   * @param hi row number &ge; <tt>lo</tt>
    * 
    * @return a monotonically ascending list of numbers from <tt>lo</tt> to </tt>hi</tt>,
    *         inclusive
@@ -259,7 +264,7 @@ public abstract class Ledger implements Digest, Closeable {
     for (int index = length; index-- > 0; )
       rows[index] = getRow(rowNumPath.get(index));
     
-    return new SkipPath(Lists.asReadOnlyList(rows), false);
+    return new SkipPath(Lists.asReadOnlyList(rows), Collections.emptyList(), false);
   }
   
   

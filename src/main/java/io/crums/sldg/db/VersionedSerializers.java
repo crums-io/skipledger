@@ -17,15 +17,22 @@ public class VersionedSerializers {
   private VersionedSerializers() {  }
   
   
+  public final static byte PATH_TYPE = (byte) 1;
+  
+  public final static byte NUGGET_TYPE = (byte) 2;
+  
+  
   
   public final static EntitySerializer<Path> PATH_SERIALIZER =
-      new VersionedEntitySerializer<>(PathParser.INSTANCE, Path::loadUnchecked);
+      new VersionedEntitySerializer<>(
+          PathParser.INSTANCE, Path::loadUnchecked, PATH_TYPE);
 
   
   
   
   public final static EntitySerializer<Nugget> NUGGET_SERIALIZER =
-      new VersionedEntitySerializer<>(NuggetParser.INSTANCE, Nugget::loadUnchecked);
+      new VersionedEntitySerializer<>(
+          NuggetParser.INSTANCE, Nugget::loadUnchecked, NUGGET_TYPE);
   
   
 

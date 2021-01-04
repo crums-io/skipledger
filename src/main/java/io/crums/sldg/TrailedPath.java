@@ -70,10 +70,10 @@ public class TrailedPath implements Serial {
   
   
   /**
-   * Returns the target of this instance, the first row in the {@linkplain #path() path}.
+   * Returns the target of this instance, the first row in the {@linkplain #rows() rows}.
    */
   public Row target() {
-    return path.first();
+    return path.target();
   }
   
   
@@ -145,6 +145,13 @@ public class TrailedPath implements Serial {
   public ByteBuffer writeTo(ByteBuffer out) {
     path.writeTo(out);
     return trail.writeTo(out);
+  }
+  
+  
+  
+  @Override
+  public String toString() {
+    return TrailedPath.class.getSimpleName() + "[utc:" + utc() + "," + path + "]";
   }
 
 }

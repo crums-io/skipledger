@@ -6,8 +6,11 @@ package io.crums.sldg.cli;
 
 import static io.crums.sldg.SldgConstants.JSON_EXT;
 import static io.crums.sldg.SldgConstants.NUG_EXT;
+import static io.crums.sldg.SldgConstants.NUG_JSON_EXT;
 import static io.crums.sldg.SldgConstants.SPATH_EXT;
+import static io.crums.sldg.SldgConstants.SPATH_JSON_EXT;
 
+import java.io.File;
 import java.util.Objects;
 
 import io.crums.sldg.Nugget;
@@ -62,7 +65,7 @@ public class FilenamingConvention {
    * Generates and returns a filename for the given <tt>path</tt>.
    */
   public String pathFilename(Path path, Format format) {
-    Objects.requireNonNull(path, "path nugget");
+    Objects.requireNonNull(path, "null path");
     Objects.requireNonNull(format, "null format");
     
     String name = makePrefix(path);
@@ -79,7 +82,7 @@ public class FilenamingConvention {
    * Generates and returns a filename for the given state path.
    */
   public String stateFilename(Path path, Format format) {
-    Objects.requireNonNull(path, "path nugget");
+    Objects.requireNonNull(path, "null path");
     Objects.requireNonNull(format, "null format");
     
     String name =
@@ -95,12 +98,34 @@ public class FilenamingConvention {
   
   
   
+  public Format guessFormat(File file) {
+    return
+        Objects.requireNonNull(file, "null file").getName().endsWith(JSON_EXT) ?
+            Format.JSON : Format.BINARY;
+  }
+  
+  
+  
+  public boolean isNugget(File file) {
+    String name = Objects.requireNonNull(file, "null file").getName();
+    return name.endsWith(NUG_EXT) || name.endsWith(NUG_JSON_EXT);
+  }
+  
+  
+  
+  public boolean isPath(File file) {
+    String name = Objects.requireNonNull(file, "null file").getName();
+    return name.endsWith(SPATH_EXT) || name.endsWith(SPATH_JSON_EXT);
+  }
+  
+  
+  
   
   
   private String makePrefix(Path path) {
     return
-        path.loRowNumber() + SEP +
-        IntegralStrings.toHex(path.first().inputHash().limit(ENTRY_BYTES_DISPLAY)) + SEP +
+        path.target().rowNumber() + SEP +
+        IntegralStrings.toHex(path.target().inputHash().limit(ENTRY_BYTES_DISPLAY)) + SEP +
         path.hiRowNumber();
   }
   
