@@ -34,6 +34,8 @@
           
           <repositoryLayout>flat</repositoryLayout>
         
+          <binFolder>bin</binFolder>
+          <repositoryName>lib</repositoryName>
         
           <programs>
             
@@ -146,8 +148,8 @@
     <!-- TODO: factor out public code -->
     <dependency>
       <groupId>io.crums</groupId>
-      <artifactId>crums-server</artifactId>
-      <version>0.0.2</version>
+      <artifactId>crums-core</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
     </dependency>
     
     
