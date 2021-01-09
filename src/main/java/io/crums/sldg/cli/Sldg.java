@@ -5,9 +5,15 @@ package io.crums.sldg.cli;
 
 
 import static io.crums.util.main.Args.*;
+import static io.crums.util.Strings.*;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -34,6 +40,7 @@ import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
+import io.crums.util.TaskStack;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.PrintSupport;
@@ -45,8 +52,13 @@ import io.crums.util.main.TablePrint;
  */
 public class Sldg extends MainTemplate {
 
-  
+
   // to minimize/organize class members
+  private static class IngestCommand {
+    private int start = 1;
+    private File file;
+  }
+  
   private static class WriteCommand {
     private boolean add;
     
@@ -57,6 +69,8 @@ public class Sldg extends MainTemplate {
     private boolean witness;
     private int toothExponent;
     private boolean witnessLast;
+    
+    private IngestCommand ingest;
   }
   
   private final static int DEFAULT_LIMIT = 8;
@@ -68,7 +82,6 @@ public class Sldg extends MainTemplate {
   }
   
 
-  // to minimize/organize class members
   private static class ReadCommand {
     private boolean state;
     private boolean path;
@@ -194,6 +207,10 @@ public class Sldg extends MainTemplate {
             System.out.println(count + pluralize(" row", count) + " added");
           }
         }
+        
+        if (writeCommand.ingest != null)
+          doIngest();
+        
         if (writeCommand.witness) {
           Db.WitnessReport report =
               writeCommand.toothExponent == -1 ?
@@ -282,6 +299,69 @@ public class Sldg extends MainTemplate {
   }
   
   
+  private void doIngest() throws IOException {
+    
+    try (TaskStack closer = new TaskStack(this)) {
+      Reader reader;
+      File file = writeCommand.ingest.file;
+      if (file == null)
+        reader = new BufferedReader(new InputStreamReader(System.in));
+      else
+        reader = new BufferedReader(new FileReader(writeCommand.ingest.file));
+      closer.pushClose(reader);
+      
+      StringBuilder buffer = new StringBuilder(128);
+      int count = 0;
+      final int start = writeCommand.ingest.start;
+      while (true) {
+        
+        int b = reader.read();
+        if (b == -1)
+          break;
+        
+        char c = (char) b;
+        if (isWhitespace(c)) {
+          int len = buffer.length();
+          if (len == 0)
+            continue;
+          if (len != SldgConstants.HASH_WIDTH * 2)
+            throw new IllegalArgumentException(
+                "on parsing " + nTh(count + 1) + " hex entry");
+          byte[] entry = IntegralStrings.hexToBytes(buffer);
+          buffer.setLength(0);
+          ++count;
+          if (count >= start)
+            db.getLedger().appendRows(ByteBuffer.wrap(entry));
+          
+        } else {
+          buffer.append(c);
+        }
+      }
+      int skipped = Math.min(count, start - 1);
+      int added = count - skipped;
+      System.out.println(
+          added + pluralize(" entry", added) + " added; " + skipped + pluralize(" entry", skipped) + " skipped");
+      long size = db.size();
+      System.out.println("Final ledger size: " + size + pluralize(" row", size));
+    }
+  }
+  
+  
+  private boolean isWhitespace(char c) {
+    switch (c) {
+    case '\t':
+    case '\n':
+    case '\f':
+    case '\r':
+    case ' ':
+      return true;
+    default:
+      return false;
+    }
+  }
+
+
+
   private void outputPath(SkipPath path) {
     
     File out;
@@ -464,11 +544,6 @@ public class Sldg extends MainTemplate {
   private void configureCommon(ArgList argList) {
     this.info = argList.removeBoolean(INFO, true);
   }
-  
-  
-  private String pluralize(String single, long count) {
-    return count == 1 ? single : single + "s";
-  }
 
 
 
@@ -525,11 +600,7 @@ public class Sldg extends MainTemplate {
 
     configureOutput(argList);
     
-    
-
-    enforceNoRemainingArgs(argList);
-    
-    
+    argList.enforceNoRemaining();
     
     return true;
   }
@@ -602,7 +673,7 @@ public class Sldg extends MainTemplate {
   
   private boolean configureWriteCommands(ArgList argList) {
 
-    List<String> writeCommands = argList.removeContained(ADD, ADDB, WIT);
+    List<String> writeCommands = argList.removeContained(ADD, ADDB, WIT, INGEST);
     switch (writeCommands.size()) {
     case 0:
       return false;
@@ -619,6 +690,29 @@ public class Sldg extends MainTemplate {
     writeCommand.add = writeCommands.contains(ADD);
     writeCommand.addBeacon = writeCommands.contains(ADDB);
     writeCommand.witness = writeCommands.contains(WIT);
+    
+    if (writeCommands.contains(INGEST)) {
+      if (writeCommands.size() > 1)
+        throw new IllegalArgumentException(INGEST + " cannot be combined with other commands: " + writeCommands);
+      
+      this.writeCommand.ingest = new IngestCommand();
+      List<File> file = argList.removeExistingFiles();
+      switch (file.size()) {
+      case 0:
+        break;
+//        throw new IllegalArgumentException(
+//            "missing or non-existent file in arguments: " + argList.getArgString());
+      case 1:
+        writeCommand.ingest.file = file.get(0);
+        break;
+      default:
+        throw new IllegalArgumentException(INGEST + " command takes only a single file: " + file);
+      }
+      
+      writeCommand.ingest.start = (int) argList.removeLong(START, 1);
+      if (writeCommand.ingest.start < 1)
+        throw new IllegalArgumentException(START + "=" + writeCommand.ingest.start + " < 1");
+    }
     
     if (writeCommand.add) {
       writeCommand.entryHashes = getHashes(argList);
@@ -640,19 +734,13 @@ public class Sldg extends MainTemplate {
       writeCommand.witnessLast = argList.removeBoolean(WSTATE, true);
     }
     
-    
-    enforceNoRemainingArgs(argList);
+    argList.enforceNoRemaining();
     
     return true;
   }
   
   
   
-  private void enforceNoRemainingArgs(ArgList argList) {
-    if (!argList.isEmpty())
-      throw new IllegalArgumentException(
-          "illegal arguments / combination: " + argList.getArgString());
-  }
   
   
   private ByteBuffer getHashPrefix(ArgList args) {
@@ -865,6 +953,20 @@ public class Sldg extends MainTemplate {
     subWideKeyTable.printRow(WSTATE + "=true",  "witness last row, even if its number is not toothed");
     subWideKeyTable.printRow(null,              "Valid values: 'true' or 'false'");
     subWideKeyTable.printRow(null,              "DEFAULT: true");
+    out.println();
+    
+    table.printRow(INGEST, "adds hexidecimal SHA-256 hash entries from the given file", REQ_CH);
+    table.printRow(null,   "Entries must be whitespace-delimited. The recommended practice", null);
+    table.printRow(null,   "is one per line. Note this is a streaming operation: if a bad", null);
+    table.printRow(null,   "argument is encountered midway in the file previous rows may", null);
+    table.printRow(null,   "already have been added.", null);
+    table.printRow(null,   "Option:", null);
+    out.println();
+    subWideKeyTable.printRow(START + "=*", "starting from this entry number in the file");
+    subWideKeyTable.printRow(null,         "I.e. if " + START + "=N, then the first N-1 entries in the file");
+    subWideKeyTable.printRow(null,         "are skipped. (Use for incremental updates and tooling.)");
+    subWideKeyTable.printRow(null,         "DEFAULT: 1");
+    out.println();
 
 
     out.println();
@@ -898,7 +1000,7 @@ public class Sldg extends MainTemplate {
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     table.println();
-    table.printHorizontalTableEdge('_');
+    table.printHorizontalTableEdge('-');
     table.printlnCenteredSpread("Output Options:", 1);
     table.printHorizontalTableEdge('-');
     table.println();
@@ -941,6 +1043,7 @@ public class Sldg extends MainTemplate {
 
   private final static String ADD = "add";
   private final static String ADDB = "addb";
+  private final static String INGEST = "ingest";
   
   private final static String WIT = "wit";
   private final static String TEX = "tex";

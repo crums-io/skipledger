@@ -5,6 +5,7 @@ package io.crums.sldg.cli;
 
 
 import static io.crums.util.IntegralStrings.*;
+import static io.crums.util.Strings.*;
 
 import java.io.File;
 import java.io.PrintStream;
@@ -12,13 +13,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-import io.crums.server.Constants;
+import io.crums.model.Constants;
 import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
+import io.crums.sldg.Row;
 import io.crums.sldg.db.EntitySerializer;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
 import io.crums.util.IntegralStrings;
+import io.crums.util.Tuple;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.PrintSupport;
@@ -30,9 +33,23 @@ import io.crums.util.main.TablePrint;
 public class Nug extends MainTemplate {
   
   
-  private boolean desc;
+  private static class DescribeCommand {
+    File file;
+  }
   
-  private File file;
+  private static class CompareCommand {
+    File a;
+    File b;
+  }
+  
+  private DescribeCommand descCommand;
+  
+  private CompareCommand compCommand;
+  
+  
+//  private boolean desc;
+//  
+//  private File file;
   
   
   
@@ -57,33 +74,142 @@ public class Nug extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = new ArgList(args);
     
-    boolean configured = configDesc(argList);
+    boolean configured = configDesc(argList) || configComp(argList);
     
     if (!configured)
       throw new IllegalArgumentException("missing command");
+
     
-    if (!argList.isEmpty())
-      throw new IllegalArgumentException(
-          "illegal or out-of-context arguments: " + argList.getArgsRemainingString());
+    argList.enforceNoRemaining();
   }
   
 
+  private boolean configComp(ArgList argList) {
+    
+    if (!removeCommand(argList, COMP))
+      return false;
+    
+    this.compCommand = new CompareCommand();
+    
+    List<File> files = argList.removeExistingFiles();
+    if (files.size() != 2)
+      throw new IllegalArgumentException("'" + COMP + "' command takes 2 file path arguments");
+    
+    compCommand.a = files.get(0);
+    compCommand.b = files.get(1);
+    
+    if (compCommand.a.equals(compCommand.b)) {
+      System.out.println();
+      System.out.println(
+          "[WARNING] Comparing file " + compCommand.a + " to itself. Did you mean this?");
+      System.out.println();
+    }
+    return true;
+  }
+  
+
+
+  private boolean removeCommand(ArgList argList, String command) {
+    
+    switch (argList.removeContained(command).size()) {
+    case 0:
+      return false;
+    case 1:
+      return true;
+      
+    default:
+      throw new IllegalArgumentException("duplicate '" + command + "' command");
+    }
+  }
+
+  private boolean configDesc(ArgList argList) {
+    
+    if (!removeCommand(argList, DESC))
+      return false;
+    
+    
+    List<File> files = argList.removeExistingFiles();
+    
+    switch (files.size()) {
+    case 0:
+      throw new IllegalArgumentException("missing file path for '" + DESC + "' command");
+    case 1:
+      break;
+    default:
+      throw new IllegalArgumentException("'" + DESC + "' command accepts a single file only");
+    }
+    
+    this.descCommand = new DescribeCommand();
+    descCommand.file = files.get(0);
+    
+    return true;
+  }
+
+
   @Override
   protected void start() throws InterruptedException, Exception {
-    if (desc) {
+    if (descCommand != null)
       describe();
-    }
+    else if (compCommand != null)
+      compare();
   }
   
   
+  private void compare() {
+    SldgEntity a = load(compCommand.a);
+    SldgEntity b = load(compCommand.b);
+    if (a.hasNugget()) {
+      Nugget nugget = a.getNugget();
+      if (b.hasNugget())
+        compareNuggets(nugget, b.getNugget());
+      else
+        comparePathToNugget(b.getPath(), nugget);
+    } else {
+      Path path = a.getPath();
+      if (b.hasNugget())
+        comparePathToNugget(path, b.getNugget());
+      else
+        comparePaths(path, b.getPath());
+    }
+  }
+
+
+  private void compareNuggets(Nugget a, Nugget b) {
+  }
+
+
+  private void comparePaths(Path a, Path b) {
+    // TODO Auto-generated method stub
+    
+  }
+
+
+  private void comparePathToNugget(Path path, Nugget nugget) {
+    
+  }
+
+
   private final static int DESC_FIRST_COL_WIDTH = 13;
   private final static int DIV_COL_WIDTH = 2;
   private final static String DIV = "|";
   
   private void describe() {
+    
+    SldgEntity entity = load(descCommand.file);
+    
+    if (entity.hasNugget())
+      describe(entity.getNugget());
+    else
+      describe(entity.getPath());
+  }
+  
+  
+  
+  
+  private SldgEntity load(File file) {
     Nugget nugget = null;
     Path path = null;
-    if (FilenamingConvention.INSTANCE.isNugget(this.file)) {
+    if (FilenamingConvention.INSTANCE.isNugget(file)) {
       nugget = loadNugget(file);
       if (nugget == null)
         path = loadPath(file);
@@ -94,25 +220,12 @@ public class Nug extends MainTemplate {
     }
     
     if (nugget != null)
-      describe(nugget);
+      return new SldgEntity(nugget);
     else if (path != null)
-      describe(path);
+      return new SldgEntity(path);
     else
-      System.out.println("Can't grok " + file + " (" + file.length() + " bytes)");
+      throw new IllegalArgumentException("Can't grok " + file + " (" + file.length() + " bytes)");
     
-    
-//      try {
-//
-//        nugget = VersionedSerializers.NUGGET_SERIALIZER.load(file);
-//      
-//      } catch (Exception x) {
-//        String msg = "Not a valid nugget (!)";
-//        String xMsg = x.getMessage();
-//        if (xMsg != null && !xMsg.isEmpty())
-//          msg += ": " + xMsg;
-//        System.out.println(msg);
-//        return;
-//      }
     
   }
   
@@ -142,6 +255,25 @@ public class Nug extends MainTemplate {
     String nums = spacedReverseNumbers( path );
     table.printRow("Row #s", DIV,  nums);
     table.printHorizontalTableEdge('-');
+    table.println();
+    
+    if (!path.hasBeacon())
+      return;
+    
+    List<Tuple<Row, Long>> beacons = path.beaconRows();
+    System.out.println(pluralize("Beacon Row", beacons.size()) + ":");
+    table.printHorizontalTableEdge('_');
+    
+    for (Tuple<Row, Long> beacon : beacons) {
+      table.printRow(" [" + beacon.a.rowNumber() + "]", DIV, new Date(beacon.b));
+      table.printRow("Entry"  , DIV, toHex(beacon.a.inputHash()));
+      String url =
+          "https://crums.io" + Constants.LIST_ROOTS_PATH + "?" +
+          Constants.QS_UTC_NAME + "=" + beacon.b +
+          "&" + Constants.QS_COUNT_NAME + "=-1";
+      table.printRow("Ref URL"  , DIV, url);
+      table.printHorizontalTableEdge('-');
+    }
     table.println();
   }
   
@@ -259,34 +391,6 @@ public class Nug extends MainTemplate {
   }
 
 
-  private boolean configDesc(ArgList argList) {
-    
-    switch (argList.removeContained(DESC).size()) {
-    case 0:
-      return false;
-    case 1:
-      break;
-    default:
-      throw new IllegalArgumentException("duplicate '" + DESC + "' command");
-    }
-    
-    List<File> files = argList.removeExistingFiles();
-    
-    switch (files.size()) {
-    case 0:
-      throw new IllegalArgumentException("missing file rows for '" + DESC + "' command");
-    case 1:
-      break;
-    default:
-      throw new IllegalArgumentException("'" + DESC + "' command accepts a single file only");
-    }
-    
-    this.file = files.get(0);
-    
-    return this.desc = true;
-  }
-
-
   private final static int INDENT = 1;
   private final static int RM = 80;
   
@@ -320,14 +424,16 @@ public class Nug extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Arguments that are specified as name/value pairs are designated in the form " +
-        "'name=*' below, with '*' standing for user input.";
+        "In the table that follows '*' stands for an argument (typically a file path) supplied by the user; " +
+        "it is not a wild card.";
     printer.printParagraph(paragraph);
     printer.println();
     
     TablePrint table = new TablePrint(out, LEFT_TBL_COL_WIDTH, RIGHT_TBAL_COL_WIDTH);
     table.setIndentation(INDENT);
-    table.printRow(DESC, "describes the object referenced in the given file rows");
+    table.printRow(DESC + " *", "describes the object referenced in the given file");
+    table.println();
+    table.printRow(COMP + " * *", "compares the objects referenced in the given 2 files");
     table.println();
     
   }
@@ -335,6 +441,8 @@ public class Nug extends MainTemplate {
   
 
   private final static String DESC = "desc";
+  private final static String COMP = "comp";
+  private final static String THEN = "then";
   private final static String ENTRY = "entry";
   private final static String RN = "rn";
   private final static String ROW_HASH = "rh";
