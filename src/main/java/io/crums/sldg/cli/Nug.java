@@ -10,13 +10,18 @@ import static io.crums.util.Strings.*;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import io.crums.model.Constants;
 import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
+import io.crums.sldg.PathIntersector;
 import io.crums.sldg.Row;
+import io.crums.sldg.RowIntersect;
+import io.crums.sldg.RowIntersection;
 import io.crums.sldg.db.EntitySerializer;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
@@ -40,6 +45,8 @@ public class Nug extends MainTemplate {
   private static class CompareCommand {
     File a;
     File b;
+    
+    Map<Object, File> fileMapping = new HashMap<>();
   }
   
   private DescribeCommand descCommand;
@@ -156,8 +163,11 @@ public class Nug extends MainTemplate {
   
   
   private void compare() {
+    try {
     SldgEntity a = load(compCommand.a);
     SldgEntity b = load(compCommand.b);
+    compCommand.fileMapping.put(a.getObject(), compCommand.a);
+    compCommand.fileMapping.put(b.getObject(), compCommand.b);
     if (a.hasNugget()) {
       Nugget nugget = a.getNugget();
       if (b.hasNugget())
@@ -171,21 +181,283 @@ public class Nug extends MainTemplate {
       else
         comparePaths(path, b.getPath());
     }
+    } catch (RuntimeException rx) {
+      rx.printStackTrace();
+      throw rx;
+    }
   }
 
 
   private void compareNuggets(Nugget a, Nugget b) {
+    
   }
 
+  private String snippetForIndirect(RowIntersection i, Path a, Path b) {
+    RowIntersect type = i.type();
+
+    String snippet;
+    Path first, second;
+    if (a.hasRow(i.first().rowNumber())) {
+      first = a;
+      second = b;
+    } else {
+      assert b.hasRow(i.first().rowNumber());
+      first = b;
+      second = a;
+    }
+    if (type.byLineage()) {
+      snippet =
+        " referenced from rows [" + i.first().rowNumber() + "] in " +
+        compCommand.fileMapping.get(first) + " and [" + i.second().rowNumber() +
+        "] in " + compCommand.fileMapping.get(second);
+    } else {
+      assert type.byReference();
+      snippet =
+        " in " + compCommand.fileMapping.get(first) + " and referenced from row [" +
+        i.second().rowNumber() + "] in " + compCommand.fileMapping.get(second);
+    }
+    return snippet;
+  }
 
   private void comparePaths(Path a, Path b) {
-    // TODO Auto-generated method stub
     
+    if (a.rows().equals(b.rows())) {
+      boolean sameTarget = a.target().rowNumber() == b.target().rowNumber();
+      boolean sameBeacons = a.beacons().equals(b.beacons());
+      String msg;
+      if (sameTarget && sameBeacons)
+        msg = "Paths are exactly the same";
+      else if (sameTarget)
+        msg = "Path rows are the same but beacon info differ";
+      else if (sameBeacons) {
+        msg = "Path rows are the same but target rows differ: [";
+        msg += a.target().rowNumber() + "] in " + compCommand.fileMapping.get(a);
+        msg += " vs. [" + b.target().rowNumber() + "] in ";
+        msg += compCommand.fileMapping.get(b);
+      } else {
+        msg = "Path rows are the same but beacon info and target rows differ. Targets: [";
+        msg += a.target().rowNumber() + "] in " + compCommand.fileMapping.get(a);
+        msg += " vs. [" + b.target().rowNumber() + "] in ";
+        msg += compCommand.fileMapping.get(b);
+      }
+      System.out.println(msg);
+      return;
+    }
+    
+    PathIntersector pi = a.intersector(b);
+    List<RowIntersection> inters = pi.collect();
+    Optional<RowIntersection> conflict = pi.firstConflict();
+    
+   
+    
+    PrintSupport printer = new PrintSupport();
+    printer.println();
+    
+    if (conflict.isPresent()) {
+      
+      // - C O N F L I C T -
+      String msg;
+      
+      RowIntersection con = conflict.get();
+      RowIntersect type = con.type();
+      assert con.isConflict();
+      msg =
+        "Paths DO NOT BELONG to a common ledger. Their hashes for row [" + con.rowNumber() +
+        "]";
+      if (type.direct()) {
+        msg += " conflict. (Both paths cite this row directly.)";
+      } else {
+        msg += snippetForIndirect(con, a, b) + " conflict.";
+      }
+      
+      printer.printParagraph(msg);
+      printer.println();
+    }
+    
+    if (inters.isEmpty()) {
+      
+      if (conflict.isEmpty()) {
+        
+        // - I G N O R A N T -
+        
+        printer.printParagraph(
+          "The row numbers in the given two paths are independent. Nothing can be " +
+          "inferred by comparing them.");
+        
+        printer.println();
+      }
+      
+    } else {  // there are valid intersections
+      
+      RowIntersection lastIntersect = inters.get(inters.size() - 1);
+      RowIntersect type = lastIntersect.type();
+      
+      String msg = conflict.isPresent() ? "However the" : "The";
+      msg += " paths share a common ledger up to row [" + lastIntersect.rowNumber() + "]";
+      
+      if (type.direct()) {
+        msg += " which is cited directly in both.";
+      } else {
+        
+        msg += snippetForIndirect(lastIntersect, a, b);
+      }
+      
+      printer.printParagraph(msg);
+      printer.println();
+    }
   }
 
 
   private void comparePathToNugget(Path path, Nugget nugget) {
+    PrintSupport printer = new PrintSupport();
+    printer.println();
     
+    String pathFile = compCommand.fileMapping.get(path).toString();
+    String nugFile = compCommand.fileMapping.get(nugget).toString();
+    
+    Path nugPath = nugget.ledgerPath();
+    
+    String pName = path.target().rowNumber() == 1 ? "State-path" : "Path";
+    
+    if (nugPath.rows().equals(path.rows())) {
+      printer.printParagraph(
+        pName + " and nugget have exactly the same ledger rows.");
+      printer.println();
+      return;
+    }
+    
+    Path trailPath = nugget.firstWitness().path();
+    
+    List<RowIntersection> intersNp, intersTp;
+    Optional<RowIntersection> conflictNp, conflictTp;
+    {
+      PathIntersector npi = nugPath.intersector(path);
+      intersNp = npi.collect();
+      conflictNp = npi.firstConflict();
+      
+      PathIntersector tpi = trailPath.intersector(path);
+      intersTp = tpi.collect();
+      conflictTp = tpi.firstConflict();
+      
+    }
+    
+    final boolean intersected = intersNp.size() + intersTp.size() > 0;
+    final RowIntersection lastInter;
+    if (!intersected)
+      lastInter = null;
+    else if (intersTp.isEmpty())
+      lastInter = intersNp.get(intersNp.size() - 1);
+    else if (intersNp.isEmpty())
+      lastInter = intersTp.get(intersTp.size() - 1);
+    else {
+      RowIntersection p = intersNp.get(intersNp.size() - 1);
+      RowIntersection t = intersTp.get(intersTp.size() - 1);
+      lastInter = p.rowNumber() >= t.rowNumber() ? p : t;
+    }
+    
+    if (conflictNp.isPresent() || conflictTp.isPresent()) {
+      
+      String msg = pName + " and nugget DO NOT BELONG to the same ledger. ";
+      
+      RowIntersection con;
+      
+      if (conflictNp.isEmpty())
+        con = conflictTp.get();
+      else if (conflictTp.isEmpty()) {
+        con = conflictNp.get();
+      } else {
+        // pick the lower numbered conflict
+        RowIntersection n = conflictNp.get();
+        RowIntersection t = conflictTp.get();
+        con = n.rowNumber() <= t.rowNumber() ? n : t;
+      }
+      
+      // check the intersections
+      if (intersected) {
+        if (con.rowNumber() == lastInter.rowNumber() + 1) {
+          msg += "Both shared the same ledger up to row [" + lastInter.rowNumber();
+          msg += "]: their ledgers fork on the next row.";
+        } else {
+          msg += "They shared a common ledger which was forked on or before row [";
+          msg += con.rowNumber() + "] but after row [";
+          msg += lastInter.rowNumber() + "].";
+        }
+      } else {
+        msg += "Row [" + con.rowNumber() + "] conflicts in the 2 ledger objects.";
+      }
+      
+      printer.printParagraph(msg);
+      printer.println();
+      
+    } else {  // no conflicts
+      
+      String msg;
+      if (intersected) {
+        msg =
+          pName + " and nugget provably share a common ledger up to row [" +
+          lastInter.rowNumber() + "]";
+        
+        RowIntersection stitchable = null;
+        
+        boolean pathHigher = path.hiRowNumber() > nugPath.hiRowNumber();
+        
+        if (pathHigher) {
+          
+          stitchable = findStitchable(path, nugPath, intersNp);
+          if (stitchable == null)
+            stitchable = findStitchable(path, trailPath, intersTp);
+          
+          if (stitchable == null) {
+            msg += ". Altho the path in " + pathFile + " has a higher row number [" + path.hiRowNumber() + "] ";
+            msg += "there isn't sufficient information to actually extend the nugget's path to that row number.";
+          } else {
+            msg += ": if you have reason to trust the path object in " + pathFile + " (e.g. it ";
+            msg += "matches information advertised by the ledger owner), there is sufficient ";
+            msg += "info in this path object to update the internal paths in " + nugFile;
+            msg += " as a new nugget file with the same target but referenced from the higher ";
+            msg += "(therefore more recent) ledger row number [" + path.hiRowNumber() + "].";
+          }
+        } else if (path.hiRowNumber() == nugPath.hiRowNumber()) {
+          
+          msg += ". Both objects record the ledger up to the same row number.";
+        } else {
+          msg += ".";
+        }
+        
+      } else { // !intersected
+        msg =
+          pName + " and nugget do not contain common ledger rows. Nothing can be gleaned by comparing them.";
+      }
+      
+      printer.printParagraph(msg);
+      printer.println();
+    }
+    
+  }
+  
+  
+  private RowIntersection findStitchable(Path path, Path innerNugPath, List<RowIntersection> inters) {
+
+    RowIntersection stitchable = null;
+    for (int index = inters.size(); index-- > 0;) {
+      // TODO
+      RowIntersection i = inters.get(index);
+      RowIntersect type = i.type();
+      
+      if (type.direct()) {
+        stitchable = i;
+        break;
+      }
+      if (type.byLineage())
+        continue;
+      
+      // type.byReference() is true
+      if (path.hasRow(i.second().rowNumber())) {
+        stitchable = i;
+        break;
+      }
+    }
+    return stitchable;
   }
 
 
@@ -236,18 +508,17 @@ public class Nug extends MainTemplate {
 
     TablePrint table = newDescribeTable();
     System.out.println("<PATH>");
-    System.out.println();
-    System.out.println("First Row:");
-    table.printHorizontalTableEdge('_');
-    table.printRow("Row #", DIV, path.first().rowNumber());
-    table.printRow("Hash", DIV, toHex(path.first().hash()));
-    table.printHorizontalTableEdge('-');
     table.println();
+    System.out.println("First Row:");
+    printLedgerRow(path.first(), table);
+    table.println();
+    if (path.isTargeted()) {
+      System.out.println("Target Row:");
+      printLedgerRow(path.target(), table);
+      table.println();
+    }
     System.out.println("Last Row:");
-    table.printHorizontalTableEdge('_');
-    table.printRow("Row #", DIV, path.hiRowNumber());
-    table.printRow("Hash", DIV, toHex(path.last().hash()));
-    table.printHorizontalTableEdge('-');
+    printLedgerRow(path.last(), table);
     table.println();
     
     System.out.println("Last-to-First:");
@@ -275,6 +546,16 @@ public class Nug extends MainTemplate {
       table.printHorizontalTableEdge('-');
     }
     table.println();
+  }
+  
+  
+  private void printLedgerRow(Row row, TablePrint table) {
+    table.printHorizontalTableEdge('_');
+    table.printRow("Row #", DIV, row.rowNumber());
+    table.printRow("Entry", DIV, toHex(row.inputHash()));
+    table.printRow("Hash", DIV, toHex(row.hash()));
+    table.printHorizontalTableEdge('-');
+    
   }
   
   
@@ -442,7 +723,6 @@ public class Nug extends MainTemplate {
 
   private final static String DESC = "desc";
   private final static String COMP = "comp";
-  private final static String THEN = "then";
   private final static String ENTRY = "entry";
   private final static String RN = "rn";
   private final static String ROW_HASH = "rh";

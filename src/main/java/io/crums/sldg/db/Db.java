@@ -195,9 +195,7 @@ public class Db implements Closeable {
     Path path;
     if (withBeaconDate) {
       List<Long> bcnRowNums = getBeaconRowNumbers();
-      System.out.println("[Db] beacon row nums " + bcnRowNums);
       int bindex = Collections.binarySearch(bcnRowNums, rowNumber);
-      System.out.println("[Db] bindex " + bindex);
       if (bindex < 0) { // usual path
         bindex = -1 - bindex;
         if (bindex == 0) {
@@ -208,7 +206,6 @@ public class Db implements Closeable {
           SkipPath head = ledger.skipPath(bcnRowNumber, rowNumber);
           SkipPath tail = ledger.skipPath(rowNumber, ledger.size());
           path = CamelPath.concatInstance(head, tail);
-          System.out.println("[Db] " + path);
         }
       } else {  // the row itself is a beacon (?) .. ok, we don't disallow it
         assert rowNumber == bcnRowNums.get(bindex).longValue();

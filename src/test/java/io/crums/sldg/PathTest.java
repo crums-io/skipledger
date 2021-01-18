@@ -155,6 +155,33 @@ public class PathTest extends SelfAwareTestCase {
   
   
   @Test
+  public void testRowHash() {
+    
+    final int rows = 99091;
+    
+    final long rowNumber = 0x18300;
+    
+    Ledger ledger = newRandomLedger(rows);
+    
+    Row row = ledger.getRow(rowNumber);
+    
+    int ptrs = Ledger.skipCount(rowNumber);
+    for (int i = 0; i < ptrs; ++i) {
+      long delta = 1L << i;
+      long refNum = rowNumber - delta;
+      ByteBuffer hash = row.hash(refNum);
+      if (refNum == 0) {
+        while (hash.hasRemaining())
+          assertEquals(0, hash.get());
+        continue;
+      }
+      Row refRow = refNum == row.rowNumber() ? row : ledger.getRow(refNum);
+      assertEquals(refRow.hash(), hash);
+    }
+  }
+  
+  
+  @Test
   public void testCamelPath() throws Exception {
     final int rows = 10_003;
     long lo = 107;

@@ -19,15 +19,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import io.crums.io.Serial;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.model.HashUtc;
 import io.crums.util.Lists;
 import io.crums.util.NaturalTuple;
-import io.crums.util.Sets;
 import io.crums.util.Tuple;
 import io.crums.util.hash.Digest;
 
@@ -662,6 +664,55 @@ public class Path implements Digest, Serial {
   
   
   
+  public Iterator<RowIntersection> expansiveIntersections(Path path) {
+    return new PathIntersector(this, path);
+  }
+  
+  
+  public Stream<RowIntersection> streamExpansiveIntersections(Path path) {
+    return new PathIntersector(this, path).stream();
+  }
+  
+  
+  
+  public Stream<RowIntersection> streamIntersections(Path path) {
+    return new UniquePairIntersector(this, path).stream();
+  }
+  
+  
+  public Optional<RowIntersection> firstIntersection(Path path) {
+    return streamIntersections(path).findFirst();
+  }
+  
+  
+  public Optional<RowIntersection> lastIntersection(Path path) {
+    RowIntersection i = null;
+    for (
+        Iterator<RowIntersection> iter = new PathIntersector(this, path);
+        iter.hasNext();
+        i = iter.next());
+    
+    return Optional.ofNullable(i);
+  }
+  
+  
+  
+  public final boolean hasRow(long rowNumber) {
+    return Collections.binarySearch(rowNumbers(), rowNumber) >= 0;
+  }
+  
+  
+  
+  public UniquePairIntersector intersector(Path path) {
+    if (path == this) {
+      Logger.getLogger(Path.class.getName()).warning(
+          "intersecting with self: " + this +
+          " - Use new UniquePairIntersector(..) directly, if you meant this " +
+          "and don't wanna see this warning");
+    }
+    return new UniquePairIntersector(this, path);
+  }
+  
   
   
   
@@ -669,7 +720,7 @@ public class Path implements Digest, Serial {
   
   
   /**
-   * Determines if this instance and the given path have rows <em>any</em> equal
+   * Determines if this instance and the given path have <em>any</em> equal
    * rows. (2 rows are equal iff both their row numbers and row hashes match.)
    * 
    * @return {@code intersects(path, false)}
@@ -681,7 +732,7 @@ public class Path implements Digest, Serial {
   
   /**
    * Determines whether this rows intersects the other consistently. 2 paths intersect
-   * consistently if some of their row numbers intersect <em>and</em> if each pair of
+   * consistently if any of their covered row numbers intersect <em>and</em> if each pair of
    * row hashes at those intersections are equal.
    * 
    * @return {@code intersects(path, true)}
@@ -703,12 +754,14 @@ public class Path implements Digest, Serial {
    * 
    * <p>Let's introduce some terminology:</p><p>
    * <ol>
-   * <li><em>Intersect</em>. 2 paths intersect each other if they share <em>any</em> 2
-   * {@linkplain Row#equals(Object) equal} rows. (2 rows are equal iff
-   * both their row numbers and row hashes match.) </li>
+   * <li><em>Intersect</em>. 2 paths intersect if the <em>hash</em> of any 2 rows
+   * in the ledger they describe cooincide at the same row number. But since our ledger
+   * rows reference previous rows thru their hash pointers, a path may intersect another
+   * path even if their row numbers don't intersect. (But note, their
+   * {@linkplain #rowNumbersCovered()} sets must intersect.) </li>
    * <li><em>Intersect Consistently</em>. 2 paths intersect consistently if (a) they
-   * intersect (as defined above) <em>and</em> (b) if any 2 row numbers in their respective
-   * paths match, then so too their row hashes.</li>
+   * intersect (as defined above) <em>and</em> (b) if any other <em>covered</em> row numbers in their respective
+   * paths intersect, then so too must their row hashes.</li>
    * </ol></p><p>
    * So if 2 paths intersect consistently, then <em>there exists a ledger</em> that can
    * produce them both;
@@ -720,48 +773,18 @@ public class Path implements Digest, Serial {
    * @param consistent if <tt>true</tt>, the test determines a consistent intersection.
    */
   public final boolean intersects(Path other, boolean consistent) {
-    Objects.requireNonNull(other, "null other");
-    
     if (other == this)
       return true;
+
+    Objects.requireNonNull(other, "null other");
     
     if (!Digest.equal(this, other))
       return false;
     
-    final List<Long> rowNums = rowNumbers();
-    final List<Long> otherRowNums = other.rowNumbers();
-    
-    Iterator<Long> iter = Sets.intersectionIterator(rowNums, otherRowNums);
-    
-    boolean intersects = false;
-    
-    while (iter.hasNext()) {
-      
-      Long rowNum = iter.next();
 
-      final ByteBuffer rowHash;
-      {
-        int index = Collections.binarySearch(rowNums, rowNum);
-        assert index >= 0;
-        rowHash = rows.get(index).hash();
-      }
-      
-      final ByteBuffer otherRowHash;
-      {
-        int index = Collections.binarySearch(otherRowNums, rowNum);
-        assert index >= 0;
-        otherRowHash = other.rows.get(index).hash();
-      }
-      
-      final boolean rowsIntersect = rowHash.equals(otherRowHash);
-      
-      if (consistent && !rowsIntersect || !consistent && rowsIntersect)
-        return rowsIntersect;
-      
-      intersects = rowsIntersect;
-    }
+    PathIntersector pi = new PathIntersector(this, other);
     
-    return intersects;
+    return pi.hasNext() && (!consistent || pi.firstConflict().isEmpty());
     
   }
   
@@ -801,21 +824,40 @@ public class Path implements Digest, Serial {
    * set returned by {@linkplain #rowNumbersCovered()}
    */
   public final ByteBuffer getRowHash(long rowNumber) throws IllegalArgumentException {
+    return
+        rowNumber == 0 ?
+            sentinelHash() :
+              getRowOrReferringRow(rowNumber).hash(rowNumber);
+  }
+  
+  
+  
+  /**
+   * Returns the row with lowest row-number that knows about the given <tt>rowNumber</tt>.
+   * I.e. if this path instance has a row with the given <tt>rowNumber</tt> then that row
+   * is returned. Otherwise, the <em>first</em> row that references the row with given
+   * row-number is returned.
+   * 
+   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <tt>rowNumber</tt>
+   * 
+   * @throws IllegalArgumentException if <tt>rowNumber</tt> is not a member of the
+   * set returned by {@linkplain #rowNumbersCovered()}
+   * 
+   * @see #getRowHash(long)
+   */
+  public final Row getRowOrReferringRow(long rowNumber) throws IllegalArgumentException {
     
-    if (rowNumber == 0)
-      return sentinelHash();
-    
-    List<Long> rowNumbers = rowNumbers();
+    final List<Long> rowNumbers = rowNumbers();
     {
       int index = Collections.binarySearch(rowNumbers, rowNumber);
       
       if (index >= 0)
-        return rows().get(index).hash();
+        return rows().get(index);
       
       else if (-1 - index == rowNumbers.size())
         throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
     }
-    
+
     final int pointerLevels = Ledger.skipCount(rowNumber);
     
     for (int exp = 0; exp < pointerLevels; ++exp) {
@@ -826,12 +868,12 @@ public class Path implements Digest, Serial {
       if (index >= 0) {
         Row row = rows.get(index);
         assert row.prevLevels() > exp;
-        
-        return row.prevHash(exp);
+        return row;
         
       } else if (-1 - index == rowNumbers.size())
-        throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
+        break;
     }
+    
     
     throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
   }
@@ -839,7 +881,93 @@ public class Path implements Digest, Serial {
   
   
   
-  public Path concat(Path path) {
+  /**
+   * Returns a subpath view of this instance for the given <em>hi</em> and
+   * <em>lo</em> row numbers in this path instance. The returned instance is
+   * untargeted: that is the {@linkplain #target() target}
+   * of the returned instance is just the default first row.
+   * 
+   * @param loRowNumber low row number
+   * @param hiRowNumber high row number (inclusive!)
+   * 
+   * 
+   * @return an untargeted sub path
+   * @see #isTargeted()
+   */
+  public final Path subPath(long loRowNumber, long hiRowNumber) {
+    
+    List<Row> subRows;
+    {
+      if (loRowNumber > hiRowNumber || loRowNumber < 1)
+        throw new IllegalArgumentException(
+            "loRowNumber " + loRowNumber + ", hiRowNumber " + hiRowNumber);
+      List<Long> rowNumbers = rowNumbers();
+      int loIndex = Collections.binarySearch(rowNumbers, loRowNumber);
+      if (loIndex < 0)
+        throw new IllegalArgumentException(
+            "loRoNumber " + loRowNumber + " not a member row");
+      int hiIndex = Collections.binarySearch(rowNumbers, hiRowNumber);
+      if (hiIndex < 0)
+        throw new IllegalArgumentException(
+            "hiRowNumber " + hiRowNumber + " not a member row");
+        
+      if (loIndex == 0 && hiIndex == rows.size() - 1 && !isTargeted())
+        return this;
+      
+      subRows = rows.subList(loIndex, hiIndex + 1);
+    }
+    
+    List<Tuple<Long,Long>> subBeacons;
+    if (beacons.isEmpty())
+      subBeacons = beacons;
+    else {
+
+      List<Long> beaconRowNums = Lists.map(beacons, t -> t.a);
+      int loBcnIndex = Collections.binarySearch(beaconRowNums, loRowNumber);
+      if (loBcnIndex < 0)
+        loBcnIndex = -1 - loBcnIndex;
+      
+      if (loBcnIndex == beacons.size())
+        subBeacons = Collections.emptyList();
+      else {
+        int hiBcnIndex = Collections.binarySearch(beaconRowNums, hiRowNumber);
+        if (hiBcnIndex < 0)
+          hiBcnIndex = -1 - hiBcnIndex;
+        else
+          hiBcnIndex = hiBcnIndex + 1;
+        
+        subBeacons = beacons.subList(loBcnIndex, hiBcnIndex);
+      }
+    }
+    
+    return new Path(subRows, subBeacons, false);
+  }
+  
+  
+  
+  /**
+   * Determines whether this instance and the given <tt>path</tt> are
+   * adjacent to one another.
+   * 
+   * <p>This is a symmetric property.</p>
+   */
+  public final boolean isAdjacent(Path path) {
+    if (path.hiRowNumber() > loRowNumber() || path.loRowNumber() < hiRowNumber())
+      return false;
+    
+    return new PathIntersector(this, path).hasNext();
+    
+  }
+  
+  
+  
+  /**
+   * Concatenates the given <em>adjacent</em> path to this one.
+   * 
+   * @param path
+   * @return
+   */
+  public final Path concat(Path path) {
     Objects.requireNonNull(path, "null path");
     
     long delta;
@@ -849,29 +977,38 @@ public class Path implements Digest, Serial {
       
       head = path;
       tail = this;
-      long referringNum = loRowNumber();
-      delta = referringNum - path.hiRowNumber();
-      checkDelta(delta, path, referringNum);
     
     } else if (hiRowNumber() <= path.loRowNumber()) {
       
       head = this;
       tail = path;
-      long referringNum = path.loRowNumber();
-      delta = referringNum - hiRowNumber();
-      checkDelta(delta, path, referringNum);
       
     } else
       throw new IllegalArgumentException(path + " not adjacent to " + this);
+    
+    {
+      long referringNum = tail.loRowNumber();
+      delta = referringNum - head.hiRowNumber();
+      checkDelta(delta, referringNum, path);
+    }
     
     List<Row> headRows = head.rows;
     List<Row> tailRows = tail.rows;
     if (delta == 0) {
       // remove the extra row
-      if (this.rows.size() == 1)
-        return path;
-      else if (path.rows.size() == 1)
-        return this;
+      
+      if (this.rows.size() == 1) {
+        // not refactoring cuz it's clearer this way (+ line # in stack trace)
+        if (path.rows.get(path.rows.size() - 1).equals(rows.get(0)))
+          return path;
+        throw new IllegalArgumentException(
+            "paths conflict (not from same ledger). this: " + this + ", path: " + path);
+      } else if (path.rows.size() == 1) {
+        if (rows.get(rows.size() - 1).equals(path.rows.get(0)))
+          return this;
+        throw new IllegalArgumentException(
+            "paths conflict (not from same ledger). this: " + this + ", path: " + path);
+      }
       
       // trim the head rows (there's a choice here; we choose the head)
       headRows = headRows.subList(0, headRows.size() - 1);
@@ -896,12 +1033,17 @@ public class Path implements Digest, Serial {
       mergedBeacons.addAll(mergedSet);
     }
     
+    // NOTE: we let the constructor perform the validation
     return new Path(concatRows, mergedBeacons);
       
   }
   
   
-  private void checkDelta(long delta, Path path, long referringNum) {
+  /**
+   * 
+   * @param path for exception message only; not used in computation
+   */
+  private void checkDelta(long delta, long referringNum, Path path) {
     boolean ok =
         delta >= 0 &&
         delta == Long.highestOneBit(delta) &&

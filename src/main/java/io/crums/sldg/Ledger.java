@@ -44,6 +44,30 @@ public abstract class Ledger implements Digest, Closeable {
     return 1 + Long.numberOfTrailingZeros(rowNumber);
   }
   
+  
+  
+  /**
+   * Determines if any of the 2 rows (from the same ledger) with given row numbers
+   * reference (and therefore link to) the other by hash. Since every row knows its own hash,
+   * by this definition, every row is linked also linked to itself.
+   */
+  public static boolean rowsLinked(long rowNumA, long rowNumB) {
+    long lo, hi;
+    if (rowNumA <= rowNumB) {
+      lo = rowNumA;
+      hi = rowNumB;
+    } else {
+      lo = rowNumB;
+      hi = rowNumA;
+    }
+    if (lo < 0)
+      throw new IllegalArgumentException(
+          "row numbers must be non-negative. Actual given: " + rowNumA + ", " + rowNumB);
+    
+    long diff = hi - lo;
+    return diff == Long.highestOneBit(diff) && diff <= (1L << (skipCount(hi) - 1));
+  }
+  
 
   /**
    * Throws an <tt>IllegalArgumentException</tt> if the given row number is not &ge; 1.

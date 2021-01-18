@@ -6,6 +6,8 @@ package io.crums.sldg;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.Collections;
+import java.util.SortedSet;
 
 import io.crums.util.IntegralStrings;
 import io.crums.util.hash.Digest;
@@ -23,7 +25,7 @@ public abstract class Row implements Digest {
   
   
   /**
-   * Returns the row number. Note this value does not figure in instance equality.
+   * Returns the row number.
    * 
    * @return &ge; 1
    * 
@@ -75,6 +77,37 @@ public abstract class Row implements Digest {
       digest.update(prevHash(level));
 
     return ByteBuffer.wrap(digest.digest());
+  }
+  
+  
+  /**
+   * Returns the hash of the given row number. An instance knows the hash of not
+   * just itself, but also of the rows it references thru its skip pointers.
+   * 
+   * @see #coveredRowNumbers()
+   */
+  public final ByteBuffer hash(long rowNumber) {
+    final long rn = rowNumber();
+    final long diff = rn - rowNumber;
+    if (diff == 0)
+      return hash();
+    
+    int referencedRows = prevLevels();
+    if (diff < 0 || Long.highestOneBit(diff) != diff || diff > (1L << (referencedRows - 1)))
+      throw new IllegalArgumentException(
+          "rowNumber " + rowNumber + " is not covered by this row " + this);
+    int ptrLevel = 63 - Long.numberOfLeadingZeros(diff);
+    return prevHash(ptrLevel);
+  }
+  
+  
+  /**
+   * Returns the set of row numbers covered by this row. This includes the row's
+   * own row number, as well as those referenced thru its hash pointers. The hashes
+   * of these referenced rows is available thru the {@linkplain #hash(long)} method.
+   */
+  public final SortedSet<Long> coveredRowNumbers() {
+    return Ledger.coverage(Collections.singletonList(rowNumber()));
   }
   
 

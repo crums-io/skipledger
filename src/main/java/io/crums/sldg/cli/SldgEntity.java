@@ -54,5 +54,10 @@ final class SldgEntity {
   public Nugget getNugget() {
     return nugget;
   }
+  
+  
+  public Object getObject() {
+    return path == null ? nugget : path;
+  }
 
 }

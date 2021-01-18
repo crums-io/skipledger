@@ -477,7 +477,8 @@ public class Sldg extends MainTemplate {
       System.out.println(
           "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastTrail.crum().utc()));
     }
-    
+    System.out.println("Ledger (last row's) Hash:");
+    System.out.println(IntegralStrings.toHex(db.getLedger().rowHash(size)));
     System.out.println("OK");
   }
 
@@ -516,7 +517,7 @@ public class Sldg extends MainTemplate {
         System.out.print(']');
         for (int index = value.length() + 2; index < hexStartPos; ++index)
           System.out.print(' ');
-        System.out.println(IntegralStrings.toHex(row.inputHash()));
+        System.out.println(IntegralStrings.toHex(row.hash()));
       }
     }
   }
@@ -955,7 +956,7 @@ public class Sldg extends MainTemplate {
     subWideKeyTable.printRow(null,              "DEFAULT: true");
     out.println();
     
-    table.printRow(INGEST, "adds hexidecimal SHA-256 hash entries from the given file", REQ_CH);
+    table.printRow(INGEST, "adds hexidecimal SHA-256 hash entries from stdin or the given file", REQ_CH);
     table.printRow(null,   "Entries must be whitespace-delimited. The recommended practice", null);
     table.printRow(null,   "is one per line. Note this is a streaming operation: if a bad", null);
     table.printRow(null,   "argument is encountered midway in the file previous rows may", null);
