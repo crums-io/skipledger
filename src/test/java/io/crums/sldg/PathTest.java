@@ -211,6 +211,80 @@ public class PathTest extends SelfAwareTestCase {
   }
   
   
+  @Test
+  public void testExtend() throws Exception {
+    Random random = new Random(55);
+    Ledger ledger = newLedger();
+    int initSize = 511;
+    int finSize = 2021;
+    addRandomRows(ledger, random, finSize);
+    Path initPath = ledger.skipPath(129, initSize);
+    Path finPath = ledger.skipPath(1, finSize);
+    Path extPath = initPath.extend(finPath);
+    assertEquals(initPath.loRowNumber(), extPath.loRowNumber());
+    assertEquals(finPath.hiRowNumber(), extPath.hiRowNumber());
+  }
+  
+  
+  @Test
+  public void testExtend2() throws Exception {
+    Random random = new Random(55);
+    Ledger ledger = newLedger();
+    int initSize = 511;
+    int finSize = 2021;
+    addRandomRows(ledger, random, finSize);
+    final long targetRn = 256;
+    Path initPath = new TargetPath(ledger.skipPath(129, initSize), targetRn);
+    assertEquals(targetRn, initPath.target().rowNumber());
+    
+    Path finPath = ledger.skipPath(1, finSize);
+    Path extPath = initPath.extend(finPath);
+    assertEquals(initPath.loRowNumber(), extPath.loRowNumber());
+    assertEquals(initPath.target().rowNumber(), extPath.target().rowNumber());
+    assertEquals(finPath.hiRowNumber(), extPath.hiRowNumber());
+  }
+  
+  
+  @Test
+  public void testExtend3() throws Exception {
+    Random random = new Random(55);
+    Ledger ledger = newLedger();
+    final int initSize = 511;
+    final int finSize = 2021;
+    addRandomRows(ledger, random, finSize);
+    final long targetRn = 256;
+    List<Tuple<Long,Long>> initBeacons;
+    long now = System.currentTimeMillis();
+    final long tdelta = 1000_000;
+    
+    {
+      List<Tuple<Long,Long>> beacons = new ArrayList<>();
+      beacons.add(new Tuple<Long,Long>(256L, now - 5 * tdelta));
+//      beacons.add(new Tuple<Long,Long>(511L, now - 4 * tdelta));
+      initBeacons = beacons;
+    }
+    Path initPath = new TargetPath(ledger.skipPath(129, initSize), initBeacons, targetRn);
+    
+    List<Tuple<Long,Long>> finBeacons;
+    {
+      List<Tuple<Long,Long>> beacons = new ArrayList<>();
+      beacons.add(new Tuple<Long,Long>(1L, now - 50 * tdelta));
+      beacons.add(new Tuple<Long,Long>(128L, now - 7 * tdelta));
+      beacons.add(new Tuple<Long,Long>(256L, now - 5 * tdelta));
+      beacons.add(new Tuple<Long,Long>(512L, now - 3 * tdelta));
+      beacons.add(new Tuple<Long,Long>(1024L, now - 2 * tdelta));
+      finBeacons = beacons;
+    }
+    Path finPath = new Path(ledger.skipPath(1, finSize), finBeacons);
+    Path extPath = initPath.extend(finPath);
+    assertEquals(initPath.loRowNumber(), extPath.loRowNumber());
+    assertEquals(targetRn, extPath.target().rowNumber());
+    assertEquals(finPath.hiRowNumber(), extPath.hiRowNumber());
+    
+    assertEquals(finBeacons.subList(2, finBeacons.size()), extPath.beacons());
+  }
+  
+  
   private void testSerializeAndLoad(int size, long[] pathNumbers) throws Exception {
     testSerializeAndLoad(size, pathNumbers, pathNumbers[0]);
   }
@@ -404,21 +478,32 @@ public class PathTest extends SelfAwareTestCase {
     if (rows <= 0)
       throw new IllegalArgumentException("rows " + rows);
     
-    Ledger ledger = new CompactLedger(new VolatileTable());
+    Ledger ledger = newLedger();
     
     Random random = new Random(rows);
+    
+    addRandomRows(ledger, random, rows);
+    
+    assertEquals(rows, ledger.size());
+    return ledger;
+  }
+  
+  
+  public static Ledger newLedger() {
+    return new CompactLedger(new VolatileTable());
+  }
+  
+  
+  public static void addRandomRows(Ledger ledger, Random random, int count) {
 
     byte[] mockHash = new byte[SldgConstants.HASH_WIDTH];
     ByteBuffer mockHashBuffer = ByteBuffer.wrap(mockHash);
     
-    for (int count = rows; count-- > 0; ) {
+    for (; count-- > 0; ) {
       random.nextBytes(mockHash);
       mockHashBuffer.clear();
       ledger.appendRows(mockHashBuffer);
     }
-    
-    assertEquals(rows, ledger.size());
-    return ledger;
   }
 
 }

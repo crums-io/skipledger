@@ -9,11 +9,14 @@ import static io.crums.util.Strings.*;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import io.crums.model.Constants;
 import io.crums.sldg.Nugget;
@@ -189,7 +192,122 @@ public class Nug extends MainTemplate {
 
 
   private void compareNuggets(Nugget a, Nugget b) {
+    Path pathA = a.ledgerPath();
+    Path trailA = a.firstWitness().path();
     
+    Path pathB = b.ledgerPath();
+    Path trailB = b.firstWitness().path();
+
+    TreeSet<RowIntersection> inters = new TreeSet<>(RowIntersection.NUM_COMP);
+    TreeSet<RowIntersection> cons = new TreeSet<>(RowIntersection.NUM_COMP);
+    
+    collect(pathA, pathB, inters, cons);
+    collect(pathA, trailB, inters, cons);
+    collect(trailA, pathB, inters, cons);
+    collect(trailA, trailB, inters, cons);
+    
+
+    final long maxTarget = Math.max(a.target().rowNumber(), b.target().rowNumber());
+    
+    String msg;
+    
+    if (!cons.isEmpty()) {
+      final RowIntersection firstCon = cons.first();
+      final boolean aboveTargets = firstCon.rowNumber() > maxTarget;
+      final RowIntersection lastGood;
+      
+      if (aboveTargets) {
+        SortedSet<RowIntersection> head = inters.headSet(firstCon);
+        if (head.isEmpty())
+          lastGood = null;
+        else {
+          RowIntersection ri = head.last();
+          lastGood = ri.rowNumber() >= maxTarget ? ri : null;
+        }
+      } else
+        lastGood = null;
+      
+      msg = "Nuggets DO NOT BELONG to the same ledger";
+      if (aboveTargets) {
+        msg += " as recorded";
+      }
+      msg += ": row [";
+      msg += firstCon.rowNumber() + "] conflicts in the 2 objects. ";
+      
+      if (aboveTargets) {
+        msg += " Their targets, however, rows [" + a.target().rowNumber() + "] in ";
+        msg += compCommand.fileMapping.get(a) + " and [" + b.target().rowNumber();
+        msg += "] in " + compCommand.fileMapping.get(b);
+        if (lastGood == null) {
+          msg += " may yet share a common ledger since they target rows numbered below ";
+          msg += "the conflict. ";
+        } else {
+          msg += " provably share a common ledger ";
+          msg += "since they intersect at row [" + lastGood.rowNumber() + "]";
+        }
+      }
+      
+    } else {  // no conflicts
+      
+      if (inters.isEmpty()) {
+        msg = "No information can be gleaned from the 2 nuggets: their numbered rows do not ";
+        msg += "cross anywhere.";
+      } else {
+        
+        RowIntersection last = inters.last();
+        if (last.rowNumber() >= maxTarget) {
+          msg = "Nugget TARGETS BELONG to a common ledger: their ledger paths intersect at row [";
+          msg += last.rowNumber() + "]";
+          if (pathA.hiRowNumber() == pathB.hiRowNumber()) {
+            msg += " the highest row number recorded in both objects.";
+          } else {
+            msg += " which is above their respective target rows [";
+            msg += a.target().rowNumber() + "] in " + compCommand.fileMapping.get(a) + " and [";
+            msg += b.target().rowNumber() + "] in " + compCommand.fileMapping.get(b);
+          }
+        } else {
+          long minTarget = Math.min(a.target().rowNumber(), b.target().rowNumber());
+          if (last.rowNumber() >= minTarget) {
+            Nugget lo, hi;
+            // one, but not the other (ie the lo one)
+            if (a.target().rowNumber() <= last.rowNumber()) {
+              lo = a;
+              hi = b;
+            } else {
+              lo = b;
+              hi = a;
+            }
+            msg = "Nugget " + compCommand.fileMapping.get(hi) + " with target row [";
+            msg += "] IMPLIES the target of nugget " + compCommand.fileMapping.get(lo);
+            msg += " [" + lo.target().rowNumber() + "] since they intersect at row [";
+            msg += last.rowNumber() + "].";
+          } else {
+            msg = "Nuggets intersect at row [" + last.rowNumber() + "] which is below ";
+            msg += "both their targets ([" + a.target().rowNumber() + "] in ";
+            msg += compCommand.fileMapping.get(a) + " and [" + b.target().rowNumber();
+            msg += "] in " + compCommand.fileMapping.get(b) + " No additonal information is available.";
+          }
+        }
+      }
+      
+      
+    }
+    
+
+    PrintSupport printer = new PrintSupport();
+    printer.println();
+    printer.printParagraph(msg);
+    printer.println();
+  }
+  
+  private void collect(
+      Path a, Path b,
+      TreeSet<RowIntersection> inters, TreeSet<RowIntersection> cons) {
+    PathIntersector i = a.intersector(b);
+    i.forEach(ri -> inters.add(ri));
+    Optional<RowIntersection> conflict = i.firstConflict();
+    if (conflict.isPresent())
+      cons.add(conflict.get());
   }
 
   private String snippetForIndirect(RowIntersection i, Path a, Path b) {

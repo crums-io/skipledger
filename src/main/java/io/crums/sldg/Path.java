@@ -640,7 +640,104 @@ public class Path implements Digest, Serial {
   }
   
   
+  /**
+   * Determines if the given <tt>path</tt> can be used to extend this one.
+   * I.e. determines if {@linkplain #extend(Path)} won't throw an exception
+   * with the given argument.
+   */
+  public final boolean isExtendableBy(Path path) {
+    if (path.hiRowNumber() <= hiRowNumber())
+      return false;
+    
+    PathIntersector i = intersector(path);
+    Optional<RowIntersection> inter =
+        i.stream()
+          .filter(e -> !e.type().byLineage() && hasRow(e.first().rowNumber()))
+          .reduce((f, s) -> s);
+    
+    return
+        i.firstConflict().isEmpty() &&
+        inter.isPresent() &&
+        inter.get().rowNumber() >= target().rowNumber();
+  }
   
+  
+  /**
+   * 
+   * @param path
+   * @return
+   */
+  public final Path extend(Path path) {
+    final long pHi = path.hiRowNumber();
+    final long hi = hiRowNumber();
+    if (pHi < hi)
+      throw new IllegalArgumentException(
+        "path hiRowNumber " + pHi + " < hiRowNumber " + hi);
+    PathIntersector i = intersector(path);
+    
+    Optional<RowIntersection> inter =
+      i.stream().filter(e -> !e.type().byLineage() && hasRow(e.first().rowNumber()))
+        .reduce((f, s) -> s);
+        
+    Optional<RowIntersection> conflict = i.firstConflict();
+    if (conflict.isPresent())
+      throw new IllegalArgumentException(
+        "path conflicts at row [" + conflict.get().rowNumber() + "]");
+    if (inter.isEmpty())
+      throw new IllegalArgumentException(
+        "path " + path + " does not intersect <this> " + this);
+    RowIntersection ri = inter.get();
+    if (ri.rowNumber() < target().rowNumber())
+      throw new IllegalArgumentException(
+        "path intersects at row [" + ri.rowNumber() + "] below target (" +
+        target().rowNumber() + ")");
+    if (pHi == hi)
+      return this;
+    
+    RowIntersect type = ri.type();
+    
+
+    List<Row> outRows;
+    {
+      int index = Collections.binarySearch(rowNumbers(), ri.first().rowNumber());
+      assert index >= 0;
+      
+      List<Row> head = rows.subList(0, index + 1);
+      
+      index = Collections.binarySearch(path.rowNumbers(), ri.second().rowNumber());
+      assert index >= 0;
+      
+      if (type.direct())
+        ++index;
+      
+      List<Row> tail = path.rows.subList(index, path.rows.size());
+      outRows = Lists.concat(head, tail);
+    }
+    
+    List<Tuple<Long,Long>> outBeacons;
+    {
+      TreeSet<NaturalTuple<Long,Long>> bcns = new TreeSet<>();
+      for (Tuple<Long,Long> b : beacons) {
+        if (b.a > ri.rowNumber())
+          break;
+        bcns.add(new NaturalTuple<>(b));
+      }
+      for (Tuple<Long,Long> b : path.beacons) {
+        if (b.a > ri.rowNumber())
+          bcns.add(new NaturalTuple<>(b));
+      }
+      if (bcns.isEmpty())
+        outBeacons = Collections.emptyList();
+      else {
+        outBeacons = new ArrayList<>(bcns.size());
+        outBeacons.addAll(bcns);
+      }
+    }
+    
+    return isTargeted() ?
+        new TargetPath(outRows, outBeacons, target().rowNumber()) :
+          new Path(outRows, outBeacons);
+  }
   
   
   
@@ -686,13 +783,7 @@ public class Path implements Digest, Serial {
   
   
   public Optional<RowIntersection> lastIntersection(Path path) {
-    RowIntersection i = null;
-    for (
-        Iterator<RowIntersection> iter = new PathIntersector(this, path);
-        iter.hasNext();
-        i = iter.next());
-    
-    return Optional.ofNullable(i);
+    return streamIntersections(path).reduce((a, b) -> b);
   }
   
   

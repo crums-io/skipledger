@@ -7,6 +7,7 @@ package io.crums.sldg;
 import static io.crums.sldg.RowIntersect.*;
 
 import java.nio.ByteBuffer;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -24,6 +25,20 @@ import java.util.Optional;
  * @see PathIntersector
  */
 public class RowIntersection {
+  
+  public final static Comparator<RowIntersection> NUM_COMP = new Comparator<RowIntersection>() {
+
+    @Override
+    public int compare(RowIntersection a, RowIntersection b) {
+      int comp = Long.compare(a.rowNumber, b.rowNumber);
+      if (comp != 0)
+        return comp;
+      comp = Long.compare(a.a.rowNumber(), b.a.rowNumber());
+      if (comp != 0)
+        return comp;
+      return Long.compare(a.b.rowNumber(), b.b.rowNumber());
+    }
+  };
 
   private final long rowNumber;
   private final Row a;
