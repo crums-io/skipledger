@@ -841,8 +841,8 @@ public class Nug extends MainTemplate {
 
   private final static String DESC = "desc";
   private final static String COMP = "comp";
-  private final static String ENTRY = "entry";
-  private final static String RN = "rn";
-  private final static String ROW_HASH = "rh";
+//  private final static String ENTRY = "entry";
+//  private final static String RN = "rn";
+//  private final static String ROW_HASH = "rh";
 
 }

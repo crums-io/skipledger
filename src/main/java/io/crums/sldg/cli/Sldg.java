@@ -837,7 +837,7 @@ public class Sldg extends MainTemplate {
         "This same structure is also used to provide a compact, standalone proof that an item at a " +
         "specific row number is indeed inside the ledger. I.e. a list of rows that connect " +
         "the latest row to the row of interest. If the row (or any row after it) has been " +
-        "witnessed, then the crumtrail witness evidence together with these rows can be" +
+        "witnessed, then the crumtrail witness evidence together with these rows can be " +
         "packaged as a \"nugget\". (See '" + NUG + "' command)";
     printer.printParagraph(paragraph, RM);
     printer.println();
@@ -995,9 +995,11 @@ public class Sldg extends MainTemplate {
     table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
     table.printRow(null,        "numbered rows", null);
     out.println();
-    table.printRow(NUG,         "prints or outputs a nugget. A nugget proves that the hash of a given", REQ_CH);
-    table.printRow(null,        "entry is on a numbered row that is linked from the last row in the", null);
-    table.printRow(null,        "ledger. It also contains evidence that sets the row's minimum age.", null);
+    table.printRow(NUG,         "prints or outputs a nugget for the given row number argument.", REQ_CH);
+    table.printRow(null,        "A nugget proves that the entry (input) hash at a given row number is", null);
+    table.printRow(null,        "linked from a row at a higher number (highest, at the time published)", null);
+    table.printRow(null,        "in the ledger. It may also contains evidence seting the row's minimum", null);
+    table.printRow(null,        "age.", null);
     out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     table.println();
@@ -1005,7 +1007,7 @@ public class Sldg extends MainTemplate {
     table.printlnCenteredSpread("Output Options:", 1);
     table.printHorizontalTableEdge('-');
     table.println();
-    table.printRow(FILE + "=*", "outputs to the specified path", null);
+    table.printRow(FILE + "=*", "outputs to the specified filepath", null);
     table.printRow(null,        "If the given path is an existing directory (recommended!), then the", null);
     table.printRow(null,        "filename is dynamically generated. Otherwise, unless overriden (see", null);
     table.printRow(null,        "next), if the pathname doesn't already sport the standard extension,", null);
