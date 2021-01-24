@@ -136,16 +136,7 @@
 
 
   <dependencies>
-  
-  
     
-    <dependency>
-      <groupId>io.crums</groupId>
-      <artifactId>io-util</artifactId>
-      <version>0.0.5-SNAPSHOT</version>
-    </dependency>
-    
-    <!-- TODO: factor out public code -->
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>crums-core</artifactId>
