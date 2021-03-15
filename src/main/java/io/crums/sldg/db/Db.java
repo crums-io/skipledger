@@ -41,6 +41,7 @@ import io.crums.sldg.SldgException;
 import io.crums.sldg.TargetPath;
 import io.crums.sldg.TrailedPath;
 import io.crums.util.CachingList;
+import io.crums.util.FilteredIndex;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
 import io.crums.util.TaskStack;
@@ -65,7 +66,7 @@ public class Db implements Closeable {
   private final static int BEACON_TBL_WIDTH = 2 * Long.BYTES;
   
   private final File dir;
-  private final Ledger ledger;
+  private final CompactFileLedger ledger;
   private final TrailRepo witnessRepo;
   
   private final Table beaconTable;
@@ -137,9 +138,30 @@ public class Db implements Closeable {
   }
   
   
-  
+  /**
+   * Returns the number of rows in the ledger.
+   */
   public long size() {
     return ledger.size();
+  }
+  
+  
+  public void truncate(long newSize) {
+    ledger.trimSize(newSize);
+    
+    try {
+      int searchIndex = Collections.binarySearch(getBeaconRowNumbers(), newSize);
+      if (searchIndex < 0)
+        searchIndex = -1 - searchIndex;
+      beaconTable.truncate(searchIndex);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on truncate(" + newSize + ")", iox);
+    }
+    
+    int searchIndex = Collections.binarySearch(witnessRepo.getIds(), newSize);
+    if (searchIndex < 0)
+      searchIndex = -1 - searchIndex;
+    witnessRepo.trimSize(searchIndex);
   }
   
   
@@ -301,9 +323,9 @@ public class Db implements Closeable {
     
     int toothExponent;
     {
-      int p = 0;
-      for (; unwitnessedRows >> (p + 1) > SldgConstants.DEF_TOOTHED_WIT_COUNT; ++p);
-      toothExponent = p;
+      int p = 1;
+      for (; (unwitnessedRows >> p) > SldgConstants.DEF_TOOTHED_WIT_COUNT; ++p);
+      toothExponent = p - 1;
     }
     
     return witness(toothExponent, true);
@@ -437,6 +459,21 @@ public class Db implements Closeable {
   
   
   
+  public int sizeSansBeacons() {
+    try {
+      long count = ledger.size() - beaconTable.getRowCount();
+      if (count > Integer.MAX_VALUE)
+        throw new SldgException(
+            "number of (non-beacon) rows " +  count + " exceeds max capacity");
+      return (int) count;
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on sizeSansBeacons(): " + iox.getMessage(), iox);
+    }
+  }
+  
+  
+  
   public List<Long> getBeaconUtcs() {
     return beaconSnapshot(r -> r.getLong(0));
   }
@@ -445,6 +482,60 @@ public class Db implements Closeable {
   
   public List<Long> getBeaconRowNumbers() {
     return beaconSnapshot(r -> r.getLong(8));
+  }
+  
+  
+  /**
+   * Translates and returns the given sans-beacon row number as a row number that
+   * includes the preceding beacon rows.
+   * <h3>Purpose</h3>
+   * <p>
+   * From a user-perspective, it may be desirable to orthogonalize the bookkeeping of
+   * ledger contents from that of timekeeping. Beacon rows serve no purpose other than
+   * to establish a <em>minimum bound on the age of rows</em> in a ledger.
+   * </p>
+   * 
+   * @param rowNum non-negative, <em>sans-beacon</em> row number 
+   * 
+   * @return the row number, after accounting for the preceding beacon rows
+   * 
+   * @throws IllegalArgumentException if {@code rowNum} &lt; 0
+   */
+  public long rowNumWithBeacons(final long rowNum) {
+    if (rowNum < 0)
+      throw new IllegalArgumentException("rowNum " + rowNum);
+    
+    List<Long> beaconRns = getBeaconRowNumbers();
+    
+    if (beaconRns.isEmpty())
+      return rowNum;
+    else
+      return new FilteredIndex(beaconRns).toUnfilteredIndex(rowNum);
+  }
+  
+  
+  /**
+   * Translates and returns the given row number as a <em>sans-beacon</em> row
+   * number. This is what the row number would be, if the ledger contained no
+   * preceding beacon rows.
+   * 
+   * @param rowNum a regular row number that is not an actual beacon row
+   * 
+   * @return the row number, as if the ledger had no beacons
+   * @throws IllegalArgumentException if {@code rowNum} is a beacon row
+   * 
+   * @see #rowNumWithBeacons(long)
+   */
+  public long rowNumSansBeacons(long rowNum) {
+    if (rowNum < 0)
+      throw new IllegalArgumentException("rowNum " + rowNum);
+    
+    int searchIndex = Collections.binarySearch(getBeaconRowNumbers(), rowNum);
+    if (searchIndex < 0) {
+      int beaconsAhead = -1 - searchIndex;
+      return rowNum - beaconsAhead;
+    }
+    throw new IllegalArgumentException("rowNum " + rowNum + " is a beacon row");
   }
   
   

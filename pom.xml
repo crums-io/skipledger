@@ -49,6 +49,11 @@
               <id>nug</id>
             </program>
             
+            <program>
+              <mainClass>io.crums.sldg.cli.Jurno</mainClass>
+              <id>jurno</id>
+            </program>
+            
             
           </programs>
         </configuration>
@@ -140,7 +145,7 @@
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>crums-core</artifactId>
-      <version>0.0.1</version>
+      <version>0.0.2-SNAPSHOT</version>
     </dependency>
     
     

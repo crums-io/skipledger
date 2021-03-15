@@ -6,9 +6,11 @@ package io.crums.sldg;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
@@ -143,6 +145,64 @@ public abstract class Ledger implements Digest, Closeable {
     }
     
     return Collections.unmodifiableSortedSet(covered);
+  }
+  
+  
+  /**
+   * Stitches and returns a copy of the given (sorted) list of row numbers that is
+   * composed of the given list interleaved with linking row numbers as necessary.
+   * If {@code rowNumbers} is already stitched, a new copy is still returned.
+   * <p>
+   * This method supports an abbreviated path specification.
+   * </p>
+   * 
+   * @param rowNumbers not empty, monotonically increasing, positive row numbers
+   * 
+   * @return a new read-only list of unique, sorted numbers
+   */
+  public static List<Long> stitch(List<Long> rowNumbers) {
+    
+    final int count = Objects.requireNonNull(rowNumbers, "null rowNumbers").size();
+    
+    switch (count) {
+    case 0:
+      throw new IllegalArgumentException("empty rowNumbers");
+    case 1:
+      return Collections.singletonList(rowNumbers.get(0));
+    }
+    
+    
+    
+    Long prev = rowNumbers.get(0);
+    
+    if (prev < 1)
+      throw new IllegalArgumentException(
+          "illegal rowNumber " + prev + " at index 0 in list " + rowNumbers);
+    
+    ArrayList<Long> stitch = new ArrayList<>(Math.max(16, count));
+    stitch.add(prev);
+    
+    for (int index = 1; index < count; ++index) {
+      
+      final Long rn = rowNumbers.get(index);
+      
+      if (rn <= prev)
+        throw new IllegalArgumentException(
+            "illegal/out-of-sequence rowNumber " + rn + " at index " + index +
+            " in list " + rowNumbers);
+      
+      if (rowsLinked(prev, rn)) {
+        stitch.add(rn);
+      } else {
+        List<Long> link = skipPathNumbers(prev, rn);
+        stitch.addAll(link.subList(1, link.size()));
+      }
+      
+      prev = rn;
+    }
+    
+    stitch.trimToSize();
+    return Collections.unmodifiableList(stitch);
   }
   
   

@@ -101,13 +101,22 @@ public class FileTable implements Table {
     try {
       return file.size() / ROW_WIDTH;
     } catch (IOException iox) {
-      throw new UncheckedIOException("on size()" + this, iox);
+      throw new UncheckedIOException("on size() " + this, iox);
     }
   }
   
 
   
   
+  @Override
+  public void trimSize(long newSize) {
+    try {
+      file.truncate(newSize * ROW_WIDTH);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on trimSize(" + newSize + ") " + this, iox);
+    }
+  }
+
   public void commit() throws UncheckedIOException {
     try {
       file.force(false);

@@ -122,6 +122,19 @@ public class CompactLedger extends Ledger {
   }
   
   
+  public void trimSize(long newSize) throws UnsupportedOperationException {
+    long size = size();
+    if (newSize > size)
+      throw new IllegalArgumentException("newSize " + newSize + " > size " + size);
+    
+    if (newSize < 1)
+      throw new IllegalArgumentException("newSize " + newSize + " < 1");
+    
+    table.trimSize(newSize);
+  }
+  
+  
+  
   private ByteBuffer rowHash(long rowNumber, Table table) {
     if (rowNumber == 0)
       return sentinelHash();
@@ -132,7 +145,7 @@ public class CompactLedger extends Ledger {
   
   
   /**
-   * Lazy-loading
+   * Lazy-loading row.
    */
   final class LedgerRow extends BaseRow {
     

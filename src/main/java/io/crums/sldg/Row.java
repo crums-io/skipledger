@@ -44,10 +44,13 @@ public abstract class Row implements Digest {
   
 
   /**
-   * Returns the serial binary representation of the row whose {@linkplain #hash() hash} is
-   * computed by hashing <em>this</em> string. This contains 1 +
-   * {@linkplain Ledger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
+   * Returns the byte string used to compute the {@linkplain #hash() hash} of this row. This
+   * contains 1 + {@linkplain Ledger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
    * {@linkplain #hashWidth()} many bytes wide.
+   * <p>
+   * <em>Note this has nothing to do with how an instance is serialized for storage or
+   * over-the-wire; it's about what data contributes a row's hash.</em>
+   * </p>
    * 
    * @return may be read-only
    */

@@ -48,6 +48,8 @@ public interface Table {
    * Returns the number of rows thus far appended.
    * 
    * @return &ge; 0
+   * 
+   * @see #trimSize(long)
    */
   long size();
   
@@ -66,5 +68,17 @@ public interface Table {
    * Closes the instance.
    */
   default void close() {  }
+  
+  
+  /**
+   * Trims the table to the given {@code newSize}. Optional operation.
+   * 
+   * @param newSize &ge; 1 and &le; {@linkplain #size() size}
+   * 
+   * @throws UnsupportedOperationException if the implementation does not support it.
+   */
+  default void trimSize(long newSize) throws UnsupportedOperationException {
+    throw new UnsupportedOperationException();
+  }
 
 }
