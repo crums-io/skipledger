@@ -7,6 +7,7 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.SortedSet;
 
 import io.crums.util.IntegralStrings;
@@ -133,6 +134,20 @@ public abstract class Row implements Digest {
    */
   public final int prevLevels() {
     return Ledger.skipCount(rowNumber());
+  }
+  
+  /**
+   * Returns the row number linked to at the given {@code level}.
+   * 
+   * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
+   * 
+   * @return {@code rowNumber() - (1L << level)}
+   * @see #hash(long)
+   */
+  public final long prevRowNumber(int level) {
+    long rn = rowNumber();
+    Objects.checkIndex(level, Ledger.skipCount(rn));
+    return rn - (1L << level);
   }
   
 

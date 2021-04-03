@@ -7,6 +7,8 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
+import io.crums.sldg.bags.RowBag;
+
 /**
  * Row backed by data in a {@linkplain RowBag}. This is a departure
  * (loosening up) from previous guarantees. Oh well, it's convenient,

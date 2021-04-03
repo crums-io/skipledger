@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.db;
+package io.crums.sldg.packs;
 
 import java.util.HashMap;
 
@@ -11,11 +11,11 @@ import io.crums.sldg.SerialRow;
 /**
  * 
  */
-public class CachingRowBag extends SortedBag {
+public class CachingRowPack extends RowPack {
   
   private final HashMap<Long, SerialRow> cache = new HashMap<>();
 
-  public CachingRowBag(SortedBag base) {
+  public CachingRowPack(RowPack base) {
     super(base);
   }
 

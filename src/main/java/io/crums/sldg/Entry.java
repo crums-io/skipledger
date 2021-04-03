@@ -6,6 +6,7 @@ package io.crums.sldg;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -14,9 +15,29 @@ import io.crums.io.buffer.BufferUtils;
 /**
  * Source of a row's {@linkplain Row#inputHash() input hash}. Note this may not
  * always be practical. For example, if the source is the contents of a very large file,
- * then an instance may not comfortably fit in memory.
+ * then an instance may not comfortably fit in memory. 
+ * 
+ * <h2>Hashing Method</h2>
+ * <p>
+ * Instances of this class encode both the source of the ledger-row's input hash
+ * (see {@linkplain #content()}) and how that source is transformed into a hash.
+ * This is done implicitly thru the overridable {@linkplain #hash()} method: the
+ * base implementaion computes a straight hash of the {@linkplain #content() contents}.
+ * A subclass may employ more complex business rules. For example, if the contents
+ * is text, the hashing method may first hash each word separately, and
+ * then hash the sequence of hashes those words generated (that way, you could redact
+ * any word but still show the rest of the entry.)
+ * </p>
  * <p>
  * Instances are immutable and safe under concurrent access.
+ * </p>
+ * <h3>TODO List</h3>
+ * <p>
+ * <ul>
+ * <li>Create member method {@code Optional<io.crums.model.hashing.Entity> asEntity()} in
+ * order to support hash grammar.</li>
+ * <li></li>
+ * </ul>
  * </p>
  * 
  * @see #identityHash(ByteBuffer, long)
@@ -76,8 +97,16 @@ public class Entry {
   /**
    * Returns a read-only view of the contents.
    */
-  public final ByteBuffer contents() {
+  public final ByteBuffer content() {
     return contents.asReadOnlyBuffer();
+  }
+  
+  
+  /**
+   * Returns the number of bytes in the {@linkplain #content() content}.
+   */
+  public final int contentSize() {
+    return contents.remaining();
   }
   
   
@@ -90,7 +119,7 @@ public class Entry {
   
   
   /**
-   * Returns this entry, but with a possibly new row number.
+   * Returns this entry, but with a new row number.
    * 
    * @param rowNumber &ge; 1
    * 
@@ -103,7 +132,7 @@ public class Entry {
   
   
   /**
-   * Returns the 32-byte hash of the {@linkplain #contents() contents}.
+   * Returns the 32-byte hash of the {@linkplain #content() contents}.
    * This may be a straight digest of it may be somehow structured and is left
    * open for subclasses. 
    * 
@@ -111,9 +140,10 @@ public class Entry {
    */
   public ByteBuffer hash() {
     MessageDigest digest = SldgConstants.DIGEST.newDigest();
-    digest.update(contents());
+    digest.update(content());
     return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
   }
+  
   
   
   
@@ -210,7 +240,7 @@ public class Entry {
     
     @Override
     public ByteBuffer hash() {
-      return hashOp.apply(contents());
+      return hashOp.apply(content());
     }
     
     @Override
@@ -266,7 +296,7 @@ public class Entry {
 
     @Override
     public final ByteBuffer hash() {
-      return contents();
+      return content();
     }
     
     @Override
@@ -274,6 +304,18 @@ public class Entry {
       return rowNumber == rowNumber() ? this : new IdentityHash(this, rowNumber);
     }
   }
+  
+  /**
+   * Row number comparator. Careful {@linkplain Object#equals(Object)} is not overridden
+   * for this class, so this ordering is inconsistent with {@code equals(Object)}.
+   */
+  public final static Comparator<Entry> ROW_NUM_ORDER =
+      new Comparator<Entry>() {
+        @Override
+        public int compare(Entry a, Entry b) {
+          return Long.compare(a.rowNumber(), b.rowNumber());
+        }
+      };
 
 }
 

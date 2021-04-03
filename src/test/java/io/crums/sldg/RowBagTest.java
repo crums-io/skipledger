@@ -13,6 +13,8 @@ import java.util.TreeSet;
 
 import  org.junit.Test;
 
+import io.crums.sldg.bags.RowBag;
+
 /**
  * Template test for implementation
  */

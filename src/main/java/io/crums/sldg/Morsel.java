@@ -3,20 +3,49 @@
  */
 package io.crums.sldg;
 
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
+import io.crums.sldg.bags.MorselBag;
 import io.crums.util.Lists;
 import io.crums.util.Tuple;
 
 /**
- * A collection of paths from a same ledger.
+ * A bundle of paths, entries (row source data), and other data from a same ledger. A morsel
+ * usually contains a small subset of the data from a much larger ledger. Regardless it provides
+ * the same tamper-proofness guarantees the ledger it came from itself provides.
  */
 public class Morsel {
   
-  
+  /**
+   * Ranks the latest {@linkplain PathInfo}s first. Here <em>latest</em> means
+   * the path with the highest row number. I.e. this ranks paths by their
+   * {@linkplain PathInfo#hi() hi} row number, but in reverse. If two paths share
+   * the same hi row numbers, then they are ordered by the <em>sizes</em> of their
+   * respective {@linkplain PathInfo#declaration() declaration}s (the more more
+   * concise declaration comes first). Note that {@linkplain PathInfo#lo()} does
+   * not figure in this ordering.
+   */
+  public final static Comparator<PathInfo> LEADERBOARD =
+      new Comparator<PathInfo>() {
+
+        @Override
+        public int compare(PathInfo a, PathInfo b) {
+          long diff = a.hi() - b.hi();  // reverse order (it's a leaderboard)
+          if (diff == 0) {
+            // the smaller declaration comes first
+            diff = a.declaration().size() - b.declaration().size();
+          }
+          return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
+        }
+      };
   
   
   
@@ -28,25 +57,95 @@ public class Morsel {
   }
   
   
-  public List<PathInfo> availablePaths() {
-    return bag.availablePaths();
+  
+  public List<EntryInfo> availableEntries() {
+    return bag.availableEntries();
   }
   
   
-  public int pathCount() {
-    return bag.availablePaths().size();
+  
+  
+  
+  
+  public List<Long> knownRows() {
+    TreeSet<Long> known = knownSet();
+    ArrayList<Long> out = new ArrayList<>(known.size());
+    out.addAll(known);
+    return Collections.unmodifiableList(out);
   }
   
   
-  public Path getPath(int index) {
+  public SortedSet<Long> knownRowSet() {
+    return Collections.unmodifiableSortedSet(knownSet());
+  }
+  
+  
+  
+  private TreeSet<Long> knownSet() {
+    TreeSet<Long> known = new TreeSet<>();
+    declaredPaths().forEach(p -> known.addAll(p.rowNumbers()));
+    return known;
+  }
+  
+  
+  
+  public Optional<Path> findPath(List<Long> rowNumbers) {
+    {
+      PathInfo info = new PathInfo(rowNumbers); // validates also
+      int index = declaredPaths().indexOf(info);
+      if (index != -1) {
+        return Optional.of(getDeclaredPath(index));
+      }
+    }
     
-    return getPath(availablePaths().get(index));
+    SortedSet<Long> known = knownRowSet();
+    assert !known.isEmpty();
+    
+    Optional<List<Long>> stitch = Ledger.stitchPath(known, rowNumbers);
+    if (stitch.isEmpty())
+      return Optional.empty();
+    
+    return Optional.of(createPath(stitch.get()));
+  }
+  
+  
+  
+  public List<PathInfo> declaredPaths() {
+    return bag.declaredPaths();
+  }
+  
+  
+  /**
+   * Returns the {@linkplain PathInfo#isState() state path}s as a leader board.
+   * 
+   * @return
+   */
+  public List<PathInfo> statePaths() {
+    List<PathInfo> all = bag.declaredPaths();
+    if (all.isEmpty())
+      return all;
+    List<PathInfo> states = new ArrayList<>(all.size());
+    all.stream().filter(p -> p.isState()).forEach(p -> states.add(p));
+    
+    switch (states.size()) {
+    case 0:   return Collections.emptyList();
+    case 1:   return Collections.singletonList(states.get(0));
+    }
+    
+    Collections.sort(states, LEADERBOARD);
+    
+    return Collections.unmodifiableList(states);
+  }
+  
+  
+  public Path getDeclaredPath(int index) {
+    return createPath(bag.declaredPaths().get(index).rowNumbers());
   }
 
 
-  public Path getPath(PathInfo info) {
-
-    final List<Long> rowNumbers = Objects.requireNonNull(info, "null info").rowNumbers();
+  
+  
+  private Path createPath(final List<Long> rowNumbers) {
     
     Row[] rows = new Row[rowNumbers.size()];
     
@@ -55,7 +154,7 @@ public class Morsel {
     long nextBeaconRn = beacons.isEmpty() ? Long.MAX_VALUE : beacons.get(0).a;
     
     
-    List<Tuple<Long,Long>> outBeacons = null;
+    ArrayList<Tuple<Long,Long>> outBeacons = new ArrayList<>(8);
     
     for (int index = 0; index < rows.length; ++index) {
       
@@ -64,31 +163,30 @@ public class Morsel {
       rows[index] = bag.getRow(rn);
       
       while (nextBeaconRn <= rn) {
-        if (rn == nextBeaconRn) {
-          // check init
-          if (outBeacons == null)
-            outBeacons = new ArrayList<>(2);
-          
+        if (rn == nextBeaconRn)
           outBeacons.add(beacons.get(bcIndex));
-        }
+        
         ++bcIndex;
         nextBeaconRn =
-            bcIndex == beacons.size() ? Long.MAX_VALUE : beacons.get(bcIndex).a;
-        
+            bcIndex == beacons.size() ?
+                Long.MAX_VALUE : beacons.get(bcIndex).a;
       }
     }
     
-    outBeacons =
-        outBeacons == null ?
-            Collections.emptyList() : Collections.unmodifiableList(outBeacons);
     
-    List<Row> roRows = Lists.asReadOnlyList(rows);
+    List<Tuple<Long,Long>> ob;
     
-    // constructor validates
-    return info.isTargeted() ?
-        new TargetPath(roRows, outBeacons, info.targetRow(), true) :
-          new Path(roRows, outBeacons, true);
+    if (outBeacons.isEmpty())
+      ob = Collections.emptyList();
+    else {
+      outBeacons.trimToSize();
+      ob = Collections.unmodifiableList(outBeacons);
+    }
     
+    List<Row> ro = Lists.asReadOnlyList(rows);
+    
+    // constructor validates.. if the data is garbage, it blows up here
+    return new Path(ro, ob, true);
   }
   
 

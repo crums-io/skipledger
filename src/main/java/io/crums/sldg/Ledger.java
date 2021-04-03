@@ -11,15 +11,119 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import io.crums.sldg.db.Db;
 import io.crums.util.EasyList;
 import io.crums.util.Lists;
 import io.crums.util.hash.Digest;
 
 /**
- * 
+ * A <em>skip ledger</em> (new terminology). A skip ledger models a tamper proof
+ * <a href="https://en.wikipedia.org/wiki/Skip_list">skip list</a>. It's use here
+ * is as a tamper proof <em>list</em>, not as a search structure. Here are some of its key
+ * differences:
+ * <p>
+ * <ol>
+ * <li><em>Append only.</em> Items are only ever be appended to the <em>end</em> of the
+ * list. (In skip list terms, the items are ordered in the ordered in they appear.)</li>
+ * <li><em>Hash pointers.</em> In lieu of the handles, pointers and such in skip lists,
+ * the pointers in a skip ledger are hash pointers. (A hash pointer is the hash of another
+ * node in the skip list.)</li>
+ * <li><em>Hash of items only.</em> We only ever append the <em>hash</em> of items,
+ * not the items themselves. (Item storage is an orthogonal issue: they might exist in
+ * a database table, for example.)</li>
+ * <li><em>Deterministic structure.</em> The row number (the index of an item in the
+ * list) uniquely determines the number of skip pointers its corresponding node in the
+ * skip list has: unlike a skip list, no randomization is involved.</li>
+ * <li><em>Efficient verification.</em> Whereas a skip list is efficient at search,
+ * a skip ledger's mojo lies in its efficiency in verification. </li>
+ * </ol>
+ * </p><p>
+ * So a skip ledger is like a tamper proof linked list, but on link steroids. The main
+ * advantage it offers over a (singlely) linked tamper proof list is that you don't need
+ * to show the whole list (or any substantial part of it) in order to prove an item's position in
+ * in the list.
+ * </p><p>
+ * Which list? In the same way that the root hash of a Merkle tree uniquely identifies
+ * the tree, the hash of the last row (node) in a skip ledger uniquely identifies the ledger
+ * (the append-only list). To prove that an item is in the ledger (its hash actually--equivalently)
+ * one needs to enumerate a list of linked rows (nodes) from the last row in the ledger (whose hash
+ * defines the ledger's state) to the row number (index) at which the item is located. With
+ * a skip ledger, the number of rows in such hash proofs is on the order of the logarithm
+ * of the number of rows in the ledger.
+ * </p>
+ * <h2>Historical Annotations</h2>
+ * <p>
+ * The skip ledger data structure itself encodes no information about time. And to the
+ * degree practical, this class eschew's knowledge of the strategy we use to embed historical
+ * information. Still, it's useful to document here how it's done.
+ * </p><p>
+ * Historical information is layered above, and embedded into, a ledger in 2 ways:
+ * </p><p>
+ * <ol>
+ * <li><em>Crumtrails.</em> A crumtrail (crums.io witness record) of a row's hash is annotated
+ * to the row. This is establishes the minumum age of the row (and every row that precedes it).
+ * </li>
+ * <li><em>Beacon rows.</em> The root hash of the periodic (threaded) Merkle trees that crums.io
+ * publishes and keeps track of cannot be computed in advance. These serve as time beacons and
+ * are embedded as special rows in the ledger. The presence of a beacon row ahead of later
+ * rows establishes the maximum age of subsequent rows.</li>
+ * </ol>
+ * </p><p>
+ * These 2 mechanisms sandwich time for any interleaving row. They establish a tamper proof inequality (minimum and maximum age)
+ * for any row interleaving (and including) the witnessed row and the beacon row. Again, this
+ * historical data is only hinted at in this abstraction, and the implementation does not
+ * actually require such data.
+ * </p>
+ * <h2>Abbreviated State</h2>
+ * <p>
+ * Since our ledger is composed entirely of opaque hashes, we <em>could</em> share the entire ledger
+ * with 3rd parties for verification purposes (as when verifying the contents of a single row).
+ * This is similar to how one verifies items on standard blockchains: you generally need access to
+ * the whole chain. Verifying things is still faster using our skip ledger than walking a
+ * linked list linearly. But we can do better.
+ * </p><p>
+ * As discussed above, the hash of a ledger's last row uniquely identifies the ledger itself.
+ * A hash is a kind of contraction of state (perhaps why it's also called a digest). But <em>the
+ * skip ledger data structure also offers an intermediate contraction of state, namely the
+ * shortest path of linked rows from the last to first</em>. Again, the size of this representation is logarithmic
+ * in the number of rows in the ledger, so it's compact no matter the ledger size.
+ * </p><p>
+ * The advantage with advertising the state of a ledger this way is that if it intersects with
+ * a previously emitted path from the ledger (when the ledger had fewer rows), then the previous
+ * path (e.g. proof that an entry belonged in the ledger at the advertised row number) can be
+ * patched with the new state information.
+ * </p><p>
+ * The issue where this state information comes from, how it is validated, etc., is a can
+ * deliberately kicked down the road. It could be simply advertised over HTTPS with the existing
+ * certificate authority mechanisms. Or the owner of the ledger might insert their public key
+ * as the first row, and then periodically add a public entry (the contents of a row they make
+ * public) that is a signature of the previous row's hash. The choices are too many to consider at
+ * this juncture and probably best left to evolve.
+ * </p>
+ * <h2>Row Numbering</h2>
+ * <p>
+ * A row's number in the ledger uniquely determines how many pointers it has (see {@linkplain #skipCount(long)}
+ * (and which row numbers they point to). An important point to note is that the indexing is
+ * 1-based, not zero based. The 1st row added to a ledger is numbered 1. This is mostly for convenience:
+ * calculating the number of skip pointers is easier in the 1-based system.
+ * </p><p>
+ * Note conceptually, the zero'th row is a special sentinel in every ledger. Its hash evaluates to a string of
+ * zero-bytes (as wide as the hash algo requires), the contents of which.. well who knows. (And
+ * for our purposes, it wouldn't matter if it were discovered by chance (practically impossible), by say some Bitcoin miner).
+ * </p>
+ * <h3>Sans-Beacon Numbering</h3>
+ * <p>
+ * The presence of beacon rows in a ledger is arguably a wart in the data model. After all, the
+ * decision whether or not to insert a beacon row (a timestamping decision) ought to be orthogonal
+ * to the order of operations captured in the ledger. Fortunately, the layer that handles historical
+ * information (beacons and crumtrails) also exposes a sans-beacon numbering scheme. This might allow one to infer,
+ * for example, a database table row's position in the ledger simply by its position in the table
+ * (i.e. without beacon bookkeeping). See ({@linkplain Db#rowNumSansBeacons(long)}.
+ * </p>
  */
 public abstract class Ledger implements Digest, Closeable {
   
@@ -36,7 +140,7 @@ public abstract class Ledger implements Digest, Closeable {
    * number, is always less than twice the row number.
    * </p>
    * 
-   * @param rowNumber &gt; 0
+   * @param rowNumber &ge; 1
    * @return &ge; 1 (with average value of 2)
    * 
    * @see #maxRows(long)
@@ -52,6 +156,9 @@ public abstract class Ledger implements Digest, Closeable {
    * Determines if any of the 2 rows (from the same ledger) with given row numbers
    * reference (and therefore link to) the other by hash. Since every row knows its own hash,
    * by this definition, every row is linked also linked to itself.
+   * 
+   * @param rowNumA &ge; 0 (zero OK!)
+   * @param rowNumB &ge; 0
    */
   public static boolean rowsLinked(long rowNumA, long rowNumB) {
     long lo, hi;
@@ -86,8 +193,9 @@ public abstract class Ledger implements Digest, Closeable {
       String msg;
       if (rowNumber == 0)
         msg =
-            "row 0 is an *abstract row that hashes to zeroes; " +
-            "its has infinite pointer levels (";
+            "row 0 is an *abstract row that hashes to a string of zeroes; " +
+            "a maximum of 63 of rows reference it, but its contents (" +
+            "pointers and input hash) are undefined";
       else
         msg = "negative rowNumber " + rowNumber;
       
@@ -100,9 +208,11 @@ public abstract class Ledger implements Digest, Closeable {
   
 
   /**
-   * Returns the rows <em>covered</em> by the specified 
-   * @param lo
-   * @param hi
+   * Returns the rows <em>covered</em> by the specified skip path. The rows covered
+   * include both the linking rows and all the rows referenced in the linking rows.
+   * 
+   * @param lo row number &ge; 1
+   * @param hi row number &ge; {@code lo}
    * @return
    */
   public static SortedSet<Long> skipPathCoverage(long lo, long hi) {
@@ -148,6 +258,26 @@ public abstract class Ledger implements Digest, Closeable {
   }
   
   
+  
+  public static SortedSet<Long> refOnlyCoverage(Collection<Long> rowNumbers) {
+    TreeSet<Long> fullSet = new TreeSet<>(rowNumbers);  // not changed hereafter
+    TreeSet<Long> refOnly = new TreeSet<>();
+    
+    for (Long rn : fullSet) {
+      
+      int pointers = skipCount(rn);
+      for (int e = 0; e < pointers; ++e) {
+        long delta = 1L << e;
+        Long refRn = rn - delta;
+        assert refRn >= 0;
+        if (!fullSet.contains(refRn))
+          refOnly.add(refRn);
+      }
+    }
+    return Collections.unmodifiableSortedSet(refOnly);
+  }
+  
+  
   /**
    * Stitches and returns a copy of the given (sorted) list of row numbers that is
    * composed of the given list interleaved with linking row numbers as necessary.
@@ -171,15 +301,13 @@ public abstract class Ledger implements Digest, Closeable {
       return Collections.singletonList(rowNumbers.get(0));
     }
     
-    
-    
     Long prev = rowNumbers.get(0);
     
     if (prev < 1)
       throw new IllegalArgumentException(
           "illegal rowNumber " + prev + " at index 0 in list " + rowNumbers);
     
-    ArrayList<Long> stitch = new ArrayList<>(Math.max(16, count));
+    ArrayList<Long> stitch = new ArrayList<>(count + 16);
     stitch.add(prev);
     
     for (int index = 1; index < count; ++index) {
@@ -200,10 +328,185 @@ public abstract class Ledger implements Digest, Closeable {
       
       prev = rn;
     }
+
+    trim(stitch);
     
-    stitch.trimToSize();
     return Collections.unmodifiableList(stitch);
   }
+  
+
+  private final static int AL_TRIM_THRESHOLD = 32;
+  
+  private static void trim(ArrayList<Long> list) {
+    if (list.size() >= AL_TRIM_THRESHOLD)
+      list.trimToSize();
+  }
+  
+
+  /**
+   * Finds and returns a structural path connecting the given {@code target} rows stitched
+   * together using only the given {@code knownRows}.
+   * 
+   * @param knownRows known (available) row numbers from which the path may be constructed
+   * @param targets target row numbers (must all be contained in {@code knownRows})
+   *                in no particular order, but with no duplicates
+   * 
+   * @return the path, if found; empty, o.w.
+   * 
+   * @see #stitchPath(SortedSet, Collection)
+   * @see #stitchPath(SortedSet, long, long)
+   */
+  public static Optional<List<Long>> stitchPath(SortedSet<Long> knownRows, Long ... target) {
+    return stitchPath(knownRows, Lists.asReadOnlyList(target));
+  }
+  
+  
+  /**
+   * Finds and returns a structural path connecting the given target rows stitched
+   * together using only the given {@code knownRows}.
+   * 
+   * @param knownRows known (available) row numbers from which the path may be constructed
+   * @param targets target row numbers (must all be contained in {@code knownRows})
+   *                in no particular order, but with no duplicates
+   * 
+   * @return the path, if found; empty, o.w.
+   * 
+   * @see #stitchPath(SortedSet, Long...)
+   * @see #stitchPath(SortedSet, long, long)
+   */
+  public static Optional<List<Long>> stitchPath(SortedSet<Long> knownRows, Collection<Long> targets) {
+    
+    if (Objects.requireNonNull(targets, "null targets").isEmpty())
+      throw new IllegalArgumentException("targets is empty");
+    if (!Objects.requireNonNull(knownRows, "null knownRows").containsAll(targets))
+      throw new IllegalArgumentException("targets contains one or more unknown rows: " + targets);
+    
+    EasyList<Long> targetRns;
+    {
+      SortedSet<Long> t = new TreeSet<>(targets);
+      if (t.size() != targets.size())
+        throw new IllegalArgumentException("targets contains duplicates: " + targets);
+      
+      targetRns = new EasyList<>(t.size());
+      targetRns.addAll(t);
+    }
+    
+    EasyList<Long> stitched = new EasyList<>(targetRns.size() + 16);
+    stitched.add(targetRns.first());
+    for (int index = 1; index < targetRns.size(); ++index) {
+      Long nextTarget = targetRns.get(index);
+      if (rowsLinked(stitched.last(), nextTarget)) {
+        stitched.add(nextTarget);
+      } else {
+        EasyList<Long> pathToNext = stitchPathRecurse(stitched.last(), nextTarget, knownRows);
+        if (pathToNext == null)
+          return Optional.empty();
+        
+        stitched.addAll(pathToNext.tailList(1));
+      }
+    }
+    
+    trim(stitched);
+    
+    return Optional.of(Collections.unmodifiableList(stitched));
+  }
+  
+  
+  /**
+   * Finds and returns a structural path from {@code lo} to {@code hi} (the skip pointers
+   * actually go hi to lo, but we present paths in the order they are created) stitched
+   * together using only the given {@code knownRows}.
+   * <p>
+   * Note the skip pointers actually point in the opposite direction, from hi to lo,
+   * but we present paths in the order they are created (equivalently, in the order
+   * rows are numbered.)
+   * </p>
+   * 
+   * @param knownRows known (available) row numbers from which the path may be constructed
+   * @param lo &ge; 1, and contained in (member of) {@code knownRows}
+   * @param hi &gt; lo, and contained in {@code knownRows}
+   * 
+   * @return the path, if found; empty, o.w.
+   * 
+   * @see #stitchPath(SortedSet, Collection)
+   * @see #stitchPath(SortedSet, Long...)
+   */
+  public static Optional<List<Long>> stitchPath(SortedSet<Long> knownRows, long lo, long hi) {
+    if (lo < 1 || hi <= lo)
+      throw new IllegalArgumentException("lo " + lo + ", hi " + hi);
+    
+    if (!Objects.requireNonNull(knownRows, "null knownRows").contains(lo))
+      throw new IllegalArgumentException("lo " + lo + " not a member of knownRows " + knownRows);
+    else if (!knownRows.contains(hi))
+      throw new IllegalArgumentException("hi " + hi + " not a member of knownRows " + knownRows);
+    
+    if (rowsLinked(lo, hi)) {
+      Long[] out = { lo, hi };
+      return Optional.of(Lists.asReadOnlyList(out));
+    }
+    
+    ArrayList<Long> out = stitchPathRecurse(lo, hi, knownRows);
+    
+    if (out == null)
+      return Optional.empty();
+    
+    trim(out);
+    
+    return Optional.of(Collections.unmodifiableList(out));
+  }
+  
+  
+  
+  /**
+   * Finds and returns an ascending list of linked row numbers if found; {@code null}
+   * otherwise.
+   * 
+   * @param lo &gt; 0, and contained in (member of) {@code known}
+   * @param hi &gt; lo, and contained in {@code known}
+   * @param known known (available) row numbers set (or subset)
+   * 
+   * @return stitched path composed of strictly ascending row numbers from {@code lo} to {@code hi} (inc)
+   *         or {@code null} if not found
+   */
+  private static EasyList<Long> stitchPathRecurse(long lo, long hi, SortedSet<Long> known) {
+    
+    final int skipCount = skipCount(hi);
+    
+    // we search from highest skip pointer to lowest
+    // this way, we discover the shortest path
+    for (int exp = skipCount; exp-- > 0; ) {
+      long delta = 1L << exp;
+      
+      long linkedByHi = hi - delta;
+      
+      if (linkedByHi < lo)
+        continue;
+      
+      if (linkedByHi == lo) {
+        // *lo is in *known, no need to check
+        EasyList<Long> out = new EasyList<>(8);
+        out.add(lo);
+        out.add(hi);
+        return out;
+      }
+      
+      if (!known.contains(linkedByHi))
+        continue;
+      
+      // lo < linkedByHi < hi
+      
+      EasyList<Long> upstream = stitchPathRecurse(lo, linkedByHi, known);
+      if (upstream != null) {
+        upstream.add(hi);
+        return upstream;
+      }
+    }
+    
+    return null;
+  }
+  
+  
+  
   
   
   /**
@@ -215,7 +518,7 @@ public abstract class Ledger implements Digest, Closeable {
    * ledgers.
    * 
    * @param lo row number &gt; 0
-   * @param hi row number &ge; <tt>lo</tt>
+   * @param hi row number &ge; {@code lo}
    * 
    * @return a monotonically ascending list of numbers from <tt>lo</tt> to </tt>hi</tt>,
    *         inclusive

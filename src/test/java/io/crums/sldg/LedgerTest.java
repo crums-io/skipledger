@@ -7,8 +7,12 @@ package io.crums.sldg;
 import static io.crums.sldg.Ledger.*;
 import static org.junit.Assert.*;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import  org.junit.Test;
 
@@ -100,9 +104,113 @@ public class LedgerTest {
       long delta = prevRow - path.get(index);
       // delta must be a power of 2
       assertTrue(delta > 0);
+      assertEquals(delta, Long.highestOneBit(delta));
       long maxDelta = 1L << (skipCount(prevRow) - 1);
       assertTrue(maxDelta >= delta);
     }
+  }
+  
+  
+  @Test
+  public void testStitch() {
+    List<Long> path = skipPathNumbers(3, 1021);
+    assertEquals(path, stitch(path));
+    int gaps = 3;
+    int chainLength = path.size() / (gaps + 1);
+    
+    ArrayList<Long> withGaps = new ArrayList<>();
+    
+    withGaps.add(path.get(0));
+    for (int index = 1; index < path.size() - 1; ++index) {
+      Long rn = path.get(index);
+      if (index % chainLength != 0)
+        withGaps.add(rn);
+    }
+    withGaps.add(path.get(path.size() - 1));
+    
+    assertEquals(path, stitch(withGaps));
+  }
+  
+  
+  @Test
+  public void testStitchPath() {
+    TreeSet<Long> known = new TreeSet<>();
+    List<Long> pathA = skipPathNumbers(11, 513);
+    
+    // test some trivial things first..
+    known.addAll(pathA);
+    Optional<List<Long>> pathOpt = stitchPath(known, pathA.get(0), pathA.get(pathA.size() - 1));
+    assertTrue(pathOpt.isPresent());
+    assertEquals(pathA, pathOpt.get());
+    
+    List<Long> expected = Lists.asReadOnlyList(256L, 512L, 513L);
+    
+    pathOpt = stitchPath(known, 256, 513);
+    assertTrue(pathOpt.isPresent());
+    assertEquals(expected, pathOpt.get());
+    
+    // now make the known set a bit more rich..
+    List<Long> pathB = skipPathNumbers(499, 513);
+    known.addAll(pathB);
+    
+    // assert we can still do the simple
+    pathOpt = stitchPath(known, pathB.get(0), pathB.get(pathB.size() - 1));
+    assertTrue(pathOpt.isPresent());
+    assertEquals(pathB, pathOpt.get());
+    
+    // assert there's no path [11:499]
+    pathOpt = stitchPath(known, 11, 499);
+    assertTrue(pathOpt.isEmpty());
+    
+    // assert subpath of pathB
+    expected = Lists.asReadOnlyList(500L , 504L, 512L);
+
+    pathOpt = stitchPath(known, 500, 512);
+    assertTrue(pathOpt.isPresent());
+    assertEquals(expected, pathOpt.get());
+
+    pathOpt = stitchPath(known, expected);
+    assertTrue(pathOpt.isPresent());
+    assertEquals(expected, pathOpt.get());
+    
+    // make it more interesting.. add enough rows for a camel-like path
+    
+    known.addAll(skipPathNumbers(514, 557));
+    pathOpt = stitchPath(known, 11, 557);
+    assertTrue(pathOpt.isPresent());
+    List<Long> stitched = pathOpt.get();
+    
+    assertLinked(stitched, 11, 557);
+    
+    
+    List<Long> targets = Lists.asReadOnlyList(11L, 512L, 513L, 514L, 556L);
+    pathOpt = stitchPath(known, targets);
+    assertTrue(pathOpt.isPresent());
+    stitched = pathOpt.get();
+    assertTrue(stitched.containsAll(targets));
+    assertLinked(stitched, 11, 556);
+  }
+  
+  
+  private void assertLinked(List<Long> path, long lo, long hi) {
+    assertEquals(lo, path.get(0).longValue());
+    assertEquals(hi, path.get(path.size() - 1).longValue());
+    for (int index = path.size(); index-- > 1; ) {
+      long first = path.get(index - 1);
+      long second = path.get(index);
+      assertTrue(second > first);
+      assertTrue(first > 0);
+      assertTrue(rowsLinked(first, second));
+    }
+  }
+  
+  
+  
+  @Test
+  public void testRefOnlyCoverage() {
+    List<Long> targets = Lists.asReadOnlyList(11L, 512L, 513L, 514L, 556L);
+    SortedSet<Long> coverage = Ledger.coverage(targets);
+    assertTrue(coverage.containsAll(targets));
   }
 
 }

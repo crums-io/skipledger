@@ -36,6 +36,15 @@ public class EntryInfo implements Comparable<EntryInfo> {
   
   
   /**
+   * Copy constructor.
+   */
+  protected EntryInfo(EntryInfo copy) {
+    this.rowNumber = copy.rowNumber;
+    this.size = copy.size;
+  }
+  
+  
+  /**
    * Returns the entry's {@linkplain Entry#rowNumber() row number}.
    * 
    * @return &ge; 1
@@ -46,7 +55,7 @@ public class EntryInfo implements Comparable<EntryInfo> {
   
 
   /**
-   * Returns the number of bytes in the entry's {@linkplain Entry#contents() contents}.
+   * Returns the number of bytes in the entry's {@linkplain Entry#content() content}.
    * 
    * @return &ge; 1
    */

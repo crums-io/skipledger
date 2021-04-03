@@ -5,16 +5,17 @@ package io.crums.sldg;
 
 import java.util.List;
 
-import io.crums.sldg.db.SortedBagBuilder;
+import io.crums.sldg.bags.RowBag;
+import io.crums.sldg.packs.RowPackBuilder;
 
 /**
  *
  */
-public class SortedBagTest extends RowBagTest {
+public class RowPackTest extends RowBagTest {
 
   @Override
   protected RowBag newBag(Ledger ledger, List<Long> rowNumbers) {
-    return new SortedBagBuilder().createBag(ledger, rowNumbers);
+    return RowPackBuilder.createBag(ledger, rowNumbers);
   }
 
 }
