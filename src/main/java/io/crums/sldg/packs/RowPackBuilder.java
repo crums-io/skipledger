@@ -5,12 +5,10 @@ package io.crums.sldg.packs;
 
 
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
@@ -30,26 +28,23 @@ import io.crums.util.Lists;
  * rules are designed to ensure this guarantee.
  * </p>
  * <p><ol>
- * <li>A row may only ever be <em>added</em> when it is already referenced by an existing row
+ * <li>An empty instance's rows may be <em>initialized</em> either with an existing
+ * {@linkplain RowPack row-pack} or a ledger {@linkplain Path path}. This initialization
+ * establishes the highest row number in the pack.</li>
+ * <li>A row may only ever be <em>added</em> if it is already referenced by an existing row
  * in the bag.</li>
- * <li>A path may <em>extend</em> a bag (by having its rows saved in the bag) only if
- *    <ul>
- *    <li>the path's highest row number is greater than any in the bag, and</li>
- *    <li>the path intersects an existing row (full or referenced-only) in the bag.</li>
- *    </ul>
- * </li>
- * <li>Every row known to the bag (whether referenced-only or in full) is checked against
- * other known rows for consistency.</li>
- * </ol></p><p>
- * Note rule (2) involves a degree of trust. Since the hash of the last row in the ledger
+ * </ol></p>
+ * <p>
+ * Note rule (1) involves a degree of trust. Since the hash of the last row in the ledger
  * represents the state of the entire ledger, extending a bag using a higher numbered path
  * necessarily involves trusting the source of the information. We punt on how this done,
  * for now.
  * </p><p>
- * Rules (1) and (2) are represented by the {@linkplain #add(Row)} and {@linkplain
- * #extend(Path)} methods, resp.
- * 
+ * Rule (1) is represenented by the {@linkplain #init(Path)} and {@linkplain #init(RowPack)} methods.
+ * Rule (2) is enforced by the {@linkplain #add(Row)} method.
  * </p>
+ * 
+ * @see RowPack {@code RowPack} for the serialization format
  */
 public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
@@ -71,11 +66,6 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
 
   @Override
   public synchronized ByteBuffer writeTo(ByteBuffer out) {
-    // Notes here are from RowPack documentation
-    // (Why not implemnent writeTo in RowPack? Because
-    // most of the time, I expect, we'll be manipulating
-    // morsels (which this class is an implementation part of)
-    // and it will be 
     
     int size = size();
     
@@ -103,6 +93,8 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   @Override
   public synchronized int serialSize() {
     int size = inputHashes.size();
+    if (size == 0)
+      return 4;
     int hashes = size + refHashes.size();
     return
         4 +
@@ -117,7 +109,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
   
   /**
-   * Adds all the rows in the given bag. If this instance {@linkplain #isEmpty() is empty}, then all
+   * Adds all the rows in the given pack. If this instance {@linkplain #isEmpty() is empty}, then all
    * the rows in the bag are added. Otherwise, only <em>linked information</em> is
    * added. I.e. this method only allows adding detail to already known information.
    * 
@@ -126,57 +118,58 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    * @throws HashConflictException
    *         if a hash in {@code bag} conflicts with existing hashes.
    */
-  public synchronized int addAll(RowPack bag) throws HashConflictException {
-    int count = 0;
-
-    // no checks necessary when starting with an empty instance
-    if (isEmpty()) {
-      for (Long rn : bag.getFullRowNumbers()) {
-        Row row = bag.getRow(rn);
-        addSansCheck(row);
-        ++count;
-      }
+  public synchronized int addAll(RowPack pack) throws HashConflictException {
     
-    } else {
-      
-      // the bag already contains other rows..
-      // work this incrementally, starting from the lowest row number
-      // and work higher.
-      
-      // we might have to do this in multiple passes:
-      // for instance, a lower may first be ineligible for adding
-      // --until a higher row number that references it is added
-      // to the bag.
-      
-      // so we keep at it, until we detect we're not making any progress
-      
-      TreeSet<Long> unprocessedRns = new TreeSet<>(bag.getFullRowNumbers());
+    if (isEmpty())
+      return init(pack);
 
-      int benchedSize;
-      
-      do {
-        benchedSize = unprocessedRns.size();
+    // the bag already contains other rows..
+    // work this incrementally, starting from the highest row number
+    // and working our way down to the lowest
 
-        Iterator<Long> rowit = unprocessedRns.iterator();
-        while (rowit.hasNext()) {
-          Long rn = rowit.next();
-          Row row = bag.getRow(rn);
-          if (add(row)) {
-            ++count;
-            rowit.remove();
-          }
-        }
-        
-        // as long as unprocessedRns is getting smaller we're making progress..
-      } while (benchedSize > unprocessedRns.size());
-      
-    } // else
+    int count = 0;
+    
+    for (var rns = Lists.reverse(pack.getFullRowNumbers()).iterator(); rns.hasNext(); ) {
+      long rn = rns.next();
+      if (add(pack.getRow(rn)))
+        ++count;
+    }
     
     return count;
   }
   
   
+  /**
+   * Initializes the instance with the given {@code pack}.
+   * 
+   * @return the number of full rows added
+   */
+  public synchronized int init(RowPack pack) {
+    checkInit();
+    List<Long> fullRns = pack.getFullRowNumbers();
+    for (long rn : fullRns)
+      addSansCheck(pack.getRow(rn));
+    return fullRns.size();
+  }
   
+  
+  /**
+   * Initializes the instance with the given path.
+   * 
+   * @param path usually a state path
+   * 
+   * @return the number of full rows added (i.e. {@code path.rows().size()}
+   */
+  public synchronized int init(Path path) throws IllegalStateException {
+    checkInit();
+    path.rows().forEach(r -> addSansCheck(r));
+    return path.rows().size();
+  }
+  
+  private void checkInit() {
+    if (!isEmpty())
+      throw new IllegalStateException("attempt to initialize while not empty");
+  }
   
   
   
@@ -198,6 +191,10 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    * @throws HashConflictException
    *         if a hash in {@code path} conflicts with existing hashes. If this happens, then
    *         the given path doesn't come from this bag's ledger.
+   *         
+   * @deprecated (for now, lol). Instead of <em>extending</em> a pack, try adding <em>this</em>
+   *            to the one you're extending. I prefer this model, because this way
+   *            every full row in a morsel is ultimately referenced by the last row
    */
   public synchronized boolean extend(Path path) throws HashConflictException {
     
@@ -224,6 +221,10 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     
     return true;
   }
+  
+  
+  
+  
   
 
   
@@ -256,12 +257,42 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
   
   /**
+   * Adds the rows in the given {@code path} that can be linked from the highest
+   * row in this instance.
+   * 
+   * @param path a path whose lowest row number is &le; {@linkplain #hi()}
+   * 
+   * @return the number of rows added (possibly zero)
+   */
+  public synchronized int addPath(Path path) {
+    final long hi = hi();
+    if (path.loRowNumber() > hi)
+      throw new IllegalArgumentException(
+          "lowest row number in path (" + path.loRowNumber() + ") > highest existing row number " + hi);
+    
+    int count = 0;
+    List<Row> rows = path.rows();
+    // add the rows in reverse
+    for (int index = rows.size(); index-- > 0; ) {
+      Row row = rows.get(index);
+      if (row.rowNumber() > hi)
+        continue;
+      if (add(row))
+        ++count;
+    }
+    return count;
+  }
+  
+  
+  /**
    * <p>
    * Adds the given row if it's not already in the bag, <em>and</em> if it's linked from an
    * exisiting (higher numbered) row in the bag.
    * </p><p>
    * With one exception this method is <em>fail-fast.</em> The single exception
    * is on an assertion-panic, which may leave the instance in an inconsistent state.</p>
+   * 
+   * @param row with row-number &le; {@linkplain #hi()}
    * 
    * @return {@code true} <b>iff</b> the row was added
    * 
@@ -333,7 +364,6 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
         
         // Given theory, this shouldn't happen with a strong hash function
         // if we get here, there's a bug
-        // TODO
         
         System.err.println("- - PLEASE REPORT THIS BUG! - -");
         System.err.println();
@@ -435,13 +465,15 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
 
   @Override
-  public List<Long> getFullRowNumbers() {
+  public synchronized List<Long> getFullRowNumbers() {
     return Lists.readOnlyCopy(inputHashes.keySet());
   }
   
   
-  
-  
+  @Override
+  public synchronized boolean hasFullRow(long rowNumber) {
+    return inputHashes.containsKey(rowNumber);
+  }
   
   
   

@@ -9,6 +9,9 @@ import io.crums.util.Lists;
 
 /**
  * Structural representation of a path in a ledger.
+ * 
+ * <p>TODO pseudo-constructor for reverse direction: i.e. given a path's row
+ * numbers, construct an equivalent instance with minimum-length declaration.</p>
  */
 public class PathInfo {
   

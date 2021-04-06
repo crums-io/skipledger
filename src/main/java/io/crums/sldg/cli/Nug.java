@@ -19,7 +19,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.model.Constants;
-import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
 import io.crums.sldg.PathIntersector;
 import io.crums.sldg.Row;
@@ -28,6 +27,7 @@ import io.crums.sldg.RowIntersection;
 import io.crums.sldg.db.EntitySerializer;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
+import io.crums.sldg.scraps.Nugget;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Tuple;
 import io.crums.util.main.ArgList;

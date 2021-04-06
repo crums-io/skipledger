@@ -5,6 +5,7 @@ package io.crums.sldg.bags;
 
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 
 import io.crums.sldg.BaggedRow;
@@ -55,6 +56,16 @@ public interface RowBag extends Digest {
    * @see #getRow(long)
    */
   List<Long> getFullRowNumbers();
+  
+  
+  /**
+   * Determines if full (hash) information is available for the row with the given number.
+   * 
+   * @return {@code Collections.binarySearch(getFullRowNumbers(), rowNumber) >= 0}
+   */
+  default boolean hasFullRow(long rowNumber) {
+    return Collections.binarySearch(getFullRowNumbers(), rowNumber) >= 0;
+  }
   
   
   /**

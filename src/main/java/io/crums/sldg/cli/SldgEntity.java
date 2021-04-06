@@ -5,8 +5,8 @@ package io.crums.sldg.cli;
 
 import java.util.Objects;
 
-import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
+import io.crums.sldg.scraps.Nugget;
 
 /**
  * 

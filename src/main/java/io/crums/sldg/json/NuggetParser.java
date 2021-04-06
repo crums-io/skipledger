@@ -10,9 +10,9 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
 import io.crums.sldg.TrailedPath;
+import io.crums.sldg.scraps.Nugget;
 
 /**
  * Parses and generates JSON for {@linkplain Nugget}s.

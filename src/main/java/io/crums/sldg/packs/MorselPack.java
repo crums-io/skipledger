@@ -50,8 +50,8 @@ import io.crums.util.Tuple;
  * <p>
  * <pre>
  *    BAG_COUNT   := BYTE (current version is 4)
- *    BAG_SIZES   := INT INT INT INT
- *    MORSEL_BAG  := BAG_SIZES ROW_BAG PATH_BAG TRAIL_BAG ENTRY_BAG
+ *    BAG_SIZES   := INT ^BAG_COUNT
+ *    MORSEL_BAG  := BAG_COUNT BAG_SIZES ROW_BAG PATH_BAG TRAIL_BAG ENTRY_BAG
  * </pre>
  * </p>
  */
@@ -161,6 +161,7 @@ public class MorselPack implements MorselBag {
     if (!rowNums.containsAll(Lists.map(entryPack.availableEntries(), ei -> ei.rowNumber())))
       throw new ByteFormatException("entry pack references rows not found in row bag");
     
+    // TODO: sanity-check beacon/crumtrail row-times
   }
   
   

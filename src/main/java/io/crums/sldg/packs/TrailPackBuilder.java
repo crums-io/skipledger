@@ -12,6 +12,7 @@ import java.util.TreeMap;
 
 import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
+import io.crums.sldg.HashConflictException;
 import io.crums.sldg.bags.TrailBag;
 import io.crums.util.Lists;
 
@@ -52,23 +53,64 @@ public class TrailPackBuilder implements TrailBag, Serial {
   
   private void checkCapacity(int adds) {
     if (trailedRows.size() + adds > 0xffff)
-      throw new IllegalArgumentException("TrailPack overflow. Current size: " + trailedRows.size());
+      throw new IllegalArgumentException(
+          "TrailPack overflow on attempt to add " + adds + ". Current size is " +
+          trailedRows.size() + "; Max size is 0xffff");
   }
   
   
-  public boolean addTrail(long rowNumber, CrumTrail trail) {
+  /**
+   * Adds the given {@code trail} for the {@code rowNumber}. Verifies hash structure.
+   * Enforces crumtrails paired with rows have witness times in ascending order.
+   * 
+   * @return {@code true} <b>iff</b> the trail was added.
+   * 
+   * @throws IllegalArgumentException if {@code trail} is out-of-sequence with existing state
+   * @throws HashConflictException if {@code trail} is malformed (not self-consistent)
+   */
+  public boolean addTrail(long rowNumber, CrumTrail trail)
+      throws IllegalArgumentException, HashConflictException {
+    
     Objects.requireNonNull(trail, "null trail");
     if (rowNumber < 1)
       throw new IllegalArgumentException("rowNumber " + rowNumber);
+    
+    if (!trail.verify())
+      throw new HashConflictException("attempt to add invalid crumtrail for row " + rowNumber);
+    
     synchronized (trailedRows) {
       checkCapacity(1);
-      CrumTrail prev = trailedRows.put(rowNumber, trail);
-      if (prev == null)
-        return true;
       
-      // undo
-      trailedRows.put(rowNumber, prev);
-      return false;
+      var headRows = trailedRows.headMap(rowNumber);
+      if (!headRows.isEmpty()) {
+        var prevTrail = headRows.get(headRows.lastKey());
+        if (prevTrail.crum().utc() > trail.crum().utc())
+          throw new IllegalArgumentException(
+              "attempt to add out-of-sequence crumtrail (witness-utc " + trail.crum().utc() +
+              ") for row " + rowNumber + " while crumtrail for row " + headRows.lastKey() +
+              " has witness-utc " + prevTrail.crum().utc());
+      }
+      
+      var tailRows = trailedRows.tailMap(rowNumber);
+      if (!tailRows.isEmpty()) {
+        long rn = tailRows.firstKey();
+        var nextTrail = tailRows.get(rn);
+        if (rn == rowNumber) {
+          if (trail.crum().utc() != nextTrail.crum().utc())
+            throw new IllegalArgumentException(
+                "attempt to overwrite trail at row " + rn + " (witness-utc " + nextTrail.crum().utc() +
+                ") using witness-utc " + trail.crum().utc());
+          
+          return false;
+        } else if (trail.crum().utc() > nextTrail.crum().utc())
+          throw new IllegalArgumentException(
+              "attempt to add out-of-sequence crumtrail (witness-utc " + trail.crum().utc() +
+              ") for row " + rowNumber + " while crumtrail for row " + rn +
+              " has witness-utc " + nextTrail.crum().utc());
+        
+      }
+      trailedRows.put(rowNumber, trail);
+      return true;
     }
   }
 
@@ -95,8 +137,14 @@ public class TrailPackBuilder implements TrailBag, Serial {
 
   @Override
   public int serialSize() {
-    // TODO Auto-generated method stub
-    return 0;
+    int bytes = 2; // TRAIL_CNT
+    final int count = trailedRows.size();
+    if (count != 0) {
+      bytes += count * (8 + 4);
+      for (var trail : trailedRows.values())
+        bytes += trail.serialSize();
+    }
+    return bytes;
   }
 
 

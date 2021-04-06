@@ -81,18 +81,18 @@ public class PathPackBuilder implements PathBag, Serial {
             
             assert first > rowNumber;
             long nextUtc = tail.get(first);
-            if (nextUtc < utc)
+            if (nextUtc <= utc)
               throw new IllegalArgumentException(
-                  "utc " + utc + " for row " + rn + " is greater than utc of next beacon at row " + first);
+                  "utc " + utc + " for row " + rn + " must be less than utc of next beacon at row " + first);
           }
         }
         
         SortedMap<Long,Long> head = beaconUtcs.headMap(rn);
         if (!head.isEmpty()) {
           Long last = head.lastKey();
-          if (head.get(last) > utc)
+          if (head.get(last) >= utc)
             throw new IllegalArgumentException(
-                "utc " + utc + " for row " + rn + " is less than utc of previous beacon at row " + last);
+                "utc " + utc + " for row " + rn + " must be greater than utc of previous beacon at row " + last);
         }
       }
       
@@ -157,9 +157,8 @@ public class PathPackBuilder implements PathBag, Serial {
     int newPathCount;
     synchronized (declaredPaths) {
       if (declaredPaths.isEmpty()) {
-        List<PathInfo> decl = pathPack.declaredPaths();
-        declaredPaths.addAll(decl);
-        newPathCount = decl.size();
+        declaredPaths.addAll(pathPack.declaredPaths());
+        newPathCount = declaredPaths.size();
       } else {
         int[] count = { 0 };
         pathPack.declaredPaths().forEach(p -> { if (addDeclaredPath(p)) ++count[0]; } );

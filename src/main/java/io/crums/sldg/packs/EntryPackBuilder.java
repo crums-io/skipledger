@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 import io.crums.io.Serial;
 import io.crums.sldg.Entry;
@@ -47,16 +48,26 @@ public class EntryPackBuilder implements EntryBag, Serial {
 
   @Override
   public List<EntryInfo> availableEntries() {
-    // TODO Auto-generated method stub
-    return null;
+    synchronized (entries) {
+      return entries.values().stream().map(e -> e.getInfo()).collect(Collectors.toList());
+    }
   }
 
 
 
   @Override
   public Entry entry(long rowNumber) {
-    // TODO Auto-generated method stub
-    return null;
+    synchronized (entries) {
+      return entries.get(rowNumber);
+    }
+  }
+  
+  
+  
+  public boolean hasEntry(long rowNumber) {
+    synchronized (entries) {
+      return entries.containsKey(rowNumber);
+    }
   }
   
   
@@ -242,6 +253,11 @@ public class EntryPackBuilder implements EntryBag, Serial {
     
     public String getMeta() {
       return meta;
+    }
+    
+    
+    public EntryInfo getInfo() {
+      return new MetaEntry(rowNumber(), contentSize(), meta);
     }
     
     

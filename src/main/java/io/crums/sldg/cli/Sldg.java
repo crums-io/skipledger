@@ -26,7 +26,6 @@ import org.json.simple.JSONObject;
 
 import io.crums.io.Opening;
 import io.crums.model.CrumTrail;
-import io.crums.sldg.Nugget;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipPath;
@@ -38,6 +37,7 @@ import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
 import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
+import io.crums.sldg.scraps.Nugget;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
