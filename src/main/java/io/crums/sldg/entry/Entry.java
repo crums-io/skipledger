@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.entry;
 
 
 import java.nio.ByteBuffer;
@@ -11,6 +11,8 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 import io.crums.io.buffer.BufferUtils;
+import io.crums.sldg.Row;
+import io.crums.sldg.SldgConstants;
 
 /**
  * Source of a row's {@linkplain Row#inputHash() input hash}. Note this may not
@@ -52,7 +54,8 @@ public class Entry {
    * Base constructor. <em>Note the data is <b>not</b> defensively copied.</em>
    * 
    * @param contents non-zero remaining bytes,
-   *                contents not-to-be-modified since it's not copied
+   *                contents not-to-be-modified since it's not copied;
+   *                argument is not modified in any way
    * @param rowNumber &ge; 1
    */
   public Entry(ByteBuffer contents, long rowNumber) {
@@ -133,8 +136,9 @@ public class Entry {
   
   /**
    * Returns the 32-byte hash of the {@linkplain #content() contents}.
-   * This may be a straight digest of it may be somehow structured and is left
-   * open for subclasses. 
+   * This is a straight digest of the contents. A subclass may override
+   * in order to exploit a more structured strategy for computing this
+   * hash.
    * 
    * @return a read-only, 32-byte wide buffer
    */

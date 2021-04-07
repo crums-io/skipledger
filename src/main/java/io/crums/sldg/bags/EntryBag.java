@@ -5,8 +5,8 @@ package io.crums.sldg.bags;
 
 import java.util.List;
 
-import io.crums.sldg.Entry;
-import io.crums.sldg.EntryInfo;
+import io.crums.sldg.entry.Entry;
+import io.crums.sldg.entry.EntryInfo;
 
 /**
  * A bag of {@linkplain Entry entries}.

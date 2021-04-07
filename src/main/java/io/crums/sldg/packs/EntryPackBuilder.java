@@ -12,9 +12,9 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import io.crums.io.Serial;
-import io.crums.sldg.Entry;
-import io.crums.sldg.EntryInfo;
 import io.crums.sldg.bags.EntryBag;
+import io.crums.sldg.entry.Entry;
+import io.crums.sldg.entry.EntryInfo;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 
@@ -129,6 +129,10 @@ public class EntryPackBuilder implements EntryBag, Serial {
   
   /**
    * Sets the entry at the given row number and returns the previous one if any.
+   * 
+   * @param meta non-empty string (optional: has no effect if empty or null)
+   * 
+   * @return the previous entry if any.
    */
   public Entry setEntry(long rowNumber, ByteBuffer content, String meta) {
     FullEntry e = new FullEntry(content, rowNumber, meta);

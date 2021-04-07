@@ -23,6 +23,8 @@ import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.entry.Entry;
+import io.crums.sldg.entry.TextEntry;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.util.Lists;
@@ -34,7 +36,10 @@ import io.crums.util.mrkl.Proof;
 import io.crums.util.mrkl.Tree;
 
 /**
+ * <p>Effectively an integration test of the various XxxPackBuilders.</p>
  * 
+ * TODO: needs way more coverage. Taking lazy approach, during active
+ * development
  */
 public class MorselPackTest extends SelfAwareTestCase {
   
@@ -257,24 +262,77 @@ public class MorselPackTest extends SelfAwareTestCase {
   @Test
   public void testWithEntries() {
 
-    final Object label = new Object() { };
-    final int initSize = 2021;
+    final int finalSize = 2021;
     
-    long[] entryRns = {
-        1574L,
-        1580L
+    int[] entryRns = {
+        1574,
+        1580
     };
     String[] entryTexts = {
         "this is a test",
         "this is _only_ a test",
     };
     
-    Ledger ledger = newRandomLedger(initSize);
+    // prepare the ledger..
+    
+    Ledger ledger = Ledgers.newVolatileLedger();
+    Random random = new Random(finalSize);
+    
+    TextEntry[] entries = new TextEntry[entryRns.length];
+    byte[] randHash = new byte[SldgConstants.HASH_WIDTH];
+    
+    for (int index = 0; index < entryRns.length; ++index) {
+      final long rn = entryRns[index];
+      
+      while (ledger.size() + 1 < rn) {
+        random.nextBytes(randHash);
+        ledger.appendRows(ByteBuffer.wrap(randHash));
+      }
+      assertTrue( ledger.size() == rn - 1) ;
+      
+      entries[index] = new TextEntry(entryTexts[index], rn);
+      ledger.appendRows(entries[index].hash());
+    }
+    while (ledger.size() < finalSize) {
+      random.nextBytes(randHash);
+      ledger.appendRows(ByteBuffer.wrap(randHash));
+    }
+
+    TextEntry entry = entries[0];
+    
     MorselPackBuilder builder = new MorselPackBuilder();
     builder.initState(ledger);
+    builder.addPathToTarget(entry.rowNumber(), ledger);
+    
+    MorselPack pack = toPack(builder);
+
+    assertInBag(ledger.skipPath(entry.rowNumber(), builder.hi()), pack);
+    assertStateDeclaration(ledger, pack);
     
     
-    Path state = ledger.statePath();
+    builder.addEntry(entry.rowNumber(), entry.content(), null);
+    
+    assertInBag(entry, builder);
+    
+    pack = toPack(builder);
+    assertInBag(entry, pack);
+    
+    long bcnRow = ((entry.rowNumber() - 1) / 16) * 16;
+    builder.addPathToTarget(bcnRow, ledger);
+    builder.addBeaconRow(bcnRow, mockBeaconUtc(bcnRow));
+    
+    long witRow = ((entry.rowNumber() + 1) / 16) * 16;
+    builder.addPathToTarget(witRow, ledger);
+    
+    CrumTrail trail = mockCrumTrail(builder, witRow);
+    builder.addTrail(witRow, trail);
+    
+    pack = toPack(builder);
+    
+    assertInBag(trail, witRow, pack);
+    assertInBag(entry, builder);
+    assertStateDeclaration(ledger, pack);
+    
   }
   
   
@@ -336,18 +394,17 @@ public class MorselPackTest extends SelfAwareTestCase {
   }
   
   
+  public static void assertInBag(Entry expected, MorselBag bag) {
+    Entry actual = bag.entry(expected.rowNumber());
+    assertEquals(expected.rowNumber(), actual.rowNumber());
+    assertEquals(expected.content(), actual.content());
+  }
   
   
   public static void assertStateDeclaration(Ledger expected, MorselBag bag) {
     PathInfo decl = new PathInfo(1, expected.size());
     assertTrue(bag.declaredPaths().contains(decl));
     assertInBag(expected.statePath(), bag);
-  }
-  
-  
-  
-  public static void assertInBag(Path expected, MorselBag bag) {
-    expected.rows().forEach(r -> assertEquals(r, bag.getRow(r.rowNumber())));
   }
   
   
@@ -358,6 +415,12 @@ public class MorselPackTest extends SelfAwareTestCase {
   
   public static void assertBeaconRows(List<Tuple<Long,Long>> expected, MorselBag bag) {
     assertEquals(expected, bag.beaconRows());
+  }
+  
+  
+  
+  public static void assertInBag(Path expected, MorselBag bag) {
+    expected.rows().forEach(r -> assertEquals(r, bag.getRow(r.rowNumber())));
   }
   
   

@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.entry;
 
 
 /**
@@ -116,7 +116,7 @@ public class EntryInfo implements Comparable<EntryInfo> {
   
   @Override
   public String toString() {
-    return "(" + rowNumber + ":" + size + ")";
+    return "(" + rowNumber + ":" + size + (hasMeta()? "-M)" : ")");
   }
 
 }

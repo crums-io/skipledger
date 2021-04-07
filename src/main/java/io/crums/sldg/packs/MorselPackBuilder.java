@@ -7,17 +7,18 @@ package io.crums.sldg.packs;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
-import io.crums.sldg.Entry;
-import io.crums.sldg.EntryInfo;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Path;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.entry.Entry;
+import io.crums.sldg.entry.EntryInfo;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
 import io.crums.util.Tuple;
@@ -143,6 +144,26 @@ public final class MorselPackBuilder implements MorselBag, Serial {
    */
   public int addPath(Path path) throws IllegalArgumentException, HashConflictException {
     return rowPackBuilder.addPath(path);
+  }
+  
+  
+  
+  /**
+   * Adds a path from the state-row ({@linkplain #hi()}) to the row with the
+   * given row number.
+   * 
+   * @param rowNumber &ge; 1 and &le; {@linkplain #hi()}
+   * @param ledger the ledger (or a descendant of) that created this instance
+   * 
+   * @return the number of rows added (possibly zero)
+   * 
+   * @throws HashConflictException
+   *         if this instance is not from the given {@code ledger}
+   */
+  public int addPathToTarget(long rowNumber, Ledger ledger) throws HashConflictException {
+    long hi = Objects.requireNonNull(ledger, "null ledger").size();
+    Path path = ledger.skipPath(rowNumber, hi);
+    return addPath(path);
   }
   
   
@@ -294,7 +315,11 @@ public final class MorselPackBuilder implements MorselBag, Serial {
   
   
   
-  
+  /**
+   * Like set entry, but only works once per row number.
+   * 
+   * @see #setEntry(long, ByteBuffer, String)
+   */
   public boolean addEntry(long rowNumber, ByteBuffer content, String meta) {
     synchronized (lock()) {
       return
@@ -304,7 +329,15 @@ public final class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
-  
+
+  /**
+   * Sets the entry at the given row number if full-hash information is available
+   * at the given row.
+   * 
+   * @param meta non-empty string (optional: has no effect if empty or null)
+   * 
+   * @return {@code false} if full-hash information is not available; {@code true} o.w.
+   */
   public boolean setEntry(long rowNumber, ByteBuffer content, String meta) {
     synchronized (lock()) {
       if (!hasFullRow(rowNumber))

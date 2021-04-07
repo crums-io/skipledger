@@ -14,6 +14,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.entry.EntryInfo;
 import io.crums.util.Lists;
 import io.crums.util.Tuple;
 

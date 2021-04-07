@@ -8,10 +8,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import io.crums.io.buffer.BufferUtils;
 import io.crums.io.buffer.Partitioning;
-import io.crums.sldg.Entry;
-import io.crums.sldg.EntryInfo;
 import io.crums.sldg.bags.EntryBag;
+import io.crums.sldg.entry.Entry;
+import io.crums.sldg.entry.EntryInfo;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 
@@ -102,24 +103,22 @@ public class EntryPack implements EntryBag {
       long rn = in.getLong();
       int entrySize = in.getInt();
       int metaSize = 0xffff & in.getShort();
+      // kill RSVD
+      in.getShort();
       
       int x2 = index * 2;
       sizes[x2] = metaSize;
       sizes[x2 + 1] = entrySize;
       infos[index] = new EntryInfo(rn, entrySize);
       sizeTally += entrySize + metaSize;
+      
     }
     
     if (in.remaining() < sizeTally)
       throw new IllegalArgumentException(
           "blob size tally " + sizeTally + " > remaining bytes " + in.remaining());
     
-    ByteBuffer block;
-    {
-      int limit = in.position() + sizeTally;
-      block = in.asReadOnlyBuffer().limit(limit).slice();
-      in.position(limit);
-    }
+    ByteBuffer block = BufferUtils.slice(in, sizeTally);
     
     Partitioning parts = new Partitioning(block, Lists.asReadOnlyList(sizes));
     
