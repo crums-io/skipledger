@@ -252,6 +252,8 @@ public class Db implements Closeable {
    * or a subsequent row is witnessed.)
    * 
    * @param rowNumber &ge; 1 and &lte; {@linkplain #size()}
+   * 
+   * @deprecated dropping this design (and nomenclature)
    */
   public Optional<TrailedPath> getTrail(long rowNumber) {
     
@@ -279,20 +281,120 @@ public class Db implements Closeable {
   }
   
   
-  
-  public CrumTrail getCrumTrail(int index) {
+  /**
+   * Returns a crumtrail by index.
+   * 
+   * @param index &ge; 0 and &lt; {@linkplain #getTrailedRowNumbers()}.size()
+   */
+  public CrumTrail getCrumTrailByIndex(int index) throws IllegalArgumentException {
     return witnessRepo.getTrail(index);
   }
   
   
   
   
+  public CrumTrail getCrumTrailByRowNumber(long rowNumber) throws IllegalArgumentException {
+    int index = Collections.binarySearch(witnessRepo.getIds(), rowNumber);
+    if (index < 0)
+      throw new IllegalArgumentException("row " + rowNumber + " is not trailed");
+    return witnessRepo.getTrail(index);
+  }
+  
+  
+  
+  /**
+   * Synonym for {@linkplain #getTrailedRowNumbers()}.
+   */
   public List<Long> getRowNumbersWitnessed() {
     return witnessRepo.getIds();
   }
   
   
+  /**
+   * Returns the row numbers that have {@linkplain CrumTrail}s. I.e.
+   * the rows that have been witnessed.
+   * 
+   * @return strictly ascending list of row numbers, possibly empty
+   * 
+   * @see #getCrumTrailByIndex(int)
+   */
+  public List<Long> getTrailedRowNumbers() {
+    return witnessRepo.getIds();
+  }
   
+  
+  /**
+   * Returns the number of rows that have crumtrails.
+   * 
+   * @return {@code getTrailedRowNumbers().size()}
+   */
+  public int getTrailedRowCount() {
+    return (int) witnessRepo.size();
+  }
+  
+  
+  
+  
+  
+  
+  
+  public boolean isTrailedRow(long rowNumber) {
+    return Collections.binarySearch(witnessRepo.getIds(), rowNumber) >= 0;
+  }
+  
+  
+  
+  /**
+   * Returns the last sans-beacon row (number) witnessed directly, or indirectly
+   * by a witnessed beacon row immediately above (next number) it.
+   * 
+   * @return <em>sans-beacon</em> row number of the last row witnessed, if any;
+   *        0 (zero) otherwise
+   */
+  public long lastSansBeaconRowWitnessed() {
+    List<Long> witRns = getRowNumbersWitnessed();
+    if (witRns.isEmpty())
+      return 0;
+    
+    final long witRn = witRns.get(witRns.size() - 1);
+    
+    List<Long> bcnRns = getBeaconRowNumbers();
+    int sindex = Collections.binarySearch(bcnRns, witRn);
+    
+    if (sindex >= 0) {
+      long bcnRn = witRn;
+      while (sindex > 0) {
+        long peek = bcnRns.get(sindex - 1);
+        if (peek == bcnRn - 1) {
+          --bcnRn;
+          --sindex;
+        } else {
+          assert peek < bcnRn - 1;
+          break;
+        }
+      }
+      return bcnRn - 1;
+    } else {
+      int insertIndex = -1 - sindex;
+      return witRn - insertIndex;
+    }
+  }
+  
+  
+  /**
+   * Returns the number of unwitnessed rows.
+   * 
+   * @return {@code size() - lastWitnessNum()}
+   */
+  public int unwitnessedRowCount() {
+    return (int) (size() - lastWitnessNum());
+  }
+  
+  
+  
+  /**
+   * Returns the last row number witnessed, if any; 0 (zero) otherwise.
+   */
   public long lastWitnessNum() {
     List<Long> ids = witnessRepo.getIds();
     return ids.isEmpty() ? 0 : ids.get(ids.size() - 1);
@@ -485,6 +587,11 @@ public class Db implements Closeable {
   }
   
   
+  public boolean isBeaconRow(long rowNumber) {
+    return Collections.binarySearch(getBeaconRowNumbers(), rowNumber) >= 0;
+  }
+  
+  
   /**
    * Translates and returns the given sans-beacon row number as a row number that
    * includes the preceding beacon rows.
@@ -530,11 +637,28 @@ public class Db implements Closeable {
     if (rowNum < 0)
       throw new IllegalArgumentException("rowNum " + rowNum);
     
-    int searchIndex = Collections.binarySearch(getBeaconRowNumbers(), rowNum);
+    List<Long> beaconRns = getBeaconRowNumbers();
+    final int searchIndex = Collections.binarySearch(beaconRns, rowNum);
     if (searchIndex < 0) {
       int beaconsAhead = -1 - searchIndex;
       return rowNum - beaconsAhead;
     }
+    // rowNum is a beacon row
+//    if (searchIndex == 0) {
+//      if (rowNum == 1)
+//        throw new IllegalArgumentException("row 1 is a beacon: there is no valid row to fall back to");
+//      return rowNum - 1;
+//    }
+//    
+//    for (int index = searchIndex; index-- > 0; ) {
+//      long beaconRn = beaconRns.get(index);
+//      if (rowNum == beaconRn)
+//        continue;
+//      
+//      assert beaconRn < rowNum;
+//      int beaconsAhead = searchIndex - index;
+//      return rowNum - beaconsAhead;
+//    }
     throw new IllegalArgumentException("rowNum " + rowNum + " is a beacon row");
   }
   

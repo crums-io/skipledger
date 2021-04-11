@@ -24,9 +24,14 @@ import io.crums.util.Sets;
 import io.crums.util.Tuple;
 
 /**
+ * A mutable {@code MorselBag} whose serial form can be loaded as an immutable
+ * {@linkplain MorselPack}. Unlike the other builders, this enforces the full
+ * business rules of the interface.
  * 
+ * 
+ * @see MorselPack#load(ByteBuffer)
  */
-public final class MorselPackBuilder implements MorselBag, Serial {
+public class MorselPackBuilder implements MorselBag, Serial {
   
   private final RowPackBuilder rowPackBuilder = new RowPackBuilder();
   
@@ -94,11 +99,22 @@ public final class MorselPackBuilder implements MorselBag, Serial {
     else if (path.rows().size() < 2)
       throw new IllegalArgumentException("ledger is a single row");
     
+    return initPath(path, true);
+  }
+  
+  
+  public int initPath(Path path, boolean declare) {
+    if (Objects.requireNonNull(path, "null path").hiRowNumber() < 2)
+      throw new IllegalArgumentException("path is single row number 1");
+    
     synchronized (lock()) {
       int count = rowPackBuilder.init(path);
-      PathInfo stateDecl = new PathInfo(path.loRowNumber(), path.hiRowNumber());
-      pathPackBuilder.addDeclaredPath(stateDecl);
-      return count + 1;
+      if (declare) {
+        PathInfo stateDecl = new PathInfo(path.loRowNumber(), path.hiRowNumber());
+        pathPackBuilder.addDeclaredPath(stateDecl);
+        ++count;
+      }
+      return count;
     }
   }
   

@@ -6,6 +6,8 @@ package io.crums.sldg;
 
 import static org.junit.Assert.*;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -16,13 +18,14 @@ import java.util.Random;
 
 import  org.junit.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
+import com.gnahraf.test.IoTestCase;
 
 import io.crums.model.Constants;
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.db.MorselFile;
 import io.crums.sldg.entry.Entry;
 import io.crums.sldg.entry.TextEntry;
 import io.crums.sldg.packs.MorselPack;
@@ -41,7 +44,7 @@ import io.crums.util.mrkl.Tree;
  * TODO: needs way more coverage. Taking lazy approach, during active
  * development
  */
-public class MorselPackTest extends SelfAwareTestCase {
+public class MorselPackTest extends IoTestCase {
   
   
   private final static long MIN_UTC = HashUtc.INCEPTION_UTC + 100_000;
@@ -260,7 +263,9 @@ public class MorselPackTest extends SelfAwareTestCase {
   
   
   @Test
-  public void testWithEntries() {
+  public void testWithEntries() throws IOException {
+
+    final Object label = new Object() { };
 
     final int finalSize = 2021;
     
@@ -333,6 +338,16 @@ public class MorselPackTest extends SelfAwareTestCase {
     assertInBag(entry, builder);
     assertStateDeclaration(ledger, pack);
     
+    File mFile = getMethodOutputFilepath(label);
+    
+    MorselFile.createMorselFile(mFile, builder);
+    
+    MorselFile morselFile = new MorselFile(mFile);
+    
+    pack = morselFile.getMorselPack();
+    assertInBag(trail, witRow, pack);
+    assertInBag(entry, builder);
+    assertStateDeclaration(ledger, pack);
   }
   
   

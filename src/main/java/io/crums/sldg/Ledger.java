@@ -7,6 +7,7 @@ package io.crums.sldg;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -652,6 +653,33 @@ public abstract class Ledger implements Digest, Closeable {
       rows[index] = getRow(rowNumPath.get(index));
     
     return new SkipPath(Lists.asReadOnlyList(rows), Collections.emptyList(), false);
+  }
+  
+
+  /**
+   * Returns a path linking the given the target row numbers.
+   * 
+   * @param targets strictly ascending list of row numbers (&le; {@linkplain #size()})
+   * 
+   */
+  public Path getPath(Long... targets) {
+    return getPath(Arrays.asList(targets));
+  }
+  
+  /**
+   * Returns a path linking the given the target row numbers.
+   * 
+   * @param targets non-empty, strictly ascending list of row numbers (&le; {@linkplain #size()})
+   */
+  public Path getPath(List<Long> targets) {
+    List<Long> stitched = stitch(targets);
+    if (stitched.get(stitched.size() - 1) > size())
+      throw new IllegalArgumentException("targets out-of-bounds, size=" + size() + ": " + targets);
+    
+    Row[] rows = new Row[stitched.size()];
+    for (int index = rows.length; index-- > 0; )
+      rows[index] = getRow(stitched.get(index));
+    return new Path(Lists.asReadOnlyList(rows), Collections.emptyList(), false);
   }
   
   

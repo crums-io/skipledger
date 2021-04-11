@@ -6,15 +6,22 @@ package io.crums.sldg.cli;
 
 import static io.crums.util.Strings.*;
 
+import java.io.Console;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.List;
 
+import io.crums.client.ClientException;
 import io.crums.io.Opening;
+import io.crums.model.Beacon;
+import io.crums.model.CrumTrail;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.db.Db;
 import io.crums.sldg.demo.jurno.Journal;
+import io.crums.util.IntegralStrings;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.PrintSupport;
@@ -152,7 +159,7 @@ public class Jurno extends MainTemplate {
           case FORKED:
             int textLineNo = journal.getForkTextLineNumber();
             int lineNo = journal.getForkLineNumber();
-            message = textFile + " has forked from its ledger at line-no " + textLineNo;
+            message = textFile + " has forked from its ledger at line # " + textLineNo;
             if (textLineNo != lineNo) {
               message += " (which was the " + nTh(lineNo) + " ledgerable line)";
             }
@@ -171,18 +178,31 @@ public class Jurno extends MainTemplate {
             } else {
               message = newLines + pluralize(" new line", newLines) + " added";
             }
-            Db.WitnessReport witReport = journal.witness();
-            if (witReport.nothingDone())
-              message += "." + System.lineSeparator() + "Up-to-date.";
-            else {
-              int crums = witReport.getRecords().size();
-              int crumtrails = witReport.getStored().size();
-              message += "." + System.lineSeparator() + crums + pluralize(" crum", crums) + " submitted; " + crumtrails +
-                  pluralize(" crumtrail", crumtrails) + pluralize(" (witness record", crumtrails) +
-                  ") stored";
-              
-              if (crumtrails == 0)
-                message += System.lineSeparator() + "Run '" + UPDATE + "' in a few";
+            try {
+              Db.WitnessReport witReport = journal.witness();
+              if (witReport.nothingDone())
+                message += "." + System.lineSeparator() + "Up-to-date.";
+              else {
+                int crums = witReport.getRecords().size();
+                int crumtrails = witReport.getStored().size();
+                message += "." + System.lineSeparator() + crums + pluralize(" crum", crums) + " submitted; " + crumtrails +
+                    pluralize(" crumtrail", crumtrails) + pluralize(" (witness record", crumtrails) +
+                    ") stored";
+                
+                if (crumtrails == 0)
+                  message += System.lineSeparator() + "Run '" + UPDATE + "' in a few";
+              }
+            } catch (ClientException cx) {
+              message += "." + System.lineSeparator();
+              int unwitnessed = journal.db().unwitnessedRowCount();
+              message += unwitnessed + pluralize(" row", unwitnessed);
+              message += singularVerb(" remain", unwitnessed) + " unwitnessed.";
+              message += System.lineSeparator() + "error message: " + cx.getMessage();
+              Throwable cause = cx.getCause();
+              if (cause != null) {
+                for (; cause.getCause() != null; cause = cause.getCause());
+                message += System.lineSeparator() + "cause: " + cause;
+              }
             }
             break;
           default:
@@ -205,19 +225,138 @@ public class Jurno extends MainTemplate {
       case STATUS:
         printStatus();
         break;
+        
+      case TRIM:
+        Console console = System.console();
+        
       }
     }
   }
 
 
+  private final static int RM = 80;
+  private final static int LEFT_STATUS_COL_WIDTH = 16;
+  private final static int RIGHT_STATUS_COL_WIDTH = 18;
+  private final static int MID_STATUS_COL_WIDTH = RM - LEFT_STATUS_COL_WIDTH - RIGHT_STATUS_COL_WIDTH;
+  
   protected void printStatus() {
+    journal.dryRun();
+    TablePrint table = new TablePrint(
+        LEFT_STATUS_COL_WIDTH, MID_STATUS_COL_WIDTH, RIGHT_STATUS_COL_WIDTH);
+    table.println();
+    switch (journal.getState()) {
+    case INIT:
+      
+      table.println("Journal initialized. No ledgerable lines in " + journal.getTextFile());
+      table.println("OK");
+      break;
+    case COMPLETE:
+
+      printStatus(table);
+      table.println();
+      int unwitnessedLines = journal.db().unwitnessedRowCount();
+      if (unwitnessedLines == 0) {
+        table.println("Journal is complete. Nothing to update.");
+        table.println("OK");
+      } else {
+        table.println(
+            "Ledger is up-to-date; " + unwitnessedLines + pluralize(" line", unwitnessedLines) +
+            " not witnessed. If you have a network connection, invoking '" + UPDATE + "' should fixes this.");
+      }
+      break;
+    case PENDING:
+
+      printStatus(table);
+      table.println();
+      int pendingLines = journal.getLines() - journal.getLedgeredLines();
+      table.println(pendingLines + pluralize(" line", pendingLines) + " pending update.");
+      break;
+    case FORKED:
+
+      table.println(journal.getTextFile() + " has forked from its ledger.");
+      table.println();
+      table.printRow("forked line #:", journal.getForkTextLineNumber());
+      table.printRow("forked row #:", journal.getForkLineNumber());
+      table.println();
+      table.println("There are 2 ways to fix this:");
+      table.println(" 1) restore the text at the forked line number (" + journal.getForkTextLineNumber() + "), or");
+      table.println(" 2) run '" + TRIM +  "' (which causes loss of historical info)");
+      table.println();
+      // TODO:
+      // 1) if only one line has changed, let the user know this is the case
+      table.println("FORKED");
+      break;
+    case TRIMMED:
+      
+      int linesRemoved = journal.getLedgeredLines();
+      table.println(
+          journal.getTextFile() + " has been trimmed to " + linesRemoved +
+          pluralize(" fewer line", linesRemoved) + " than recorded in its ledger. Run '" + TRIM + "' to fix this.");
+      table.println();
+      table.println("TRIMMED");
+      break;
+    }
     
+    
+  }
+  
+  
+  private void printStatus(TablePrint table) {
+    table.printRow("Lines in file:", journal.getTextLineCount() );
+    table.printRow("ledgerable:", journal.getLines() );
+    table.printRow("ledgered:", journal.getLedgeredLines() );
+    table.println();
+    int beacons = journal.db().getBeaconCount();
+    table.printRow("Beacon rows:", beacons );
+    if (beacons > 0) {
+      table.println();
+      table.printRow(null, "First");
+      printBeaconDetail(0, table);
+      if (beacons > 1) {
+        table.println();
+        table.printRow(null, "Last");
+        printBeaconDetail(beacons - 1, table);
+      }
+    }
+    table.println();
+    int witnessedRows = journal.db().getTrailedRowCount();
+    table.printRow("Witnessed rows:", witnessedRows);
+    if (witnessedRows != 0) {
+      table.println();
+      table.printRow(null, "First");
+      printTrailDetail(0, table);
+      if (witnessedRows > 1) {
+        table.println();
+        table.printRow(null, "Last");
+        printTrailDetail(witnessedRows - 1, table);
+      }
+    }
+  }
+  
+
+  private void printBeaconDetail(int index, TablePrint table) {
+    long utc = journal.db().getBeaconUtcs().get(index);
+    long rn = journal.db().getBeaconRowNumbers().get(index);
+    ByteBuffer hash =journal.db().getLedger().getRow(rn).inputHash();
+    Beacon beacon = new Beacon(hash, utc);
+    table.printRow("row #: ", journal.db().getBeaconRowNumbers().get(index));
+    table.printRow("created after:", new Date(utc), "UTC: " + utc);
+    table.printRow("ref URL:", beacon.getRefUrl());
+    table.printRow("beacon:", beacon.hashHex());
+  }
+  
+  
+  private void printTrailDetail(int index, TablePrint table) {
+    CrumTrail trail = journal.db().getCrumTrailByIndex(index);
+    long utc = trail.crum().utc();
+    table.printRow("row #: ", journal.db().getTrailedRowNumbers().get(index));
+    table.printRow("created before:", new Date(utc), "UTC: " + utc);
+    table.printRow("trail root:", IntegralStrings.toHex(trail.rootHash()));
+    table.printRow("ref URL:", trail.getRefUrl());
   }
 
 
-
   private final static int INDENT = 1;
-  private final static int RM = 80;
 
   @Override
   protected void printDescription() {
@@ -333,6 +472,7 @@ public class Jurno extends MainTemplate {
   //  - - O P T I O N S - -
   
   private final static String LD = "-ld";
+  private final static String FORCE = "-force";
 
 }
 

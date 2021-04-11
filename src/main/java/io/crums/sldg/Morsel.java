@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
-import java.util.TreeSet;
 
 import io.crums.sldg.bags.MorselBag;
 import io.crums.sldg.entry.EntryInfo;
 import io.crums.util.Lists;
+import io.crums.util.Sets;
 import io.crums.util.Tuple;
 
 /**
@@ -67,26 +67,10 @@ public class Morsel {
   
   
   
-  
-  public List<Long> knownRows() {
-    TreeSet<Long> known = knownSet();
-    ArrayList<Long> out = new ArrayList<>(known.size());
-    out.addAll(known);
-    return Collections.unmodifiableList(out);
-  }
-  
-  
   public SortedSet<Long> knownRowSet() {
-    return Collections.unmodifiableSortedSet(knownSet());
+    return Sets.sortedSetView(bag.getFullRowNumbers());
   }
   
-  
-  
-  private TreeSet<Long> knownSet() {
-    TreeSet<Long> known = new TreeSet<>();
-    declaredPaths().forEach(p -> known.addAll(p.rowNumbers()));
-    return known;
-  }
   
   
   

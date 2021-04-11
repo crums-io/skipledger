@@ -457,7 +457,7 @@ public class Sldg extends MainTemplate {
     }
     
     if (witCount == 1) {
-      CrumTrail trail = db.getCrumTrail(0);
+      CrumTrail trail = db.getCrumTrailByIndex(0);
       long witnessedRow = witnessed.get(0);
       System.out.println(
           "first (and last) row witnessed: [" + format.format(witnessedRow) + "] " +
@@ -466,8 +466,8 @@ public class Sldg extends MainTemplate {
       long firstRow = witnessed.get(0);
       long lastRow = witnessed.get(witnessed.size() - 1);
       
-      CrumTrail firstTrail = db.getCrumTrail(0);
-      CrumTrail lastTrail = db.getCrumTrail(witnessed.size() - 1);
+      CrumTrail firstTrail = db.getCrumTrailByIndex(0);
+      CrumTrail lastTrail = db.getCrumTrailByIndex(witnessed.size() - 1);
       
       if (firstTrail.crum().utc() > lastTrail.crum().utc())
         throw new SldgException("corrupt repo: " + db.getDir());

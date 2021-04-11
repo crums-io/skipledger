@@ -56,6 +56,15 @@ import io.crums.util.hash.Digest;
  * it knows about everyone). It could be refactored, but at the cost of complexity. Ultimately,
  * the simpler wins--unless you find something simpler.
  * </p>
+ * <h2>TODO</h2>
+ * <p>
+ * Some cleaning up to do, since the new classes allow better separation-of-concerns..
+ * </p>
+ * <ol>
+ * <li>The morsel design obviates the need to encapsulate beacons in this abstraction. Take it out.</li>
+ * <li>{@code PathInfo} obviates the need to keep track of targets. Remove this business of
+ * target rows. It's not needed anyway in with morsels.</li>
+ * </ol>
  */
 public class Path implements Digest, Serial {
   

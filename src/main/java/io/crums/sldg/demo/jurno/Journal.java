@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
+import io.crums.client.ClientException;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.db.Db;
 import io.crums.util.hash.Digests;
@@ -137,15 +138,43 @@ public class Journal {
   
   /**
    * Returns the directory the backing ledger is kept in.
+   * 
+   * @see #ledgerDir()
    */
   public File ledgerDir() {
     return db.getDir();
   }
   
   
+  
+  public Db db() {
+    return db;
+  }
+  
+  
   /**
-   * Returns the number of already-legered lines. This value is available immediately after
-   * construction.
+   * Returns the last witnessed line, if any; 0 (zero), otherwise.
+   */
+  public int lastLineWitnessed() {
+    return (int) db.lastSansBeaconRowWitnessed();
+  }
+  
+  
+  /**
+   * Returns the text file.
+   * 
+   * @see #ledgerDir()
+   */
+  public File getTextFile() {
+    return textFile;
+  }
+  
+  
+  /**
+   * Returns the current number of already-legered lines in the database. This value is always available
+   * (even immediately after construction).
+   * 
+   *  @return {@code db().sizeSansBeacons()}
    */
   public int getLedgeredLines() {
     return db.sizeSansBeacons();
@@ -429,11 +458,19 @@ public class Journal {
    */
   protected Consumer<String> newLineProc() {
     MessageDigest digest = Digests.SHA_256.newDigest();
-    return line -> addLine(line, digest);
+    int[] countPtr = { 0 };
+    return line ->  addLine(line, digest, countPtr[0]++);
   }
   
   
-  private void addLine(String line, MessageDigest digest) {
+  private void addLine(String line, MessageDigest digest, int count) {
+    if (count == 0) {
+      try {
+        db.addBeacon();
+      } catch (ClientException x) {
+        // swallow
+      }
+    }
     ByteBuffer hash = lineHash(line, digest);
     db.getLedger().appendRows(hash);
   }

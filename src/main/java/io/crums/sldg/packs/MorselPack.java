@@ -55,7 +55,7 @@ import io.crums.util.Tuple;
  * </pre>
  * </p>
  */
-public class MorselPack implements MorselBag {
+public final class MorselPack implements MorselBag {
   
   
   

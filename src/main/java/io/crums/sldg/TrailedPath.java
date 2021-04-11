@@ -14,7 +14,7 @@ import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
 
 /**
- * 
+ * @deprecated Dropping this design in favor of morsels
  */
 public class TrailedPath implements Serial {
   
