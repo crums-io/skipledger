@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.scraps;
 
 
 import java.io.IOException;
@@ -12,6 +12,8 @@ import java.util.Objects;
 
 import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
+import io.crums.sldg.Path;
+import io.crums.sldg.Row;
 
 /**
  * @deprecated Dropping this design in favor of morsels

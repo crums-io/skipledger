@@ -4,9 +4,9 @@
 package io.crums.sldg.db;
 
 import io.crums.sldg.Path;
-import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
 import io.crums.sldg.scraps.Nugget;
+import io.crums.sldg.scraps.NuggetParser;
 
 /**
  * 

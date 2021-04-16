@@ -1,12 +1,11 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.scraps;
 
 import java.util.Objects;
 
 import io.crums.sldg.Path;
-import io.crums.sldg.scraps.Nugget;
 
 /**
  * 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.db;
 
 
 import static io.crums.sldg.SldgConstants.JSON_EXT;
@@ -17,19 +17,17 @@ import java.util.Objects;
 import io.crums.sldg.Path;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.bags.MorselBag;
-import io.crums.sldg.db.Format;
 import io.crums.sldg.entry.EntryInfo;
 import io.crums.sldg.scraps.Nugget;
 import io.crums.util.IntegralStrings;
 
 /**
  * The file naming convention.
- * <p>TODO: move to db package.</p>
  */
-public class FilenamingConvention {
+public class Filenaming {
   
   
-  public final static FilenamingConvention INSTANCE = new FilenamingConvention();
+  public final static Filenaming INSTANCE = new Filenaming();
 
   /**
    * Number of bytes displayed in hex in a path-like filename.

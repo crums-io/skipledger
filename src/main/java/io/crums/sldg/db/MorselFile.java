@@ -15,7 +15,6 @@ import io.crums.io.Opening;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.cli.FilenamingConvention;
 import io.crums.sldg.entry.Entry;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
@@ -98,7 +97,7 @@ public class MorselFile {
       name = target.getAbsoluteFile().getName();
     }
     
-    String filename = FilenamingConvention.INSTANCE.morselFilename(name, builder);
+    String filename = Filenaming.INSTANCE.morselFilename(name, builder);
     
     target = new File(target, filename);
     if (target.exists())

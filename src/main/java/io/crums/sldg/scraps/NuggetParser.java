@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Babak Farhang
  */
-package io.crums.sldg.json;
+package io.crums.sldg.scraps;
 
 
 import java.util.Objects;
@@ -11,8 +11,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import io.crums.sldg.Path;
-import io.crums.sldg.TrailedPath;
-import io.crums.sldg.scraps.Nugget;
+import io.crums.sldg.json.JsonEntityParser;
 
 /**
  * Parses and generates JSON for {@linkplain Nugget}s.

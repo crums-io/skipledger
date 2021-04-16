@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Babak Farhang
  */
-package io.crums.sldg.json;
+package io.crums.sldg.scraps;
 
 
 import java.util.Objects;
@@ -13,7 +13,7 @@ import org.json.simple.parser.ParseException;
 import io.crums.model.CrumTrail;
 import io.crums.model.json.CrumTrailParser;
 import io.crums.sldg.Path;
-import io.crums.sldg.TrailedPath;
+import io.crums.sldg.json.PathParser;
 
 /**
  * 

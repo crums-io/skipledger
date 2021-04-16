@@ -32,12 +32,13 @@ import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.db.Db;
+import io.crums.sldg.db.Filenaming;
 import io.crums.sldg.db.Finder;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
-import io.crums.sldg.json.NuggetParser;
 import io.crums.sldg.json.PathParser;
 import io.crums.sldg.scraps.Nugget;
+import io.crums.sldg.scraps.NuggetParser;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
@@ -366,7 +367,7 @@ public class Sldg extends MainTemplate {
     
     File out;
     if (readCommand.file.isDirectory()) {
-      String file = FilenamingConvention.INSTANCE.pathFilename(path, readCommand.format);
+      String file = Filenaming.INSTANCE.pathFilename(path, readCommand.format);
       out = new File(readCommand.file, file);
       exitIfExists(out);
     } else
@@ -390,7 +391,7 @@ public class Sldg extends MainTemplate {
     
     File out;
     if (readCommand.file.isDirectory()) {
-      String file = FilenamingConvention.INSTANCE.nuggetFilename(nugget, readCommand.format);
+      String file = Filenaming.INSTANCE.nuggetFilename(nugget, readCommand.format);
       out = new File(readCommand.file, file);
       exitIfExists(out);
     } else
@@ -421,7 +422,7 @@ public class Sldg extends MainTemplate {
     
     File out;
     if (readCommand.file.isDirectory()) {
-      String file = FilenamingConvention.INSTANCE.stateFilename(statePath, readCommand.format);
+      String file = Filenaming.INSTANCE.stateFilename(statePath, readCommand.format);
       out = new File(readCommand.file, file);
       exitIfExists(out);
     } else
@@ -657,9 +658,9 @@ public class Sldg extends MainTemplate {
         String name = readCommand.file.getName();
         String normalizedName;
         if (readCommand.isPathResponse())
-          normalizedName = FilenamingConvention.INSTANCE.normalizePathFilename(name, readCommand.format);
+          normalizedName = Filenaming.INSTANCE.normalizePathFilename(name, readCommand.format);
         else
-          normalizedName = FilenamingConvention.INSTANCE.normalizeNuggetFilename(name, readCommand.format);
+          normalizedName = Filenaming.INSTANCE.normalizeNuggetFilename(name, readCommand.format);
         if (!normalizedName.equals(name)) {
           readCommand.file = new File(parent, normalizedName);
           if (readCommand.file.exists())

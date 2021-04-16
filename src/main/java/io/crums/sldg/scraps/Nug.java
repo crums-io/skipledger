@@ -1,7 +1,7 @@
 /*
  * Copyright 2020 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.scraps;
 
 
 import static io.crums.util.IntegralStrings.*;
@@ -24,9 +24,9 @@ import io.crums.sldg.Row;
 import io.crums.sldg.RowIntersect;
 import io.crums.sldg.RowIntersection;
 import io.crums.sldg.db.EntitySerializer;
+import io.crums.sldg.db.Filenaming;
 import io.crums.sldg.db.Format;
 import io.crums.sldg.db.VersionedSerializers;
-import io.crums.sldg.scraps.Nugget;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Tuple;
 import io.crums.util.main.ArgList;
@@ -598,7 +598,7 @@ public class Nug extends MainTemplate {
   private SldgEntity load(File file) {
     Nugget nugget = null;
     Path path = null;
-    if (FilenamingConvention.INSTANCE.isNugget(file)) {
+    if (Filenaming.INSTANCE.isNugget(file)) {
       nugget = loadNugget(file);
       if (nugget == null)
         path = loadPath(file);
@@ -774,7 +774,7 @@ public class Nug extends MainTemplate {
   
   
   private <T> T load(File file, EntitySerializer<T> serializer) {
-    Format format = FilenamingConvention.INSTANCE.guessFormat(file);
+    Format format = Filenaming.INSTANCE.guessFormat(file);
     try {
       return serializer.load(file, format);
     } catch (Exception x) {  }

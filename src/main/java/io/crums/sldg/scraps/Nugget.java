@@ -19,7 +19,6 @@ import io.crums.io.Serial;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
-import io.crums.sldg.TrailedPath;
 import io.crums.util.Lists;
 import io.crums.util.Tuple;
 
