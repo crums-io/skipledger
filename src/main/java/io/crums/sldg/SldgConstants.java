@@ -29,6 +29,8 @@ public class SldgConstants {
 
   
   public final static String DB_EXT = ".sldg";
+
+  public static final String MRSL_EXT = ".mrsl";
   
   public final static String DB_LEDGER = "ledger";
   
@@ -81,6 +83,8 @@ public class SldgConstants {
   
 
   public static final String SPATH_JSON_EXT = SPATH_EXT + JSON_EXT;
+  
+  
   
   
   

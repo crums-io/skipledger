@@ -599,7 +599,7 @@ public class Db implements Closeable {
    * <p>
    * From a user-perspective, it may be desirable to orthogonalize the bookkeeping of
    * ledger contents from that of timekeeping. Beacon rows serve no purpose other than
-   * to establish a <em>minimum bound on the age of rows</em> in a ledger.
+   * to establish a <em>maximum bound on the age of rows</em> in a ledger.
    * </p>
    * 
    * @param rowNum non-negative, <em>sans-beacon</em> row number 
@@ -625,11 +625,15 @@ public class Db implements Closeable {
    * Translates and returns the given row number as a <em>sans-beacon</em> row
    * number. This is what the row number would be, if the ledger contained no
    * preceding beacon rows.
+   * <p>
+   * If the argument is itself a beacon row, then the return value is
+   * the same as the value returned for highest non-beacon row number that is
+   * less than the argument. That's a mouthful, but it means it falls thru.
+   * </p>
    * 
-   * @param rowNum a regular row number that is not an actual beacon row
+   * @param rowNum a regular row number
    * 
    * @return the row number, as if the ledger had no beacons
-   * @throws IllegalArgumentException if {@code rowNum} is a beacon row
    * 
    * @see #rowNumWithBeacons(long)
    */
@@ -638,28 +642,17 @@ public class Db implements Closeable {
       throw new IllegalArgumentException("rowNum " + rowNum);
     
     List<Long> beaconRns = getBeaconRowNumbers();
-    final int searchIndex = Collections.binarySearch(beaconRns, rowNum);
-    if (searchIndex < 0) {
-      int beaconsAhead = -1 - searchIndex;
+    int beaconsAhead = Collections.binarySearch(beaconRns, rowNum);
+    if (beaconsAhead < 0) {
+      beaconsAhead = -1 - beaconsAhead;
       return rowNum - beaconsAhead;
     }
-    // rowNum is a beacon row
-//    if (searchIndex == 0) {
-//      if (rowNum == 1)
-//        throw new IllegalArgumentException("row 1 is a beacon: there is no valid row to fall back to");
-//      return rowNum - 1;
-//    }
-//    
-//    for (int index = searchIndex; index-- > 0; ) {
-//      long beaconRn = beaconRns.get(index);
-//      if (rowNum == beaconRn)
-//        continue;
-//      
-//      assert beaconRn < rowNum;
-//      int beaconsAhead = searchIndex - index;
-//      return rowNum - beaconsAhead;
-//    }
-    throw new IllegalArgumentException("rowNum " + rowNum + " is a beacon row");
+    // rowNum is itself a beacon row, and beaconsAhead includes it.
+    // we fall thru, arguing it's documented behavior
+    return rowNum - beaconsAhead;
+    
+    // PS if you're worried about consecutive beacons rows, don't:
+    //    the arithmetic works out
   }
   
   
@@ -780,10 +773,14 @@ public class Db implements Closeable {
    */
   public final static class WitnessReport {
     
+    private final long localQueryTime = System.currentTimeMillis();
+    
     private final List<WitnessRecord> records;
     private final List<WitnessRecord> stored;
     
     private final long prevLastWitNum;
+    
+    
     
     /**
      * Empty instance.
@@ -830,6 +827,39 @@ public class Db implements Closeable {
      */
     public long prevLastWitNum() {
       return prevLastWitNum;
+    }
+    
+    
+    
+    /**
+     * Determines if <em>any</em> witness {@linkplain #getRecords() record} in this report
+     * indicates an the object (hashes) was witnessed before this query. This is an inherently fuzzy idea,
+     * subject to races, network speed, host clock skew, etc. 
+     * 
+     * @return {@code seenBefore(3 seconds before local query time)}
+     * @see #localQueryTime()
+     */
+    public boolean seenBefore() {
+      return seenBefore(localQueryTime - 3_000);
+    }
+    
+    
+    
+    /**
+     * Determines if <em>any</em> witness {@linkplain #getRecords() record} in this report
+     * indicates an of the object (hashes) was witnessed before the specifed date.
+     * Determines if <em>any</em> witness {@linkplain #getRecords() records} in this report
+     * indicate any of the objects (hashes) were witnessed before the specifed date.
+     * 
+     * @param utc
+     */
+    public boolean seenBefore(long utc) {
+      return records.stream().anyMatch(r -> r.utc() < utc);
+    }
+    
+    
+    public long localQueryTime() {
+      return localQueryTime;
     }
     
     

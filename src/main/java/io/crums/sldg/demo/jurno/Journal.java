@@ -5,6 +5,7 @@ package io.crums.sldg.demo.jurno;
 
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -12,14 +13,18 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 import io.crums.client.ClientException;
+import io.crums.io.FileLineIterator;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.db.Db;
+import io.crums.util.Lists;
 import io.crums.util.hash.Digests;
 
 /**
@@ -39,7 +44,7 @@ import io.crums.util.hash.Digests;
  * 
  * @see State
  */
-public class Journal {
+public class Journal implements Closeable {
   
   
   /**
@@ -241,6 +246,10 @@ public class Journal {
   }
   
   
+  /**
+   * Trims the ledger to the {@linkplain #lastValidLedgerRow()};
+   * @throws IllegalStateException
+   */
   public void trim() throws IllegalStateException {
     if (state == null)
       throw new IllegalStateException(
@@ -248,17 +257,53 @@ public class Journal {
     if (!state.needsMending())
       throw new IllegalStateException(state + " doesn't need mending: " + this);
     
-    long lastValidRow;
-    if (state.isTrimmed()) {
-      assert lines > 0;
-      lastValidRow = db.rowNumWithBeacons(lines);
-    } else {
-      // state isForked
-      assert forkLineNumber > 1;
-      lastValidRow = db.rowNumWithBeacons(forkLineNumber - 1);
-    }
+    int lastValidRow = lastValidLedgerRow();
+    if (lastValidRow < 1)
+      throw new IllegalStateException("attempt to trim to zero rows");
 
     db.truncate(lastValidRow);
+  }
+  
+  
+  /**
+   * Returns the highest row number (includes beacon rows) in the ledger that
+   * matches the journaled text file.
+   * 
+   * @return &ge; 0
+   * @throws IllegalStateException
+   * 
+   * @see {@link #lastValidLedgeredLine()}
+   */
+  public int lastValidLedgerRow() throws IllegalStateException {
+    if (state == null)
+      throw new IllegalStateException("state not set: " + this);
+    
+    switch (state) {
+    case FORKED:
+      assert forkLineNumber > 1;
+      return (int) db.rowNumWithBeacons(forkLineNumber - 1);
+    case TRIMMED:
+      assert lines > 1;
+      return (int) db.rowNumWithBeacons(lines);
+    default:
+      return (int) db.size();
+    }
+    
+  }
+  
+
+  /**
+   * Returns the highest ledgered line number in the text file that
+   * matches the backing ledger. This filters beacon rows from the
+   * accounting (so you don't have to).
+   * 
+   * @return &ge; 0
+   * @throws IllegalStateException
+   * 
+   * @see {@link #lastValidLedgerRow()}
+   */
+  public int lastValidLedgeredLine() throws IllegalStateException {
+    return (int) db.rowNumSansBeacons(lastValidLedgerRow());
   }
   
   
@@ -301,6 +346,64 @@ public class Journal {
   }
   
   
+  
+  
+  
+  /**
+   * Returns the given ledgered (or more accurately, <em>ledgerable</em>) line numbers from the
+   * text file. Since some lines may be skipped (i.e. blank or comment lines),
+   * ledgerable-line numbers seldom match one-to-one with actual line numbers in the text.
+   * <p>
+   * Note the file must be traversed sequentially to the last line number. If this is a big
+   * number (and therefore the file is big), this might take a second.
+   * </p>
+   * 
+   * @param lineNumbers strictly ascending list of positive ledgerable line numbers
+   * 
+   * @return read-only list of verbatim lines from the text (with trailing new-line chars trimmed, of course)
+   * 
+   * @throws IllegalArgumentException
+   *         if {@code lineNumbers} is empty, not ascending, has dups, or specifies a non-existent
+   *         line (i.e. not positive or beyond the last line in the file)
+   */
+  public List<String> getLedgerableLines(List<Integer> lineNumbers) {
+    
+    if (Objects.requireNonNull(lineNumbers, "null lineNumbers").isEmpty())
+      throw new IllegalArgumentException("empty lineNumbers");
+    
+    if (!Lists.isSortedNoDups(lineNumbers))
+      throw new IllegalArgumentException("lineNumbers must be sorted with no dups: " + lineNumbers);
+    
+    if (lineNumbers.get(0) < 1)
+      throw new IllegalArgumentException("line numbers must be positive: " + lineNumbers);
+    
+    
+    try (var iter = new FileLineIterator(textFile)) {
+      
+      ArrayList<String> out = new ArrayList<>(lineNumbers.size());
+      int ledgerableLines = 0;
+      
+      for (int target : lineNumbers) {
+
+        String line = null;
+        while (ledgerableLines < target && iter.hasNext()) {
+          line = iter.next();
+          if (canonicalizeLine(line) == null)
+            continue;
+          ++ledgerableLines;
+        }
+        
+        if (ledgerableLines != target)
+          throw new IllegalArgumentException(
+              "journaled file contains only " + ledgerableLines + " lines. Argument: [" +
+              target + "] in " + lineNumbers);
+        
+        out.add(line);
+      }
+      
+      return Collections.unmodifiableList(out);
+    }
+  }
   
   
   
@@ -485,13 +588,13 @@ public class Journal {
   }
   
   
-  private boolean verifyLine(String line, long rowNumber, MessageDigest digest) {
+  protected final boolean verifyLine(String line, long rowNumber, MessageDigest digest) {
     ByteBuffer hash = lineHash(line, digest);
     return db.getLedger().getRow(rowNumber).inputHash().equals(hash);
   }
   
   
-  private ByteBuffer lineHash(String line, MessageDigest digest) {
+  protected ByteBuffer lineHash(String line, MessageDigest digest) {
     if (line.isEmpty())
       return Digests.SHA_256.sentinelHash();
 
@@ -506,6 +609,14 @@ public class Journal {
     File dir = db.getDir().getAbsoluteFile();
     File parent = dir.getParentFile();
     return "Journal[" + parent.getName() + "/" + dir.getName() + "]";
+  }
+
+
+
+
+  @Override
+  public void close() {
+    db.close();
   }
 
 }

@@ -11,16 +11,20 @@ import static io.crums.sldg.SldgConstants.SPATH_EXT;
 import static io.crums.sldg.SldgConstants.SPATH_JSON_EXT;
 
 import java.io.File;
+import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.Path;
 import io.crums.sldg.SldgConstants;
+import io.crums.sldg.bags.MorselBag;
 import io.crums.sldg.db.Format;
+import io.crums.sldg.entry.EntryInfo;
 import io.crums.sldg.scraps.Nugget;
 import io.crums.util.IntegralStrings;
 
 /**
  * The file naming convention.
+ * <p>TODO: move to db package.</p>
  */
 public class FilenamingConvention {
   
@@ -40,7 +44,33 @@ public class FilenamingConvention {
   
   public final static String STATE = "state";
   
+
+  private final static int MAX_ECOUNT_IN_NAME = 4;
   
+  
+  
+  public String morselFilename(String name, MorselBag bag) {
+    Objects.requireNonNull(name, "null name");
+    Objects.requireNonNull(bag, "null builder");
+    
+    if (name == null || name.isEmpty() || !name.equals(name.trim()))
+        throw new IllegalArgumentException("name '" + name + "'");
+
+    List<EntryInfo> entries = bag.availableEntries();
+    String filename = name;
+    if (entries.isEmpty()) {
+      filename += "-state-" + bag.hi();
+    } else {
+      for (int index = entries.size(), count = MAX_ECOUNT_IN_NAME; index-- > 0 && count-- > 0; )
+        filename += "-" + entries.get(index).rowNumber();
+      
+      if (entries.size() > MAX_ECOUNT_IN_NAME)
+        filename += "-";
+    }
+    
+    filename += SldgConstants.MRSL_EXT;
+    return filename;
+  }
   
   
 

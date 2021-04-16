@@ -12,6 +12,7 @@ import java.util.Objects;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Path;
+import io.crums.sldg.SldgConstants;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.util.EasyList;
 
@@ -31,13 +32,23 @@ public class DbMorselBuilder extends MorselPackBuilder {
     initState(db.getLedger());
   }
   
+
+
+  
+  public String getName() {
+    String name = db.getDir().getAbsoluteFile().getName();
+    if (name.endsWith(SldgConstants.DB_EXT))
+      name = name.substring(0, name.length() - SldgConstants.DB_EXT.length());
+    return name;
+  }
+  
   /**
    * 
    * <h2>Additional Override Behavior</h2>
    * <p>
    * Adds the <em>last beacon row before</em> {@code rowNumber}, if any; adds the <em>first
    * crumtrail on or after</em> {@code rowNumber}, if any. Ensures a path from {@linkplain #hi()}
-   * to these and {@code rowNumber} exist.
+   * to these and {@code rowNumber} exists (by adding rows as necessary).
    * </p>
    */
   @Override

@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -21,9 +22,12 @@ import io.crums.model.CrumTrail;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.db.Db;
 import io.crums.sldg.demo.jurno.Journal;
+import io.crums.sldg.demo.jurno.JurnoMorselBuilder;
 import io.crums.util.IntegralStrings;
+import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
+import io.crums.util.main.NumbersArg;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
@@ -33,7 +37,6 @@ import io.crums.util.main.TablePrint;
  */
 public class Jurno extends MainTemplate {
   
-  private final static String PROG_NAME = Jurno.class.getSimpleName().toLowerCase();
   private final static String EXTENSION = SldgConstants.DB_EXT;
   
   
@@ -42,6 +45,52 @@ public class Jurno extends MainTemplate {
     jurno.doMain(args);
   }
   
+  private static class MakeMorselCmd {
+    
+    File morselFile = new File(".");
+    
+    /**
+     * Ledgered lines
+     */
+    List<Integer> lineNums;
+    
+    void setMorselFile(String filepath) {
+      this.morselFile = new File(filepath);
+      File parent = morselFile.getParentFile();
+      // don't care if failing after set.. we won't be see this instance again
+      if (parent != null && !parent.exists())
+        throw new IllegalArgumentException(
+            "expected parent directory for morsel file does not exist: " + this.morselFile);
+      
+      if (morselFile.isFile())
+        throw new IllegalArgumentException("morsel file already exists: " + morselFile);
+      
+    }
+    
+    private void setLineNums(List<Integer> lineNums) {
+      if (lineNums == null || lineNums.isEmpty())
+        throw new IllegalArgumentException("missing or illegally formatted line numbers");
+      if (lineNums.get(0) < 1 || !Lists.isSortedNoDups(lineNums))
+        throw new IllegalArgumentException(
+            "line numbers must be > 0 and strictly ascending. Numbers parsed: " + lineNums);
+      
+      this.lineNums = lineNums;
+    }
+  }
+  
+  private static class ReadMorselCmd {
+    
+    File morselFile;
+    
+    ReadMorselCmd(File morselFile) {
+      if (morselFile == null)
+        throw new IllegalArgumentException("no morsel file given");
+      this.morselFile = morselFile;
+    }
+    
+  }
+  
+  
   
   
   private File textFile;
@@ -49,13 +98,13 @@ public class Jurno extends MainTemplate {
   private Opening opening;
   private String command;
   
-  private boolean addBeacon;
   private boolean abortOnFork;
   
-  private File morselFile;
+  
   private Journal journal;
   
-  
+  private MakeMorselCmd makeMorsel;
+  private ReadMorselCmd readMorsel;
   
 
   /**
@@ -67,70 +116,113 @@ public class Jurno extends MainTemplate {
   @Override
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = new ArgList(args);
-    List<String> cmd = argList.removeContained(
-        CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL, READ_MORSEL);
-    if (cmd.isEmpty())
-      throw new IllegalArgumentException("no command specified");
-    if (cmd.size() != 1)
-      throw new IllegalArgumentException("only one command at a time may be given: " + cmd);
-    this.command = cmd.get(0);
+    
+    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL, READ_MORSEL);
     
     
-    
+    // set the opening preamble
     switch (command) {
     case STATUS:
     case MAKE_MORSEL:
-      this.opening = Opening.READ_ONLY; break;
+      this.opening = Opening.READ_ONLY;
+      break;
     case TRIM:
     case UPDATE:
-      opening = Opening.READ_WRITE_IF_EXISTS; break;
+      opening = Opening.READ_WRITE_IF_EXISTS;
+      break;
     case CREATE:
-      opening = Opening.CREATE; break;
+      opening = Opening.CREATE;
+      break;
     case READ_MORSEL:
-      List<File> files = argList.removeExistingFiles();
-      if (files.isEmpty())
-        throw new IllegalArgumentException("no morsel file given");
-      if (files.size() > 1)
-        throw new IllegalArgumentException("ambiguous, multiple files given: " + files);
-      this.morselFile = files.get(0);
+      
+      // this does not depend on access to any particular journal
+      // the command is here as a client to morsels created by _other_ journals
+      this.readMorsel = new ReadMorselCmd(argList.removeExistingFile());
+      
+      System.out.println("Sorry to put you thru this.. Not implemented yet.");
+      StdExit.OK.exit();
+      break;
     }
     
-    if (opening != null) {
+    if (opening != null)
       setJournoFiles(argList);
-    }
     
+    if (MAKE_MORSEL.equals(command)) {
+
+      this.makeMorsel = new MakeMorselCmd();
+      
+      List<String> remainingArgs = argList.argsRemaining();
+      switch (remainingArgs.size()) {
+      case 0:
+        throw new IllegalArgumentException("missing line numbers");
+      case 1:
+        makeMorsel.setLineNums(NumbersArg.parseInts(remainingArgs.get(0)));
+        argList.removeContained(remainingArgs.get(0));
+        break;
+      case 2:
+        String file = argList.removeValue(FILE, ".");
+        if (argList.size() != 1)
+          throw new IllegalArgumentException(
+              "unrecognized (or too many) command line args in remaining in pipeline [a]: " + remainingArgs);
+        
+        List<Integer> lineNums = NumbersArg.parseInts(argList.removeFirst());
+        
+        makeMorsel.setLineNums(lineNums);
+        makeMorsel.setMorselFile(file);
+        break;
+      default:
+        throw new IllegalArgumentException(
+            "unrecognized (or too many) command line args in remaining in pipeline [b]: " + remainingArgs);
+      }
+      
+      argList.removeContained(remainingArgs);
+      
+    } //  if (MAKE_MORSEL
     
+    argList.enforceNoRemaining();
   }
   
   
   
+  /**
+   * Invoked only if this.opening != null.
+   */
   private void setJournoFiles(ArgList args) {
-    List<File> textSource = args.removeExistingFiles();
-    if (textSource.isEmpty())
+
+    assert opening != null && opening != Opening.CREATE_ON_DEMAND;
+    
+    this.textFile = args.removeExistingFile();
+    if (textFile == null)
       throw new IllegalArgumentException("requried text file is missing");
     
-    else if (textSource.size() > 1)
-      throw new IllegalArgumentException("only one text file can be journaled: " + textSource);
-    
-    this.textFile = textSource.get(0);
-    
     if (!args.removeContained(LD).isEmpty()) {
-      List<String> dir = args.argsRemaining();
-      if (dir.isEmpty())
-        throw new IllegalArgumentException("option " + LD + " requires a path to the ledger directory");
-      if (dir.size() > 1)
-        throw new IllegalArgumentException("ambiguous ledger directory with " + LD + " option: " + dir);
       
-      this.ledgerDir = new File(dir.get(0));
-      if (!ledgerDir.exists()) {
-        File parent = ledgerDir.getParentFile();
-        if (parent != null && !parent.exists()) {
-          throw new IllegalArgumentException("parent of ledger directory must be an existing directory: " + ledgerDir);
+      if (opening.exists()) {
+        ledgerDir = args.removeExistingDirectory();
+        if (ledgerDir == null)
+          throw new IllegalArgumentException("required ledger directory missing with option " + LD);
+        
+      } else {
+        
+        assert opening == Opening.CREATE;
+        
+        // we get finicky on the create path
+        List<String> dir = args.argsRemaining();
+        if (dir.isEmpty())
+          throw new IllegalArgumentException("option " + LD + " requires a path to the ledger directory");
+        if (dir.size() > 1)
+          throw new IllegalArgumentException("ambiguous ledger directory with " + LD + " option: " + dir);
+        
+        this.ledgerDir = new File(dir.get(0));
+        if (!ledgerDir.exists()) {
+          File parent = ledgerDir.getParentFile();
+          if (parent != null && !parent.exists()) {
+            throw new IllegalArgumentException("parent of ledger directory must be an existing directory: " + ledgerDir);
+          }
         }
-      } else if (ledgerDir.isFile())
-        throw new IllegalArgumentException("ledger directory given is actaully a file: " + ledgerDir);
-    
-    } else {
+      }
+      
+    } else {  // default
       ledgerDir = new File(textFile.getPath() + EXTENSION);
     }
   }
@@ -145,8 +237,6 @@ public class Jurno extends MainTemplate {
       case UPDATE:
         
         final int alreadyLedgered = journal.getLedgeredLines();
-        if (addBeacon)
-          db.addBeacon();
         
         journal.update(abortOnFork);
         
@@ -198,11 +288,9 @@ public class Jurno extends MainTemplate {
               message += unwitnessed + pluralize(" row", unwitnessed);
               message += singularVerb(" remain", unwitnessed) + " unwitnessed.";
               message += System.lineSeparator() + "error message: " + cx.getMessage();
-              Throwable cause = cx.getCause();
-              if (cause != null) {
-                for (; cause.getCause() != null; cause = cause.getCause());
+              Throwable cause = cx.getRootCause();
+              if (cause != null)
                 message += System.lineSeparator() + "cause: " + cause;
-              }
             }
             break;
           default:
@@ -227,10 +315,86 @@ public class Jurno extends MainTemplate {
         break;
         
       case TRIM:
-        Console console = System.console();
+        journal.dryRun();
+        if (!journal.getState().needsMending()) {
+          System.err.println("[ERROR] Journal does not need mending.");
+          return;
+        }
         
-      }
+        int lastGoodRow = journal.lastValidLedgerRow();
+        int lastGoodLine = journal.lastValidLedgeredLine();
+        int linesToLose = journal.getLedgeredLines() - lastGoodLine;
+        int size = (int) journal.db().size();
+        int rowsToLose = size - lastGoodRow;
+        int beaconsToLose = numToLose(journal.db().getBeaconRowNumbers(), lastGoodRow);
+        int trailsToLose = numToLose(journal.db().getTrailedRowNumbers(), lastGoodRow);
+        
+        message = "Confirm '" + TRIM + "' ledger to row %d%n" + // lastGoodRow
+                  "  trails to lose: %d%n" +  // trailsToLose
+                  "  beacons to lose: %d%n" + // beaconsToLose
+                  "  ledgered lines to lose: %d%n%n" + // linesToLose
+                  "Total rows to lose: %d%n" +  // rowsToLose
+                  "Current rows in ledger: %d%n" +  // size
+                  "Proceed to trim? [Type 'yes']:%n";
+        
+        Console console = System.console();
+        if (console == null) {
+          System.err.println("[ERROR] No console. Aborting.");
+          StdExit.GENERAL_ERROR.exit();
+          break;  // never reached
+        }
+        console.printf(
+            message,
+            lastGoodRow, trailsToLose, beaconsToLose, linesToLose, rowsToLose, size);
+        String ack = console.readLine();
+        if ("yes".equals(ack)) {
+          journal.trim();
+          System.out.println(rowsToLose + pluralize(" row", rowsToLose) + " trimmed.");
+          System.out.printf("Current number of rows in ledger: %d%n", journal.db().size());
+        } else {
+          console.writer().println();
+          console.writer().println("Aborted.");
+        }
+        break;
+        
+      case MAKE_MORSEL:
+        makeMorsel();
+        break;
+        
+      }   // switch (command
+      
+      
     }
+  }
+  
+  
+  
+  private void makeMorsel() throws IOException {
+    journal.dryRun();
+    if (journal.getState().needsMending())
+      throw new IllegalStateException(
+          "Journaled file " + journal.getTextFile() + " is out-of-sync with its ledger." + System.lineSeparator() +
+          "Run '" + STATUS + "' for details.");
+    
+    
+    var builder = new JurnoMorselBuilder(journal);
+    
+    builder.addEntriesByLineNumber(makeMorsel.lineNums);  // for now we canonicalize,
+                                                          // keep it simple for validation
+    
+    
+    File file = builder.createMorselFile(makeMorsel.morselFile);
+    int entries = makeMorsel.lineNums.size();
+    if (entries == 0)
+      System.out.println("state path written to morsel: " + file);
+    else
+      System.out.println(entries + pluralize(" entry", entries) + " written to morsel: " + file);
+  }
+  
+  private int numToLose(List<Long> rns, long lastGoodRow) {
+    int index = Collections.binarySearch(rns, lastGoodRow);
+    int goodOnes = index < 0 ? -1 - index : index;
+    return rns.size() - goodOnes;
   }
 
 
@@ -254,13 +418,13 @@ public class Jurno extends MainTemplate {
 
       printStatus(table);
       table.println();
-      int unwitnessedLines = journal.db().unwitnessedRowCount();
-      if (unwitnessedLines == 0) {
+      int unwitnessedRows = journal.db().unwitnessedRowCount();
+      if (unwitnessedRows == 0) {
         table.println("Journal is complete. Nothing to update.");
         table.println("OK");
       } else {
         table.println(
-            "Ledger is up-to-date; " + unwitnessedLines + pluralize(" line", unwitnessedLines) +
+            "Ledger is up-to-date; " + unwitnessedRows + pluralize(" row", unwitnessedRows) +
             " not witnessed. If you have a network connection, invoking '" + UPDATE + "' should fixes this.");
       }
       break;
@@ -303,18 +467,18 @@ public class Jurno extends MainTemplate {
   
   private void printStatus(TablePrint table) {
     table.printRow("Lines in file:", journal.getTextLineCount() );
-    table.printRow("ledgerable:", journal.getLines() );
-    table.printRow("ledgered:", journal.getLedgeredLines() );
+    table.printRow("  ledgerable:", journal.getLines() );
+    table.printRow("  ledgered:", journal.getLedgeredLines() );
     table.println();
     int beacons = journal.db().getBeaconCount();
     table.printRow("Beacon rows:", beacons );
     if (beacons > 0) {
       table.println();
-      table.printRow(null, "First");
+      table.printRow(null, "First beacon");
       printBeaconDetail(0, table);
       if (beacons > 1) {
         table.println();
-        table.printRow(null, "Last");
+        table.printRow(null, "Last beacon");
         printBeaconDetail(beacons - 1, table);
       }
     }
@@ -323,14 +487,17 @@ public class Jurno extends MainTemplate {
     table.printRow("Witnessed rows:", witnessedRows);
     if (witnessedRows != 0) {
       table.println();
-      table.printRow(null, "First");
+      table.printRow(null, "First crumtrail");
       printTrailDetail(0, table);
       if (witnessedRows > 1) {
         table.println();
-        table.printRow(null, "Last");
+        table.printRow(null, "Last crumtrail");
         printTrailDetail(witnessedRows - 1, table);
       }
     }
+
+    table.println();
+    table.printRow("Ledger state:", IntegralStrings.toHex(journal.db().getLedger().stateHash()));
   }
   
 
@@ -373,8 +540,44 @@ public class Jurno extends MainTemplate {
         "against a compact, opaque hash structure that captures the state of the text file.";
     printer.printParagraph(paragraph);
     printer.println();
+    printer.println("Line Numbers");
+    printer.println();
+    paragraph =
+        "The lines in a text file are numbered in one of two ways: actual and ledgerable. Actual " +
+        "line numbers are just the ordinary line numbers you see in a typical " +
+        "text editor that start from 1. However, not all lines in the text file figure in the " +
+        "journal's state: blank, empty, or comment lines do not count. Ledgerable " +
+        "line numbers exclude these ignored lines from the accounting.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println("Row Numbers");
+    printer.println();
+    paragraph =
+        "These denote a row in the backing skip ledger. Since some rows are beacon rows (used " +
+        "to establish maximum row age, see next) there are usually a few more rows in the ledger than there are " +
+        "lines in the file. Row numbers too start from 1.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println("Beacon Rows");
+    printer.println();
+    paragraph =
+        "These rows contain special hash values that have nothing to do with the text file. " +
+        "They record the minimum creation-date (maximum age) of subsequent rows by recording the root hash " +
+        "of the most recent merkle tree published by crums.io. Since it cannot be computed in " +
+        "advance, it functions as a beacon.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println();
+    printer.println("Trailed Rows");
+    printer.println();
+    paragraph =
+        "A row whose hash has been witnessed, evidenced by a crumtrail attachment. Both beacon- and regular rows may be " +
+        "witnessed this way. Trailed rows establish maximum creation-date " +
+        "(minimum age) for both themselves and every row before them. This is " + 
+        "because every row in a skip ledger is linked (thru hash pointers) to every row before it.";
+    printer.printParagraph(paragraph);
+    printer.println();
   }
-
 
   private final static int LEFT_TBL_COL_WIDTH = 15;
   private final static int RIGHT_TBAL_COL_WIDTH =
@@ -388,11 +591,10 @@ public class Jurno extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Commands in the table below each take a filename (file path) as an " +
-        "argument. The filename is the name of the journaled text file, not the similarly named ledger directory. By default the ledger " +
-        "(an opaque database that backs the journal) is found in the same directory " +
-        "as the text file and is named the same as the text file but with an additional '" +
-        EXTENSION + "' filename extension.";
+        "Commands in the table below each take a filename (file path) as an argument. Excepting '" + READ_MORSEL +
+        "', every command takes the journaled text filename (not the similarly named ledger directory) as an argument. By default the ledger " +
+        "(the opaque database that backs the journal) is found in the same directory " +
+        "as the text file and is named the same as the text file, but with the '" + EXTENSION + "' extension added.";
     printer.printParagraph(paragraph);
     printer.println();
 
@@ -421,6 +623,18 @@ public class Jurno extends MainTemplate {
     table.printRow(MAKE_MORSEL, "prints or outputs a morsel file containing the contents of");
     table.printRow(null,   "the given ledgered line number(s). Additonal parameters:");
     table.println();
+    table.printRow(null,   "<line-numbers>  (required)");
+    table.printRow(null,   "Strictly ascending line numbers separated by commas (no spaces)");
+    table.printRow(null,   "Ranges may be substituted for numbers. For example:");
+    table.printRow(null,   "303,466,592-598,717");
+    table.println();
+    table.printRow(null,   FILE + "=<path/to/morselfile>  (optional)");
+    table.printRow(null,   "If provided, then <path/to/morselfile> is the destination path.");
+    table.printRow(null,   "The given path should not be an existing file; however, if it's");
+    table.printRow(null,   "an existing directory, then a filename is generated for the");
+    table.printRow(null,   "file in the chosen directory.");
+    table.printRow(null,   "DEFAULT: '.'  (current directory)");
+    table.println();
     table.printRow(READ_MORSEL, "reads/verifies the contents of a morsel file");
     table.println();
     table.printRow(JURNO_STATE, "prints or outputs structured hashes encapsulating all the");
@@ -434,17 +648,9 @@ public class Jurno extends MainTemplate {
     table.println();
     
     table.printRow(LD,    "sets the ledger directory");
-    table.printRow(null,  "DEFAULT: same as the text file, but with a '" + EXTENSION + "' extension");
+    table.printRow(null,  "DEFAULT: same as the text file, but with the '" + EXTENSION + "' extension");
+    table.printRow(null,  "         added.");
     table.println();
-//    table.printRow(null,   "Line number(s):");
-//    table.printRow(null,   "==============");
-//    table.println();
-//    table.printRow(null,   "Lines are numbered in one of two ways: actual and ledgerable. Actual");
-//    table.printRow(null,   "line numbers are just the ordinary line numbers you see in a typical");
-//    table.printRow(null,   "text editor. However, not all lines in the text file figure in the");
-//    table.printRow(null,   "journal's state: blank, empty, or comment lines do not count: the");
-//    table.printRow(null,   "ledgerable line numbers exclude these.");
-//    table.println();
     
   }
   
@@ -455,19 +661,13 @@ public class Jurno extends MainTemplate {
   private final static String STATUS = "status";
   private final static String UPDATE = "update";
   private final static String TRIM = "trim";
-  /*
-   * TODO:
-   * Whatever you name this..
-   * 1) write path: lines (line range)
-   * 2) read path:
-   *  *  verify against journal skip path
-   *  * use common hash grammar
-   * 
-   */
+  
+  
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String READ_MORSEL = "read-morsel";
   private final static String JURNO_STATE = "jurno-state";
   
+  private final static String FILE = "file";
   
   //  - - O P T I O N S - -
   

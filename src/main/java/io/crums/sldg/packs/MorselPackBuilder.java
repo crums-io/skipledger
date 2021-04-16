@@ -386,25 +386,6 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   
-  /**
-   * The lowest (full) row number in the bag, or 0 if empty.
-   * 
-   * @return &ge; 0
-   */
-  public long lo() {
-    return rowPackBuilder.lo();
-  }
-  
-
-  /**
-   * The highest (full) row number in the bag, or 0 if empty.
-   *
-   * @return &ge; {@linkplain #lo()}
-   */
-  public long hi() {
-    return rowPackBuilder.hi();
-  }
-  
   
 
   
@@ -434,6 +415,17 @@ public class MorselPackBuilder implements MorselBag, Serial {
   @Override
   public boolean hasFullRow(long rowNumber) {
     return rowPackBuilder.hasFullRow(rowNumber);
+  }
+  
+  @Override
+  public long lo() {
+    return rowPackBuilder.lo();
+  }
+  
+
+  @Override
+  public long hi() {
+    return rowPackBuilder.hi();
   }
   
   

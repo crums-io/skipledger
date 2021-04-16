@@ -15,6 +15,7 @@ import io.crums.io.Opening;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.HashConflictException;
+import io.crums.sldg.cli.FilenamingConvention;
 import io.crums.sldg.entry.Entry;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
@@ -63,20 +64,48 @@ public class MorselFile {
   
   /**
    * Creates a new morsel file at the {@code target} file path using the given {@code builder}.
+   * If the target is a path to a non-existent file, then the file is written to the destination
+   * as given; if however the target is a path to a directory, then a file with a name generated
+   * from the characteristics of the given {@linkplain builder} is returned.
+   * 
+   * @return the file the morsel was written to
    */
-  public static void createMorselFile(File target, MorselPackBuilder builder) throws IOException {
+  public static File createMorselFile(File target, MorselPackBuilder builder) throws IOException {
     Objects.requireNonNull(target, "null target");
     Objects.requireNonNull(builder, "null builder");
+    
+    target = prepareTarget(target, builder);
     
     try (var ch = Opening.CREATE.openChannel(target)) {
       ChannelUtils.writeRemaining(ch, header());
       ChannelUtils.writeRemaining(ch, builder.serialize());
     }
+    
+    return target;
   }
   
   
   
-  
+  private static File prepareTarget(File target, MorselPackBuilder builder) {
+    if (!target.isDirectory())
+      return target;
+    
+    
+    String name;
+    if (builder instanceof DbMorselBuilder) {
+      name = ((DbMorselBuilder) builder).getName();
+    } else {
+      name = target.getAbsoluteFile().getName();
+    }
+    
+    String filename = FilenamingConvention.INSTANCE.morselFilename(name, builder);
+    
+    target = new File(target, filename);
+    if (target.exists())
+      throw new IllegalStateException("file already exists: " + target);
+    
+    return target;
+  }
   
   
   

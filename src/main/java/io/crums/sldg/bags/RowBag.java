@@ -14,12 +14,14 @@ import io.crums.sldg.SldgConstants;
 import io.crums.util.hash.Digest;
 
 /**
- * A bag of rows. The general contract is that if a row's
+ * <p>A bag of rows. The general contract is that if a row's
  * {@linkplain #inputHash(long) input hash} is known, then
  * the {@linkplain #rowHash(long) row hash}es the row links
- * to are also known. <strike>This interface does not advertise <em>
- * which</em> rows are in the bag: that can be defined elsewhere
- * in multiple ways, so we punt for now.</strike>
+ * to are also known.
+ * </p><p>
+ * <em>Return values are read-only.</em> Excepting buffers (which carry positional state),
+ * this means return values are immutable.
+ * </p>
  */
 public interface RowBag extends Digest {
   
@@ -51,11 +53,34 @@ public interface RowBag extends Digest {
    * Returns the row numbers for which full rows in this bag
    * can be constructed.
    * 
-   * @return non-null, strictly ascending list of positive row numbers
+   * @return non-null, not empty, strictly ascending list of positive row numbers
    * 
    * @see #getRow(long)
    */
   List<Long> getFullRowNumbers();
+
+  
+
+  /**
+   * The lowest (full) row number in the bag, or 0 if empty.
+   * 
+   * @return &ge; 0
+   */
+  default long lo() {
+    List<Long> rns = getFullRowNumbers();
+    return rns.isEmpty() ? 0L : rns.get(0);
+  }
+  
+
+  /**
+   * The highest (full) row number in the bag, or 0 if empty.
+   *
+   * @return &ge; {@linkplain #lo()}
+   */
+  default long hi() {
+    List<Long> rns = getFullRowNumbers();
+    return rns.isEmpty() ? 0L : rns.get(rns.size() - 1);
+  }
   
   
   /**
@@ -66,6 +91,9 @@ public interface RowBag extends Digest {
   default boolean hasFullRow(long rowNumber) {
     return Collections.binarySearch(getFullRowNumbers(), rowNumber) >= 0;
   }
+  
+  
+  
   
   
   /**

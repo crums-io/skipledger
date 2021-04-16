@@ -415,22 +415,14 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     return inputHashes.isEmpty();
   }
   
-  
-  /**
-   * The highest (full) row number in the bag, or 0 if empty.
-   *
-   * @return &ge; {@linkplain #lo()}
-   */
+
+  @Override
   public synchronized long hi() {
     return inputHashes.isEmpty() ? 0L : inputHashes.lastKey();
   }
   
-  
-  /**
-   * The lowest (full) row number in the bag, or 0 if empty.
-   * 
-   * @return &ge; 0
-   */
+
+  @Override
   public synchronized long lo() {
     return inputHashes.isEmpty() ? 0L : inputHashes.firstKey();
   }
