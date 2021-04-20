@@ -78,17 +78,7 @@ public class Jurno extends MainTemplate {
     }
   }
   
-  private static class ReadMorselCmd {
-    
-    File morselFile;
-    
-    ReadMorselCmd(File morselFile) {
-      if (morselFile == null)
-        throw new IllegalArgumentException("no morsel file given");
-      this.morselFile = morselFile;
-    }
-    
-  }
+  
   
   
   
@@ -104,7 +94,6 @@ public class Jurno extends MainTemplate {
   private Journal journal;
   
   private MakeMorselCmd makeMorsel;
-  private ReadMorselCmd readMorsel;
   
 
   /**
@@ -115,9 +104,9 @@ public class Jurno extends MainTemplate {
 
   @Override
   protected void init(String[] args) throws IllegalArgumentException, Exception {
-    ArgList argList = new ArgList(args);
+    ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL, READ_MORSEL);
+    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL);
     
     
     // set the opening preamble
@@ -132,15 +121,6 @@ public class Jurno extends MainTemplate {
       break;
     case CREATE:
       opening = Opening.CREATE;
-      break;
-    case READ_MORSEL:
-      
-      // this does not depend on access to any particular journal
-      // the command is here as a client to morsels created by _other_ journals
-      this.readMorsel = new ReadMorselCmd(argList.removeExistingFile());
-      
-      System.out.println("Sorry to put you thru this.. Not implemented yet.");
-      StdExit.OK.exit();
       break;
     }
     
@@ -591,10 +571,9 @@ public class Jurno extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Commands in the table below each take a filename (file path) as an argument. Excepting '" + READ_MORSEL +
-        "', every command takes the journaled text filename (not the similarly named ledger directory) as an argument. By default the ledger " +
-        "(the opaque database that backs the journal) is found in the same directory " +
-        "as the text file and is named the same as the text file, but with the '" + EXTENSION + "' extension added.";
+        "In addition to those explicitly below, each command takes the journaled text file as argument. " +
+        "By default the ledger (the opaque database that backs the journal) is found in the same directory " +
+        "as the text file and is named the same as the text file, but with an added '" + EXTENSION + "' extension.";
     printer.printParagraph(paragraph);
     printer.println();
 
@@ -603,8 +582,7 @@ public class Jurno extends MainTemplate {
     
     table.printRow(CREATE, "creates a new journal for the given text file.");
     table.println();
-    table.printRow(STATUS, "prints the status of the journal associated with the given");
-    table.printRow(null,   "text file");
+    table.printRow(STATUS, "prints the status of the journaled text file");
     table.println();
     table.printRow(UPDATE, "updates the ledger to the state of the journaled text file. Date");
     table.printRow(null,   "and time information (in the form of crumtrails and beacons) are");
@@ -616,30 +594,27 @@ public class Jurno extends MainTemplate {
 
     out.println();
     table.printHorizontalTableEdge('-');
-    table.printlnCenteredSpread("OUTPUT / PRINT", 2);
+    table.printlnCenteredSpread("OUTPUT", 2);
     table.printHorizontalTableEdge('-');
     out.println();
     
-    table.printRow(MAKE_MORSEL, "prints or outputs a morsel file containing the contents of");
-    table.printRow(null,   "the given ledgered line number(s). Additonal parameters:");
+    table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
+    table.printRow(null,   "given ledgered line number(s)");
+    table.printRow(null,   "Args:");
     table.println();
     table.printRow(null,   "<line-numbers>  (required)");
+    table.println();
     table.printRow(null,   "Strictly ascending line numbers separated by commas (no spaces)");
     table.printRow(null,   "Ranges may be substituted for numbers. For example:");
-    table.printRow(null,   "303,466,592-598,717");
+    table.printRow(null,   "308,466,592-598,717");
     table.println();
     table.printRow(null,   FILE + "=<path/to/morselfile>  (optional)");
+    table.println();
     table.printRow(null,   "If provided, then <path/to/morselfile> is the destination path.");
     table.printRow(null,   "The given path should not be an existing file; however, if it's");
     table.printRow(null,   "an existing directory, then a filename is generated for the");
     table.printRow(null,   "file in the chosen directory.");
     table.printRow(null,   "DEFAULT: '.'  (current directory)");
-    table.println();
-    table.printRow(READ_MORSEL, "reads/verifies the contents of a morsel file");
-    table.println();
-    table.printRow(JURNO_STATE, "prints or outputs structured hashes encapsulating all the");
-    table.printRow(null,   "ledgered lines in the journal in an opaque way.");
-    table.printRow(null,   "");
     table.println();
     
     table.printHorizontalTableEdge('-');
@@ -664,15 +639,14 @@ public class Jurno extends MainTemplate {
   
   
   private final static String MAKE_MORSEL = "make-morsel";
-  private final static String READ_MORSEL = "read-morsel";
-  private final static String JURNO_STATE = "jurno-state";
+//  private final static String READ_MORSEL = "read-morsel";
+//  private final static String JURNO_STATE = "jurno-state";
   
   private final static String FILE = "file";
   
   //  - - O P T I O N S - -
   
   private final static String LD = "-ld";
-  private final static String FORCE = "-force";
 
 }
 

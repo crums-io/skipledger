@@ -45,8 +45,8 @@
             </program>
             
             <program>
-              <mainClass>io.crums.sldg.cli.Nug</mainClass>
-              <id>nug</id>
+              <mainClass>io.crums.sldg.cli.Mrsl</mainClass>
+              <id>mrsl</id>
             </program>
             
             <program>

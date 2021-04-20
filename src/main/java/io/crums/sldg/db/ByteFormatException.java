@@ -27,12 +27,6 @@ public class ByteFormatException extends SldgException {
   public ByteFormatException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
     super(message, cause, enableSuppression, writableStackTrace);
   }
-
-  @Override
-  public synchronized ByteFormatException fillInStackTrace() {
-    super.fillInStackTrace();
-    return this;
-  }
   
   
 

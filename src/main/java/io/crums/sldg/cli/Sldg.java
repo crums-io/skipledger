@@ -153,7 +153,7 @@ public class Sldg extends MainTemplate {
     if (args.length == 0)
       throw new IllegalArgumentException("No arguments specified");
     
-    ArgList argList = new ArgList(args);
+    ArgList argList = newArgList(args);
     
     this.dir = new File(argList.removeRequiredValue(DIR));
     this.mode = getMode(argList);

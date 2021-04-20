@@ -4,7 +4,8 @@
 package io.crums.sldg;
 
 /**
- * 
+ * Indicates the SHA-256 hash of one thing does not match the hash another when
+ * it was supposed to.
  */
 @SuppressWarnings("serial")
 public class HashConflictException extends SldgException {

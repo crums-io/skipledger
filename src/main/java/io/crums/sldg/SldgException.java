@@ -28,10 +28,4 @@ public class SldgException extends CrumsException {
     super(message, cause, enableSuppression, writableStackTrace);
   }
 
-  @Override
-  public synchronized SldgException fillInStackTrace() {
-    super.fillInStackTrace();
-    return this;
-  }
-
 }

@@ -98,7 +98,7 @@ public class Entry {
   }
   
   /**
-   * Returns a read-only view of the contents.
+   * Returns a read-only view of the content.
    */
   public final ByteBuffer content() {
     return contents.asReadOnlyBuffer();
