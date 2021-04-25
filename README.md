@@ -14,7 +14,7 @@ not as a search structure. Here are some of its key differences:
 4. *Deterministic structure.* The row number (the index of an item in the list) uniquely determines the number of skip pointers its corresponding node (row) in the list has: unlike a skip list, no randomization is involved.
 5. *Efficient verification.* Whereas a skip list is efficient at search, a skip ledger's mojo lies in its efficiency at verification.
 
-So a skip ledger is like a tamper proof linked list, but on link-steroids. The main advantage it offers over a (singlely) linked tamper proof list is that you don't need to show the whole list (or any substantial part of it) in order to prove an item's position in in the list.
+So a skip ledger is like a tamper proof linked list, but on link-steroids. The main advantage it offers over a (singly) linked tamper proof list is that you don't need to show the whole list (or any substantial part of it) in order to prove an item's position in the list.
 
 Which ledger? (Which list?) In the same way that the root hash of a Merkle tree uniquely identifies the tree, the hash of the last row (node) in a skip ledger uniquely identifies the ledger (the append-only list). To prove that an item is in the ledger (its hash actually--equivalently) one needs to enumerate a list of linked rows (nodes) from the last row in the ledger (whose hash defines the ledger's state) to the row number (index) at which the item is located. With a skip ledger, the number of rows in such hash proofs is on the order of the logarithm of the number of rows in the ledger.
 
@@ -375,7 +375,7 @@ $ jurno make-morsel mytext.txt 47,50 <br/>
 2 entries written to morsel: ./mytext.txt-52-49.mrsl <br/>
 </pre>
 
- Let's the *mrsl* tool to *list* what's in it.
+ Let's use the *mrsl* tool to *list* what's in it.
  
 >
 <pre>
@@ -522,7 +522,7 @@ The immediate tasks ahead, however, are more mundane, but still interesting.
 # Thank you
 
 Thanks for reading this far, and if you did, for trying out these tools. I hope this concept of ledgers and morsels has piqued your interest and lights bright
-ideas about how might use them. Feel free to drop suggestions, thoughts, feedback, and yes, code. Let's build this together.
+ideas about how you might use them. Feel free to drop suggestions, thoughts, feedback, and yes, code. Let's build this together.
 
 <br/><br/>
 Babak Farhang<br/>
