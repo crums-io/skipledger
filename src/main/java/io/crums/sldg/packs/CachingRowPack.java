@@ -9,12 +9,18 @@ import io.crums.sldg.Row;
 import io.crums.sldg.SerialRow;
 
 /**
- * 
+ * The base implementation is clean but terribly inefficient. A bit of caching,
+ * memo-ization, speeds it up.
  */
 public class CachingRowPack extends RowPack {
   
   private final HashMap<Long, SerialRow> cache = new HashMap<>();
 
+  /**
+   * Promotion constructor.
+   * 
+   * @param base
+   */
   public CachingRowPack(RowPack base) {
     super(base);
   }

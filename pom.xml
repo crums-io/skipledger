@@ -21,6 +21,23 @@
 <build>
     <plugins>
 
+      <!--  Works, but doesn't fit my needs. See comment in appassembler-maven-plugin below.. -->
+      
+      <!--plugin>
+      <artifactId>maven-assembly-plugin</artifactId>
+      <version>3.3.0</version>
+      <configuration>
+        <archive>
+          <manifest>
+            <mainClass>io.crums.sldg.cli.Jurno</mainClass>
+          </manifest>
+        </archive>
+        <descriptorRefs>
+          <descriptorRef>jar-with-dependencies</descriptorRef>
+        </descriptorRefs>
+      </configuration>
+      </plugin-->
+
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>appassembler-maven-plugin</artifactId>
@@ -28,9 +45,16 @@
         
         <configuration>
         
-          <platforms>
+        <!--
+          Note: there must be better ways to do this. I want a single jar file with
+          multiple launch scripts
+         -->
+        
+      
+        
+          <!--platforms>
             <platform>unix</platform>
-          </platforms>
+          </platforms-->
           
           <repositoryLayout>flat</repositoryLayout>
         

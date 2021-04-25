@@ -52,7 +52,7 @@ public class Jurno extends MainTemplate {
     /**
      * Ledgered lines
      */
-    List<Integer> lineNums;
+    List<Integer> lineNums = Collections.emptyList();
     
     void setMorselFile(String filepath) {
       this.morselFile = new File(filepath);
@@ -106,13 +106,14 @@ public class Jurno extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL);
+    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL, STATE_MORSEL);
     
     
     // set the opening preamble
     switch (command) {
     case STATUS:
     case MAKE_MORSEL:
+    case STATE_MORSEL:
       this.opening = Opening.READ_ONLY;
       break;
     case TRIM:
@@ -157,7 +158,11 @@ public class Jurno extends MainTemplate {
       
       argList.removeContained(remainingArgs);
       
-    } //  if (MAKE_MORSEL
+    } else if (STATE_MORSEL.equals(command)) {
+      
+      this.makeMorsel = new MakeMorselCmd();
+      makeMorsel.setMorselFile(argList.removeValue(FILE, "."));
+    }
     
     argList.enforceNoRemaining();
   }
@@ -341,6 +346,10 @@ public class Jurno extends MainTemplate {
         makeMorsel();
         break;
         
+      case STATE_MORSEL:
+        makeMorsel();
+        break;
+        
       }   // switch (command
       
       
@@ -359,8 +368,9 @@ public class Jurno extends MainTemplate {
     
     var builder = new JurnoMorselBuilder(journal);
     
-    builder.addEntriesByLineNumber(makeMorsel.lineNums);  // for now we canonicalize,
-                                                          // keep it simple for validation
+    if (!makeMorsel.lineNums.isEmpty())
+      builder.addEntriesByLineNumber(makeMorsel.lineNums);  // for now we canonicalize,
+                                                            // keep it simple for validation
     
     
     File file = builder.createMorselFile(makeMorsel.morselFile);
@@ -617,6 +627,20 @@ public class Jurno extends MainTemplate {
     table.printRow(null,   "DEFAULT: '.'  (current directory)");
     table.println();
     
+    table.printRow(STATE_MORSEL, "creates a morsel file containing only the ledger's state-");
+    table.printRow(null,   "path. That is the shortest list of rows connecting the last row");
+    table.printRow(null,   "to the first. It serves as a fingerprint against which older");
+    table.printRow(null,   "morsels can be validated (and optionally be updated).");
+    table.println();
+    table.printRow(null,   FILE + "=<path/to/morselfile>  (optional)");
+    table.println();
+    table.printRow(null,   "If provided, then <path/to/morselfile> is the destination path.");
+    table.printRow(null,   "The given path should not be an existing file; however, if it's");
+    table.printRow(null,   "an existing directory, then a filename is generated for the");
+    table.printRow(null,   "file in the chosen directory.");
+    table.printRow(null,   "DEFAULT: '.'  (current directory)");
+    table.println();
+    
     table.printHorizontalTableEdge('-');
     table.printlnCenteredSpread("OPTIONS", 2);
     table.printHorizontalTableEdge('-');
@@ -639,10 +663,11 @@ public class Jurno extends MainTemplate {
   
   
   private final static String MAKE_MORSEL = "make-morsel";
+  private final static String STATE_MORSEL = "state-morsel";
 //  private final static String READ_MORSEL = "read-morsel";
 //  private final static String JURNO_STATE = "jurno-state";
   
-  private final static String FILE = "file";
+  private final static String FILE = "save";
   
   //  - - O P T I O N S - -
   

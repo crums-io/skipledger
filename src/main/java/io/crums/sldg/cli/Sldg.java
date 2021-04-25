@@ -996,12 +996,13 @@ public class Sldg extends MainTemplate {
     table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
     table.printRow(null,        "numbered rows", null);
     out.println();
-    table.printRow(NUG,         "prints or outputs a nugget for the given row number argument.", REQ_CH);
-    table.printRow(null,        "A nugget proves that the entry (input) hash at a given row number is", null);
-    table.printRow(null,        "linked from a row at a higher number (highest, at the time published)", null);
-    table.printRow(null,        "in the ledger. It may also contains evidence seting the row's minimum", null);
-    table.printRow(null,        "age.", null);
-    out.println();
+    // Deprecating the nugget concept for now. morsels are much more powerful.
+//    table.printRow(NUG,         "prints or outputs a nugget for the given row number argument.", REQ_CH);
+//    table.printRow(null,        "A nugget proves that the entry (input) hash at a given row number is", null);
+//    table.printRow(null,        "linked from a row at a higher number (highest, at the time published)", null);
+//    table.printRow(null,        "in the ledger. It may also contains evidence seting the row's minimum", null);
+//    table.printRow(null,        "age.", null);
+//    out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     table.println();
     table.printHorizontalTableEdge('-');

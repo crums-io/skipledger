@@ -67,12 +67,20 @@ public class MorselFile {
    * as given; if however the target is a path to a directory, then a file with a name generated
    * from the characteristics of the given {@linkplain builder} is returned.
    * 
+   * @param target target file or directory; {@code null} is interpreted as the current directory
+   * 
    * @return the file the morsel was written to
    */
   public static File createMorselFile(File target, MorselPackBuilder builder) throws IOException {
-    Objects.requireNonNull(target, "null target");
+//    Objects.requireNonNull(target, "null target");
     Objects.requireNonNull(builder, "null builder");
     
+//    System.out.println(
+//        "+++MorselFile+++ target=" + target +
+//        " target.isDirectory()=" + target.isDirectory() +
+//        " absolute=" + target.getAbsoluteFile() +
+//        " absolute.getName()=" + target.getAbsoluteFile().getName() +
+//        " absolute.isDirectory()=" + target.getAbsoluteFile().isDirectory());
     target = prepareTarget(target, builder);
     
     try (var ch = Opening.CREATE.openChannel(target)) {
@@ -86,7 +94,10 @@ public class MorselFile {
   
   
   private static File prepareTarget(File target, MorselPackBuilder builder) {
-    if (!target.isDirectory())
+    
+    if (target == null)
+      target = new File(".");
+    else if (!target.isDirectory())
       return target;
     
     
@@ -94,7 +105,13 @@ public class MorselFile {
     if (builder instanceof DbMorselBuilder) {
       name = ((DbMorselBuilder) builder).getName();
     } else {
-      name = target.getAbsoluteFile().getName();
+      
+      // TODO: this mess should go in FileUtils.. never want to do this again
+      name = target.getName();
+      if (name.isEmpty() || name.equals("."))
+        name = target.getAbsoluteFile().getParentFile().getName();
+      else if (name.equals(".."))
+        name = target.getAbsoluteFile().getParentFile().getParentFile().getName();
     }
     
     String filename = Filenaming.INSTANCE.morselFilename(name, builder);

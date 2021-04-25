@@ -5,6 +5,7 @@ package io.crums.sldg.packs;
 
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedSet;
@@ -16,6 +17,7 @@ import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
+import io.crums.sldg.SerialRow;
 import io.crums.sldg.SldgConstants;
 import io.crums.util.Lists;
 
@@ -59,8 +61,9 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   private final TreeMap<Long, ByteBuffer> refHashes = new TreeMap<>();
   
   
-
-
+  private final HashMap<Long, SerialRow> cache = new HashMap<>();
+  
+  
 
 
 
@@ -173,87 +176,11 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
   
   
-  /**
-   * Extends this bag to a higher row number by adding the given {@code path} with
-   * a higher row number. 
-   * <p>
-   * Two requirements must be met by the {@code path} argument to extend the bag:
-   * </p>
-   * <ol>
-   * <li>{@code path}.{@linkplain Path#hiRowNumber() hiRowNumber()} must be greater than
-   * {@linkplain #hi()}</li>
-   * <li>{@code path} must intersect or reference an existing full row (as advertised by
-   * {@linkplain #getFullRowNumbers()}).</li>
-   * </ol>
-   * 
-   * @return {@code true} <b>iff</b> one or more rows were added
-   * 
-   * @throws HashConflictException
-   *         if a hash in {@code path} conflicts with existing hashes. If this happens, then
-   *         the given path doesn't come from this bag's ledger.
-   *         
-   * @deprecated (for now, lol). Instead of <em>extending</em> a pack, try adding <em>this</em>
-   *            to the one you're extending. I prefer this model, because this way
-   *            every full row in a morsel is ultimately referenced by the last row
-   */
-  public synchronized boolean extend(Path path) throws HashConflictException {
-    
-    if (path.hiRowNumber() < hi())
-      return false;;
-    
-    
-    // we do this in 2 passes..
-    
-    // first pass we check to see if we can even do this
-    boolean linked = false;
-    
-    for (Long coveredRn : path.rowNumbersCovered().tailSet(1L))
-      linked |= pathLinkedAt(path, coveredRn);
-    
-    if (!linked)
-      return false;
-    
-    // 1st pass checks out
-    // 2nd pass: do it, replace / add rows
-    
-    for (Row row : path.rows())
-      addSansCheck(row);
-    
-    return true;
-  }
-  
   
   
   
   
 
-  
-  
-  /**
-   * 
-   * @param path
-   * @param rn a member of {@code path}.{@linkplain Path#rowNumbersCovered() rowNumbersCovered()}
-   * @return
-   */
-  private boolean pathLinkedAt(Path path, Long rn) {
-    boolean linked = false;
-    
-    if (isKnownRow(rn)) {
-      if (rowHash(rn).equals(path.getRowHash(rn)))
-          linked = true;
-      else
-        throw new HashConflictException("at row[" + rn + "] in path " + path);
-    }
-    
-    return linked;
-  }
-  
-  
-  
-  
-  private  boolean isKnownRow(Long rn) {
-    return refHashes.containsKey(rn) || inputHashes.containsKey(rn);
-  }
   
   
   /**
@@ -332,6 +259,8 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     // don't have to if we maintain the invariants for
     // this.inputHashes and this.refHashes )
     
+    // do we need to cache.clear() (?)
+    // can reason it's unnecessary.. so won't
     addSansCheck(row);
     
     return true;
@@ -452,6 +381,22 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     if (input == null)
       throw new IllegalArgumentException("no info for row with given number: " + rowNumber);
     return input.asReadOnlyBuffer();
+  }
+
+
+  @Override
+  public synchronized Row getRow(long rowNumber) {
+    Long rn = rowNumber;
+    SerialRow cachedRow = cache.get(rn);
+    if (cachedRow == null) {
+      Row row = super.getRow(rowNumber);
+      // this cascades, but note that entering a synchronized
+      // block when the monitor is already-held is cheap
+      cachedRow = new SerialRow(row);
+      cache.put(rn, cachedRow);
+    }
+    
+    return cachedRow;
   }
 
   

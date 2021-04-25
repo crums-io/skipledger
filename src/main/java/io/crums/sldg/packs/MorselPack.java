@@ -3,8 +3,10 @@
  */
 package io.crums.sldg.packs;
 
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.SortedSet;
 
@@ -105,7 +107,7 @@ public final class MorselPack implements MorselBag {
     TrailPack trailPack = TrailPack.load(parts.getPart(2), false);
     EntryPack entryPack = EntryPack.load(parts.getPart(3));
     
-    return new MorselPack(rowPack, pathPack, trailPack, entryPack);
+    return new MorselPack(new CachingRowPack(rowPack), pathPack, trailPack, entryPack);
   }
   
   
@@ -138,7 +140,9 @@ public final class MorselPack implements MorselBag {
       if (!rowNums.containsAll(decl.rowNumbers()))
           throw new ByteFormatException("declared path " + decl + " references rows not in bag");
     }
-    for (Tuple<Long,Long> beacon : pathPack.beaconRows()) {
+    
+    var beacons = pathPack.beaconRows();
+    for (Tuple<Long,Long> beacon : beacons) {
       Long rn = beacon.a;
       if (!rowNums.contains(rn))
         throw new ByteFormatException("beacon row " + rn + " not found in row pack");
@@ -147,6 +151,8 @@ public final class MorselPack implements MorselBag {
     // validate trailPack
     if (!rowNums.containsAll(trailPack.trailedRows()))
       throw new ByteFormatException("trail pack references rows not found in row bag");
+    
+    List<Long> beaconRows = Lists.map(beacons, b -> b.a);
     for (Long rn : trailPack.trailedRows()) {
       CrumTrail trail = trailPack.crumTrail(rn);
       if (!trail.verify())
@@ -155,13 +161,36 @@ public final class MorselPack implements MorselBag {
       ByteBuffer rowHash = rowPack.rowHash(rn);
       if (!rowHash.equals(witnessedHash))
         throw new HashConflictException("hash referenced in crumtrail does not match row " + rn);
+      {
+        int bindex = Collections.binarySearch(beaconRows, rn);
+        
+        if (bindex < 0) {
+          
+          int insertIndex = -1 - bindex;
+          if (insertIndex != 0 && beacons.get(insertIndex - 1).b > trail.crum().utc())
+            throw new ByteFormatException(
+                "beacon " + beacons.get(insertIndex - 1) +
+                " ahead crumtrail [" + rn + "," + trail.crum().utc() + "]");
+          
+          if (insertIndex < beacons.size() && beacons.get(insertIndex).b < trail.crum().utc())
+            throw new ByteFormatException(
+                "beacon " + beacons.get(insertIndex) +
+                " behind crumtrail [" + rn + "," + trail.crum().utc() + "]");
+        
+        } else if (beacons.get(bindex).b > trail.crum().utc())
+            throw new ByteFormatException(
+                "beacon " + beacons.get(bindex) +
+                " ahead crumtrail [" + rn + "," + trail.crum().utc() + "]");
+        
+      }
     }
     
     // validate entryPack
     if (!rowNums.containsAll(Lists.map(entryPack.availableEntries(), ei -> ei.rowNumber())))
       throw new ByteFormatException("entry pack references rows not found in row bag");
     
-    // TODO: sanity-check beacon/crumtrail row-times
+    
+    // 
   }
   
   

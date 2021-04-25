@@ -83,7 +83,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
       int rowsAdded = rowPackBuilder.addAll(pack.rowPack());
       int objectsAdded = pathPackBuilder.addPathPack(pack.pathPack());
       int trailsAdded = trailPackBuilder.addAll(pack.trailPack());
-      return rowsAdded + objectsAdded + trailsAdded;
+      int entriesAdded = entryPackBuilder.addAll(pack.entryPack());
+      return rowsAdded + objectsAdded + trailsAdded + entriesAdded;
     }
   }
   
@@ -375,7 +376,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
       for (var info : infos) {
         ByteBuffer entryContent = mp.entry(info.rowNumber()).content();
         String meta = info.hasMeta() ? info.meta() : null;
-        if (addEntry(info.rowNumber(), entryContent, meta))
+        boolean added = addEntry(info.rowNumber(), entryContent, meta);
+        if (added)
           ++count;
       }
       return count;

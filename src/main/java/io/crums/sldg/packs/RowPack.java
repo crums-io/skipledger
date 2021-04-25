@@ -15,10 +15,14 @@ import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.Ledger;
+import io.crums.sldg.bags.RowBag;
 import io.crums.sldg.db.ByteFormatException;
 import io.crums.util.Lists;
 
 /**
+ * Base {@linkplain RowBag} implementation. Note this uses no caching/memo-ization.
+ * Consequently the cost every full-row lookup is linear in the row number. Not good:
+ * validating the pack then is <b>0</b>(n<sup><tiny>2</tiny></sup>). See {@linkplain CachingRowPack}.
  * 
  * <h2>Serial Format</h2>
  * 

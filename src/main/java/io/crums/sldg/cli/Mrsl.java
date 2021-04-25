@@ -11,7 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -27,6 +27,7 @@ import io.crums.sldg.db.ByteFormatException;
 import io.crums.sldg.db.MorselFile;
 import io.crums.sldg.entry.Entry;
 import io.crums.sldg.packs.MorselPack;
+import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -46,10 +47,12 @@ public class Mrsl extends MainTemplate {
   private String command;
   private File morselFile;
   
-//  private String listOpts;
   private List<Long> rowNumbers;
   private File saveFile;
   private String sep = "\n";
+  
+  private List<File> morselFiles;
+  
   
   private Mrsl() {
   }
@@ -63,34 +66,75 @@ public class Mrsl extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, IOException {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(SUM, STATE, LIST, ENTRY);
-    this.morselFile = argList.removeExistingFile();
+    this.command = argList.removeCommand(SUM, STATE, LIST, ENTRY, MERGE);
     switch (command) {
     case SUM:
     case STATE:
     case LIST:
+      this.morselFile = argList.removeExistingFile();
       break;
     case ENTRY:
+      this.morselFile = argList.removeExistingFile();
       this.rowNumbers = argList.removeNumbers(true);
       if (rowNumbers.isEmpty())
         throw new IllegalArgumentException("missing entry row numbers");
-      String filepath = argList.removeValue(FILE);
-      if (filepath != null) {
-        saveFile = new File(filepath);
-        File parent = saveFile.getParentFile();
-        if (parent != null && !parent.isDirectory())
-          throw new IllegalArgumentException("parent directory of given path does not exist: " + filepath);
-      }
+      setSaveFile(argList);
+      String separator = argList.removeValue(SEP);
+      if (separator != null)
+        this.sep = Strings.unescape(separator);
       break;
+    case MERGE:
+      this.morselFiles = argList.removeExistingFiles();
+      
+      if (morselFiles.size() < 2)
+        throw new IllegalArgumentException(
+            morselFiles.isEmpty() ?
+                "missing morsel files for merge" : "missing 2nd morsel file for merge");
+      
+//      var remainingArgs = argList.argsRemaining();
+//      if (argList.argsRemaining().size() > 1)
+//      
+//      switch (remainingArgs.size()) {
+//      case 0:
+//        throw new IllegalArgumentException("missing path to new morsel file (must not exist)");
+//      case 1:
+//        break;
+//      default:
+//        throw new IllegalArgumentException(
+//          "ambiguous file destination for new morsel: " + remainingArgs);
+//      }
+
+      setSaveFile(argList);
+      break;
+      
     default:
       throw new RuntimeException("assertion failed. command=" + command);
     }
-    if (morselFile == null)
+    if (morselFile == null && morselFiles == null)
       throw new IllegalArgumentException("required path/to/morsel file missing");
     
     
     argList.enforceNoRemaining();
   }
+  
+  
+  private void setSaveFile(ArgList argList) {
+    String filepath = argList.removeValue(SAVE);
+    if (filepath != null) {
+      saveFile = new File(filepath);
+      checkSaveParentDir();
+    }
+  }
+  
+  
+  private void checkSaveParentDir() {
+    File parent = saveFile.getParentFile();
+    if (parent != null && !parent.isDirectory())
+      throw new IllegalArgumentException(
+          "parent directory of given path does not exist: " + saveFile);
+    
+  }
+  
 
   @Override
   protected void start() throws InterruptedException, IOException {
@@ -101,10 +145,19 @@ public class Mrsl extends MainTemplate {
     } catch (SldgException sx) {
       
       if (sx instanceof HashConflictException) {
-        throw new SldgException("Hash conflict in morsel file " + morselFile, sx);
+        String msg;
+        if (morselFile != null)
+          msg = "Hash conflict in morsel file " + morselFile;
+        else
+          msg = "Hash conflict across morsel files " + morselFiles;
+        
+        if (sx.getMessage() != null)
+          msg += ": " + sx.getMessage();
+        
+        throw new HashConflictException(msg, sx);
       
       } else if (sx instanceof ByteFormatException) {
-        throw new SldgException("Illegal byte format in morsel file " + morselFile, sx);
+        throw new ByteFormatException("Illegal byte format in morsel file " + morselFile, sx);
       
       } else
         throw sx;
@@ -113,28 +166,88 @@ public class Mrsl extends MainTemplate {
   
   
   private void startImpl() throws InterruptedException, IOException, HashConflictException {
-    MorselFile morsel = new MorselFile(morselFile);
     switch (command) {
     case SUM:
-      printSummary(morsel);
+      printSummary(new MorselFile(morselFile));
       break;
     case STATE:
-      System.out.println(stateString(morsel.getMorselPack()));
+      System.out.println(stateString(new MorselFile(morselFile).getMorselPack()));
       break;
     case LIST:
-      list(morsel);
+      list(new MorselFile(morselFile));
       break;
     case ENTRY:
+      MorselFile morsel = new MorselFile(morselFile);
       if (saveFile == null)
         printEntries(morsel);
       else
         saveEntries(morsel);
+      break;
+    case MERGE:
+      merge();
       break;
     default:
       throw new RuntimeException("assertion failure. command=" + command);
     }
   }
   
+
+
+  private void merge() throws IOException {
+    
+    final int count = this.morselFiles.size();
+    
+    var out = System.out;
+    
+    out.println();
+    out.println("Loading " + count + " morsels for merge..");
+    
+    ArrayList<MorselFile> sources = new ArrayList<>(count);
+    MorselFile auth;
+    {
+      for (File f : morselFiles) {
+        out.print(" " + f);
+        sources.add(new MorselFile(f));
+        out.println();
+      }
+      
+      Collections.sort(sources, (a, b) -> compareMorsels(a, b));
+      
+      auth = sources.remove(sources.size() - 1);
+    }
+
+    out.println();
+    out.println(" authority: " + auth.getFile());
+    
+    
+    MorselPackBuilder builder = new MorselPackBuilder();
+    int objects = builder.init(auth.getMorselPack());
+    out.println();
+    out.println("init " + objects + pluralize(" object", objects) + " (hi row " + auth.getMorselPack().hi() + ")");
+    
+    
+    for (var morsel : sources) {
+      
+      out.print(" " + morsel.getFile() + " ..");
+      int added = builder.addAll(morsel.getMorselPack());
+      objects += added;
+      out.println(". " + added + pluralize(" object", added) + " added");
+    }
+    
+    File dest = MorselFile.createMorselFile(saveFile, builder);
+    
+    out.println();
+    out.println(objects + pluralize(" object", objects) + " merged to " + dest);
+  }
+  
+  private int compareMorsels(MorselFile a, MorselFile b) {
+    MorselPack packA = a.getMorselPack();
+    MorselPack packB = b.getMorselPack();
+    int comp = Long.compare(packA.hi(), packB.hi());
+    if (comp == 0)
+      comp = packA.getFullRowNumbers().size() - packB.getFullRowNumbers().size();
+    return comp;
+  }
 
 
   private void saveEntries(MorselFile morsel) throws IOException {
@@ -198,6 +311,8 @@ public class Mrsl extends MainTemplate {
       
       table = new TablePrint(fcw, DATE_COL, RM - fcw - DATE_COL);
     }
+    
+    table.println();
     
     var beacons = pack.beaconRows();
     
@@ -279,7 +394,6 @@ public class Mrsl extends MainTemplate {
   private void printTrail(long witRn, MorselPack pack, TablePrint table) {
     
     var trail = pack.crumTrail(witRn);
-    trail.verify(); // TODO: verify a pack already verifies so I don't have to do this
     
     Date date = new Date(trail.crum().utc());
     
@@ -346,7 +460,9 @@ public class Mrsl extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Commands in the table below each take a morsel file as argument.";
+        "Commands in the table below each take a morsel file as argument. The order in which " +
+        "arguments are entered doesn't matter. Reminder: if a required command name collides with a " +
+        "pathname, the pathname can be prefixed with '." + File.separatorChar + "'";
     printer.printParagraph(paragraph);
     printer.println();
 
@@ -365,24 +481,43 @@ public class Mrsl extends MainTemplate {
     table.printRow(ENTRY, "lists in detail the given entries or saves them to a file");
     table.printRow(null,  "Arguments:");
     table.println();
-    table.printRow(null,   "<line-numbers>  (required)");
+    table.printRow(null,   "<line-numbers>      (required)");
     table.println();
     table.printRow(null,   "Strictly ascending line numbers separated by commas or spaces");
     table.printRow(null,   "Ranges (incl.) may be substituted for numbers. For example:");
     table.printRow(null,   "308,466,592-598,717");
     table.println();
-    table.printRow(null, FILE + "=<path/to/file> (optional)");
+    table.printRow(null, SAVE + "=<path/to/file> (optional)");
     table.println();
     table.printRow(null,  "If provided, then entries are saved to the given file path in");
     table.printRow(null,  "the order given; otherwise lists the entries as text.");
     table.println();
-    table.printRow(null, SEP + "=<separator> (optional)");
+    table.printRow(null, SEP + "=<separator>     (optional)");
     table.println();
-    table.printRow(null,  "If provided with " + FILE + "=<path/to/file>, then each entry is");
+    table.printRow(null,  "If provided with " + SAVE + "=<path/to/file>, then each entry is");
     table.printRow(null,  "is trailed with the <seperator> string. To set with no separator,");
     table.printRow(null,   "leave the value empty.");
-    table.printRow(null,  "DEFAULT: " + SEP + "=\\n     (new line)");
+    table.printRow(null,  "DEFAULT: " + SEP + "=\\\\n     (new line)");
     table.println();
+    table.printRow(null,  "Note most shells will eat a single '\\' (which is why it is shown");
+    table.printRow(null,  "in doubles for the default above).");
+    table.println();
+
+    table.printRow(MERGE, "merges the given morsel files to a new morsel file. The morsels");
+    table.printRow(null,  "must come from the same ledger.");
+    table.printRow(null,  "Arguments:");
+    table.println();
+    table.printRow(null,   "<path/to/morsel_1> <path/to/morsel_2> ..  (2 or more required)");
+    table.println();
+    table.printRow(null, SAVE + "=<path/to/file> (optional)");
+    table.println();
+    table.printRow(null,  "If path/to/file doesn't exist, then the merged morsel gets");
+    table.printRow(null,  "created there; if the path is an existing directory, then a");
+    table.printRow(null,  "file with a merge-generated name is created in that directory.");
+    table.printRow(null,  "DEFAULT: '.'  (current directory)");
+    table.println();
+    
+    
   }
   
   
@@ -554,10 +689,11 @@ public class Mrsl extends MainTemplate {
   private final static String STATE = "state";
   private final static String LIST = "list";
   private final static String ENTRY = "entry";
+  private final static String MERGE = "merge";
   
   // named values (name=value)
   
-  private final static String FILE = "save";
+  private final static String SAVE = "save";
   private final static String SEP = "sep";
   
   // list options
