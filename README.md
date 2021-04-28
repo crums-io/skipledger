@@ -500,7 +500,6 @@ what the objects that are being hashed are, how those objects are to be accessed
 by use cases. Here's a short list of half-baked suggestions of adaptor widgets:
 
 * Log file adaptor.
-* Database driver adaptor.
 * Spreadsheet adaptor. (*jurno* sort of works for `.csv` files.)
 * Video chopping adaptor.
 
@@ -514,6 +513,7 @@ Another way to approach this is from the real-world applications side. What sema
 
 The immediate tasks ahead, however, are more mundane, but still interesting.
 
+* Database driver adaptor. ([issue 1](https://github.com/crums-io/skipledger/issues/1 ))
 * Improve the command line tools.
 * Improve the `.mrsl` file format. Publish a normative description, hopefully after peer feedback. (Right now, it's in comments alongside code.)
 * Find a way to express and verify structured hashing for an entry in a morsel file. (The hashing grammar in the crums-core library might help.)
