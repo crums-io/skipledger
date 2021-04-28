@@ -1,0 +1,1 @@
+packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"io.crums.sldg"},{"l":"io.crums.sldg.bags"},{"l":"io.crums.sldg.cli"},{"l":"io.crums.sldg.db"},{"l":"io.crums.sldg.db.flat"},{"l":"io.crums.sldg.demo.jurno"},{"l":"io.crums.sldg.entry"},{"l":"io.crums.sldg.json"},{"l":"io.crums.sldg.packs"},{"l":"io.crums.sldg.scraps"}];updateSearchResults();

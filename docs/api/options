@@ -1,0 +1,22 @@
+-classpath
+'/Users/babak/.m2/repository/io/crums/crums-core/0.0.2/crums-core-0.0.2.jar:/Users/babak/.m2/repository/io/crums/merkle-tree/0.0.2/merkle-tree-0.0.2.jar:/Users/babak/.m2/repository/io/crums/io-util/0.0.6/io-util-0.0.6.jar:/Users/babak/.m2/repository/com/googlecode/json-simple/json-simple/1.1.1/json-simple-1.1.1.jar'
+-encoding
+'UTF-8'
+-protected
+-sourcepath
+'/Users/babak/code/workspace/skipledger/src/main/java'
+-author
+-bottom
+'Copyright &#169; 2021. All rights reserved.'
+-charset
+'UTF-8'
+-d
+'/Users/babak/code/workspace/skipledger/target/site/apidocs'
+-docencoding
+'UTF-8'
+-doctitle
+'SkipLedger 0.0.1 API'
+-use
+-version
+-windowtitle
+'SkipLedger 0.0.1 API'

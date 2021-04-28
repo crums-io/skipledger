@@ -493,40 +493,12 @@ in a file named *docs.spath*. (The auto file extension mechanism is overrideable
 
 If the `file=docs` argument is not provided then the object is printed to the console in JSON.
 
-# Roadmaps
+# API Javadocs
 
-I released this project early because the possible roadmaps are many. Excepting *jurno*, the demo app that defines what a ledgerable line is, the library does not define
-what the objects that are being hashed are, how those objects are to be accessed and so on. These are layers whose design ought to be driven
-by use cases. Here's a short list of half-baked suggestions of adaptor widgets:
+Presently, the documentation is near the code. This is because things move fairly fast in early releases and it's difficult to maintain (or easy to overlook)
+docs, and keep them in synch with code changes. Javadocs for the latest version are [here](./api/index.html).
 
-* Log file adaptor.
-* Database driver adaptor.
-* Spreadsheet adaptor. (*jurno* sort of works for `.csv` files.)
-* Video chopping adaptor.
 
-Another way to approach this is from the real-world applications side. What semantics do we layer on the contents of a ledger? More semi-baked examples:
-
-* Product label tracking. (Already prototyping this at crums.io.)
-* Digital drivers license (and other government records). Each of these is tied to a specific type of government ledger.
-* Accounting ledgers. Layer in cryptographic proofs the numbers add up. (I'm not a cryptographer but am hopeful this can be achieved by something like an order-preserving encryption scheme.)
-* Bid and ask ledgers. Marketmaker's bid and ask ledger.
-* Is there a best way to record a morsel (from another ledger) in this ledger?
-
-The immediate tasks ahead, however, are more mundane, but still interesting.
-
-* Improve the command line tools.
-* Improve the `.mrsl` file format. Publish a normative description, hopefully after peer feedback. (Right now, it's in comments alongside code.)
-* Find a way to express and verify structured hashing for an entry in a morsel file. (The hashing grammar in the crums-core library might help.)
-* Rows marking the ledger owner's signature. This might then be packaged in a ledger's state-morsel.
-
-# Thank you
-
-Thanks for reading this far, and if you did, for trying out these tools. I hope this concept of ledgers and morsels has piqued your interest and lights bright
-ideas about how you might use them. Feel free to drop suggestions, thoughts, feedback, and yes, code. Let's build this together.
-
-<br/><br/>
-Babak Farhang<br/>
-April 24 2021
 
 
 
