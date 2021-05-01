@@ -15,6 +15,7 @@ import io.crums.sldg.db.CompactFileLedger;
  */
 public class CompactFileLedgerTest extends AbstractLedgerTest {
 
+  @Override
   protected Ledger newLedger(Object methodLabel) throws Exception {
     File file = getMethodOutputFilepath(methodLabel);
     return new CompactFileLedger(file);

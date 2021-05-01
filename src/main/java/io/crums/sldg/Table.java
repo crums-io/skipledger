@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
  * 
  * @see SldgConstants#DIGEST
  */
-public interface Table {
+public interface Table extends AutoCloseable {
   
   
   /**

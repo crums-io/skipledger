@@ -85,6 +85,13 @@ public class SldgConstants {
   public static final String SPATH_JSON_EXT = SPATH_EXT + JSON_EXT;
   
   
+
+  /**
+   * Logger name.
+   */
+  public static final String LOGGER_NAME = "skipledger";
+  
+  
   
   
   
