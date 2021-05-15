@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2020-2021 Babak Farhang
  */
 package io.crums.sldg;
 
@@ -37,5 +37,7 @@ abstract class BaseRow extends Row {
   public final ByteBuffer sentinelHash() {
     return DIGEST.sentinelHash();
   }
-
+  
 }
+
+

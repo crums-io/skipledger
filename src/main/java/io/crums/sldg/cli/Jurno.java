@@ -4,25 +4,26 @@
 package io.crums.sldg.cli;
 
 
-import static io.crums.util.Strings.*;
+import static io.crums.util.Strings.nTh;
+import static io.crums.util.Strings.pluralize;
+import static io.crums.util.Strings.singularVerb;
 
 import java.io.Console;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
 import io.crums.client.ClientException;
 import io.crums.io.Opening;
-import io.crums.model.Beacon;
-import io.crums.model.CrumTrail;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.db.Db;
 import io.crums.sldg.demo.jurno.Journal;
 import io.crums.sldg.demo.jurno.JurnoMorselBuilder;
+import io.crums.sldg.fs.HashLedgerDir;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.sldg.time.WitnessReport;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.main.ArgList;
@@ -215,7 +216,7 @@ public class Jurno extends MainTemplate {
   @Override
   protected void start() throws IOException {
     if (opening != null) {
-      Db db = new Db(ledgerDir, opening);
+      HashLedgerDir db = new HashLedgerDir(ledgerDir, opening, true);
       this.journal = new Journal(textFile, db);
       switch (command) {
       case CREATE:
@@ -254,7 +255,7 @@ public class Jurno extends MainTemplate {
               message = newLines + pluralize(" new line", newLines) + " added";
             }
             try {
-              Db.WitnessReport witReport = journal.witness();
+              WitnessReport witReport = journal.witness();
               if (witReport.nothingDone())
                 message += "." + System.lineSeparator() + "Up-to-date.";
               else {
@@ -269,7 +270,8 @@ public class Jurno extends MainTemplate {
               }
             } catch (ClientException cx) {
               message += "." + System.lineSeparator();
-              int unwitnessed = journal.db().unwitnessedRowCount();
+              long lastWitRn = journal.db().lastWitnessedRowNumber();
+              int unwitnessed = (int) (journal.db().size() - lastWitRn);
               message += unwitnessed + pluralize(" row", unwitnessed);
               message += singularVerb(" remain", unwitnessed) + " unwitnessed.";
               message += System.lineSeparator() + "error message: " + cx.getMessage();
@@ -311,12 +313,10 @@ public class Jurno extends MainTemplate {
         int linesToLose = journal.getLedgeredLines() - lastGoodLine;
         int size = (int) journal.db().size();
         int rowsToLose = size - lastGoodRow;
-        int beaconsToLose = numToLose(journal.db().getBeaconRowNumbers(), lastGoodRow);
         int trailsToLose = numToLose(journal.db().getTrailedRowNumbers(), lastGoodRow);
         
         message = "Confirm '" + TRIM + "' ledger to row %d%n" + // lastGoodRow
                   "  trails to lose: %d%n" +  // trailsToLose
-                  "  beacons to lose: %d%n" + // beaconsToLose
                   "  ledgered lines to lose: %d%n%n" + // linesToLose
                   "Total rows to lose: %d%n" +  // rowsToLose
                   "Current rows in ledger: %d%n" +  // size
@@ -330,7 +330,7 @@ public class Jurno extends MainTemplate {
         }
         console.printf(
             message,
-            lastGoodRow, trailsToLose, beaconsToLose, linesToLose, rowsToLose, size);
+            lastGoodRow, trailsToLose, linesToLose, rowsToLose, size);
         String ack = console.readLine();
         if ("yes".equals(ack)) {
           journal.trim();
@@ -369,7 +369,7 @@ public class Jurno extends MainTemplate {
     var builder = new JurnoMorselBuilder(journal);
     
     if (!makeMorsel.lineNums.isEmpty())
-      builder.addEntriesByLineNumber(makeMorsel.lineNums);  // for now we canonicalize,
+      builder.addSourcesByLineNumber(makeMorsel.lineNums);  // for now we canonicalize,
                                                             // keep it simple for validation
     
     
@@ -408,7 +408,7 @@ public class Jurno extends MainTemplate {
 
       printStatus(table);
       table.println();
-      int unwitnessedRows = journal.db().unwitnessedRowCount();
+      int unwitnessedRows = (int) journal.db().unwitnessedRowCount();
       if (unwitnessedRows == 0) {
         table.println("Journal is complete. Nothing to update.");
         table.println("OK");
@@ -460,20 +460,8 @@ public class Jurno extends MainTemplate {
     table.printRow("  ledgerable:", journal.getLines() );
     table.printRow("  ledgered:", journal.getLedgeredLines() );
     table.println();
-    int beacons = journal.db().getBeaconCount();
-    table.printRow("Beacon rows:", beacons );
-    if (beacons > 0) {
-      table.println();
-      table.printRow(null, "First beacon");
-      printBeaconDetail(0, table);
-      if (beacons > 1) {
-        table.println();
-        table.printRow(null, "Last beacon");
-        printBeaconDetail(beacons - 1, table);
-      }
-    }
     table.println();
-    int witnessedRows = journal.db().getTrailedRowCount();
+    int witnessedRows = journal.db().getTrailCount();
     table.printRow("Witnessed rows:", witnessedRows);
     if (witnessedRows != 0) {
       table.println();
@@ -487,29 +475,17 @@ public class Jurno extends MainTemplate {
     }
 
     table.println();
-    table.printRow("Ledger state:", IntegralStrings.toHex(journal.db().getLedger().stateHash()));
-  }
-  
-
-  private void printBeaconDetail(int index, TablePrint table) {
-    long utc = journal.db().getBeaconUtcs().get(index);
-    long rn = journal.db().getBeaconRowNumbers().get(index);
-    ByteBuffer hash =journal.db().getLedger().getRow(rn).inputHash();
-    Beacon beacon = new Beacon(hash, utc);
-    table.printRow("row #: ", journal.db().getBeaconRowNumbers().get(index));
-    table.printRow("created after:", new Date(utc), "UTC: " + utc);
-    table.printRow("ref URL:", beacon.getRefUrl());
-    table.printRow("beacon:", beacon.hashHex());
+    table.printRow("Ledger state:", IntegralStrings.toHex(journal.db().getSkipLedger().stateHash()));
   }
   
   
   private void printTrailDetail(int index, TablePrint table) {
-    CrumTrail trail = journal.db().getCrumTrailByIndex(index);
-    long utc = trail.crum().utc();
+    TrailedRow trailedRow = journal.db().getTrailByIndex(index);
+    long utc = trailedRow.utc();
     table.printRow("row #: ", journal.db().getTrailedRowNumbers().get(index));
     table.printRow("created before:", new Date(utc), "UTC: " + utc);
-    table.printRow("trail root:", IntegralStrings.toHex(trail.rootHash()));
-    table.printRow("ref URL:", trail.getRefUrl());
+    table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
+    table.printRow("ref URL:", trailedRow.trail().getRefUrl());
   }
 
 
@@ -543,27 +519,17 @@ public class Jurno extends MainTemplate {
     printer.println("Row Numbers");
     printer.println();
     paragraph =
-        "These denote a row in the backing skip ledger. Since some rows are beacon rows (used " +
-        "to establish maximum row age, see next) there are usually a few more rows in the ledger than there are " +
-        "lines in the file. Row numbers too start from 1.";
-    printer.printParagraph(paragraph);
-    printer.println();
-    printer.println("Beacon Rows");
-    printer.println();
-    paragraph =
-        "These rows contain special hash values that have nothing to do with the text file. " +
-        "They record the minimum creation-date (maximum age) of subsequent rows by recording the root hash " +
-        "of the most recent merkle tree published by crums.io. Since it cannot be computed in " +
-        "advance, it functions as a beacon.";
+        "These denote a row in the backing skip ledger. Rows are numbered starting from 1. " +
+        "Each row in the backing ledger stores only the hash of the line.";
     printer.printParagraph(paragraph);
     printer.println();
     printer.println();
     printer.println("Trailed Rows");
     printer.println();
     paragraph =
-        "A row whose hash has been witnessed, evidenced by a crumtrail attachment. Both beacon- and regular rows may be " +
-        "witnessed this way. Trailed rows establish maximum creation-date " +
-        "(minimum age) for both themselves and every row before them. This is " + 
+        "A row whose hash has been witnessed, evidenced by a crumtrail attachment. " +
+        "Trailed rows establish the maximum creation-date " +
+        "(minimum age) for both the row they reference and also every row before them. This is " + 
         "because every row in a skip ledger is linked (thru hash pointers) to every row before it.";
     printer.printParagraph(paragraph);
     printer.println();
@@ -664,8 +630,6 @@ public class Jurno extends MainTemplate {
   
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String STATE_MORSEL = "state-morsel";
-//  private final static String READ_MORSEL = "read-morsel";
-//  private final static String JURNO_STATE = "jurno-state";
   
   private final static String FILE = "save";
   

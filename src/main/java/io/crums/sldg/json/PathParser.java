@@ -1,13 +1,9 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2021 Babak Farhang
  */
 package io.crums.sldg.json;
 
 
-import static io.crums.sldg.json.RowParser.RN;
-
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,8 +14,6 @@ import org.json.simple.parser.ParseException;
 
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
-import io.crums.sldg.TargetPath;
-import io.crums.util.Tuple;
 
 /**
  * Parses both lists of rows and paths. The representations are exactly the
@@ -31,9 +25,6 @@ public class PathParser implements JsonEntityParser<Path> {
    * The rows tag.
    */
   public final static String ROWS = "rows";
-  public final static String TARGET = "target";
-  public final static String BEACONS = "beacons";
-  public final static String UTC = "utc";
   
   
   
@@ -66,20 +57,8 @@ public class PathParser implements JsonEntityParser<Path> {
     JSONArray jPath = rowParser.toJsonArray(path.rows());
     jObj.put(ROWS, jPath);
     
-    if (path.isTargeted())
-      jObj.put(TARGET, path.target().rowNumber());
     
     
-    if (path.hasBeacon()) {
-      JSONArray bArray = new JSONArray();
-      for (Tuple<Long,Long> rnUtc : path.beacons()) {
-        JSONObject jBeacon = new JSONObject();
-        jBeacon.put(RN, rnUtc.a);
-        jBeacon.put(UTC, rnUtc.b);
-        bArray.add(jBeacon);
-      }
-      jObj.put(BEACONS, bArray);
-    }
     
     return jObj;
   }
@@ -102,25 +81,10 @@ public class PathParser implements JsonEntityParser<Path> {
     JSONArray jArray = (JSONArray) jObj.get(ROWS);
     List<Row> rows = rowParser.toRows(jArray);
     
-    List<Tuple<Long,Long>> beacons;
-    Object jBeaconsObj = jObj.get(BEACONS);
-    if (jBeaconsObj == null)
-      beacons = Collections.emptyList();
-    else {
-      JSONArray jBeacons = (JSONArray) jBeaconsObj;
-      beacons = new ArrayList<>(jBeacons.size());
-      for (int index = 0; index < jBeacons.size(); ++index) {
-        JSONObject jBcn = (JSONObject) jBeacons.get(index);
-        Long rn = (Long) jBcn.get(RN);
-        Long utc = (Long) jBcn.get(UTC);
-        beacons.add(new Tuple<>(rn, utc));
-      }
-    }
-    
-    Object target = jObj.get(TARGET);
     
     
-    return target == null ? new Path(rows, beacons) : new TargetPath(rows,  beacons, (Long) target);
+    
+    return new Path(rows);
   }
   
   

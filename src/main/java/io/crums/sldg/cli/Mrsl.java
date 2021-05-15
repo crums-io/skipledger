@@ -10,7 +10,7 @@ import static io.crums.util.Strings.pluralize;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -19,20 +19,17 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.io.Opening;
-import io.crums.io.channels.ChannelUtils;
-import io.crums.model.Beacon;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
+import io.crums.sldg.MorselFile;
 import io.crums.sldg.SldgException;
-import io.crums.sldg.db.ByteFormatException;
-import io.crums.sldg.db.MorselFile;
-import io.crums.sldg.entry.Entry;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.SourceRow;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
 import io.crums.util.Strings;
-import io.crums.util.Tuple;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
 import io.crums.util.main.PrintSupport;
@@ -179,9 +176,9 @@ public class Mrsl extends MainTemplate {
     case ENTRY:
       MorselFile morsel = new MorselFile(morselFile);
       if (saveFile == null)
-        printEntries(morsel);
+        printSources(morsel);
       else
-        saveEntries(morsel);
+        saveSources(morsel);
       break;
     case MERGE:
       merge();
@@ -250,49 +247,43 @@ public class Mrsl extends MainTemplate {
   }
 
 
-  private void saveEntries(MorselFile morsel) throws IOException {
-    checkEntryNums(morsel);
+  private void saveSources(MorselFile morsel) throws IOException {
+    checkSourceRowNums(morsel);
     try (var ch = Opening.CREATE.openChannel(this.saveFile)) {
 
       MorselPack pack = morsel.getMorselPack();
-      if (sep == null || sep.isEmpty()) {
-        for (long rn : this.rowNumbers)
-          ChannelUtils.writeRemaining(ch, pack.entry(rn).content());
-      } else {
-        ByteBuffer separator = Strings.utf8Buffer(sep);
-        for (long rn : this.rowNumbers) {
-          ChannelUtils.writeRemaining(ch, pack.entry(rn).content());
-          ChannelUtils.writeRemaining(ch, separator.clear());
-        }
-      }
+      byte[] sepBytes = (sep == null || sep.isEmpty()) ? null : Strings.utf8Bytes(sep);
+      for (long rn : this.rowNumbers)
+        pack.getSourceByRowNumber(rn).writeSource(ch, null, sepBytes);
     }
     
     int count = rowNumbers.size();
-    System.out.println(count + pluralize(" entry", count) + " written to " + saveFile);
+    System.out.println(count + pluralize(" source-row", count) + " written to " + saveFile);
   }
   
   
   
-  private void checkEntryNums(MorselFile morsel) {
-    var entryNums = entryNumSet(morsel.getMorselPack());
-    if (!entryNums.containsAll(this.rowNumbers)) {
+  
+  
+  private void checkSourceRowNums(MorselFile morsel) {
+    var srcNums = Sets.sortedSetView(morsel.getMorselPack().sourceRowNumbers());
+    if (!srcNums.containsAll(this.rowNumbers)) {
       throw new IllegalArgumentException("illegal / unknown entry numbers: " + rowNumbers);
     }
   }
   
   
-  private SortedSet<Long> entryNumSet(MorselPack pack) {
-    List<Long> rns = Lists.map(pack.availableEntries(), e -> e.rowNumber());
-    return Sets.sortedSetView(rns);
+  private SortedSet<Long> sourceRowNumSet(MorselPack pack) {
+    return Sets.sortedSetView(pack.sourceRowNumbers());
   }
   
 
 
-  private void printEntries(MorselFile morsel) {
+  private void printSources(MorselFile morsel) {
     MorselPack pack = morsel.getMorselPack();
     
     TreeSet<Long> entryRns = new TreeSet<>(this.rowNumbers);
-    entryRns.retainAll(entryNumSet(pack));
+    entryRns.retainAll(sourceRowNumSet(pack));
     
     if (entryRns.isEmpty()) {
       System.err.println("[ERROR] No entries match the row numbers given.");
@@ -313,29 +304,6 @@ public class Mrsl extends MainTemplate {
     }
     
     table.println();
-    
-    var beacons = pack.beaconRows();
-    
-    final int bindexStart;
-    int bindex;
-    long nextBcnRn;
-    
-    {
-      int index = Collections.binarySearch(Lists.map(beacons, b -> b.a), first);
-      if (index < 0) {
-        int insertIndex = -1 - index;
-        if (insertIndex > 0) {
-          bindex = insertIndex - 1;
-          nextBcnRn = beacons.get(bindex).a;
-        } else {
-          bindex = insertIndex;
-          nextBcnRn = bindex == beacons.size() ? Long.MAX_VALUE : beacons.get(bindex).a;
-        }
-      } else {
-        throw failBothBeaconAndEntry(first).fillInStackTrace();
-      }
-      bindexStart = bindex;
-    }
     
     
     var trailRns = pack.trailedRows();
@@ -358,19 +326,13 @@ public class Mrsl extends MainTemplate {
     
     boolean didFirst = false;
     for (long entryRn : entryRns) {
-      if (entryRn == nextBcnRn)
-        throw failBothBeaconAndEntry(entryRn).fillInStackTrace();
       if (entryRn > nextWitRn && didFirst)
         printTrail(nextWitRn, pack, table);
-      else if (entryRn > nextBcnRn)
-        printBeacon(beacons.get(bindex), pack, table);
       
       if (entryRn >= nextWitRn)
         nextWitRn = ++tindex == trailRns.size() ? Long.MAX_VALUE : trailRns.get(tindex);
-      if (entryRn >= nextBcnRn)
-        nextBcnRn = ++bindex == beacons.size() ? Long.MAX_VALUE : beacons.get(bindex).a;
       
-      printEntryText(entryRn, pack, table);
+      printSourceRowAsText(entryRn, pack, table);
       
       didFirst = true;
     }
@@ -380,11 +342,9 @@ public class Mrsl extends MainTemplate {
     
     table.println();
     int count = entryRns.size();
-    int bcns = bindex - bindexStart;
     int trails = tindex - tindexStart;
     table.println(
         count + pluralize(" entry", count) + ", " +
-        bcns + pluralize(" beacon", bcns) + ", " +
         trails + pluralize(" crumtrail", trails));
   }
 
@@ -404,27 +364,28 @@ public class Mrsl extends MainTemplate {
 
 
   private final static char PRINT_SEP = '-';
-  private void printEntryText(long entryRn, MorselPack pack, TablePrint table) {
+  private void printSourceRowAsText(long srcRn, MorselPack pack, TablePrint table) {
     
-    Entry entry = pack.entry(entryRn);
-    table.printRow(entryRn, "Entry (" + entry.contentSize() + " bytes). As text:");
+    SourceRow srcRow = pack.getSourceByRowNumber(srcRn);
+    StringWriter string = new StringWriter();
+    try {
+      srcRow.writeSource(string, ", ", null);
+    } catch (IOException iox) {
+      throw new RuntimeException("should be impossible: " + iox, iox);
+    }
+    table.printRow(srcRn, "source-row as text:");
     table.printHorizontalTableEdge(PRINT_SEP);
-    table.println(Strings.utf8String(pack.entry(entryRn).content()));
+    table.println(string.toString());
     table.printHorizontalTableEdge(PRINT_SEP);
   }
 
 
-  private ByteFormatException failBothBeaconAndEntry(long rn) {
-    return new ByteFormatException("row " + rn + " purports to be both beacon and entry");
-  }
-
-
-  private void printBeacon(Tuple<Long, Long> beacon, MorselPack pack, TablePrint table) {
-    Beacon bcn = new Beacon(pack.inputHash(beacon.a), beacon.b);
-    table.printRow(beacon.a, "created after " + new Date(bcn.utc()) + "  (beacon)");
-    table.printRow(" beacon:",  bcn.hashHex() );
-    table.printRow(" ref URL:",  bcn.getRefUrl() );
-  }
+//  private void printBeacon(Tuple<Long, Long> beacon, MorselPack pack, TablePrint table) {
+//    Beacon bcn = new Beacon(pack.inputHash(beacon.a), beacon.b);
+//    table.printRow(beacon.a, "created after " + new Date(bcn.utc()) + "  (beacon)");
+//    table.printRow(" beacon:",  bcn.hashHex() );
+//    table.printRow(" ref URL:",  bcn.getRefUrl() );
+//  }
 
 
 
@@ -538,8 +499,7 @@ public class Mrsl extends MainTemplate {
     TablePrint table = new TablePrint(LEFT_SUM_COL_WIDTH, MID_SUM_COL_WIDTH, RIGHT_SUM_COL_WIDTH);
     
     List<Long> rns = pack.getFullRowNumbers();
-    var entries = pack.availableEntries();
-    var beacons = pack.beaconRows();
+    var entries = pack.sources();
     var trails = pack.trailedRows();
     
     final long hi = pack.hi();
@@ -551,12 +511,8 @@ public class Mrsl extends MainTemplate {
     out.println();
     
     // !beacons.isEmpty() || !trails.isEmpty() == !(beacons.isEmpty() && trails.isEmpty())
-    if (!beacons.isEmpty() || !trails.isEmpty()) {
+    if (!trails.isEmpty()) {
       out.println("History:");
-      if (!beacons.isEmpty()) {
-        var firstBcn = beacons.get(0);
-        table.printRow(" created after:", new Date(firstBcn.b), "(row " + firstBcn.a + ")");
-      }
       
       if (!trails.isEmpty()) {
         long witRn = trails.get(trails.size() - 1);
@@ -577,9 +533,8 @@ public class Mrsl extends MainTemplate {
   }
   
   
-  private final static String BCN_TAG = "A";
   private final static String TRL_TAG = "W";
-  private final static String ENT_TAG = "E";
+  private final static String ENT_TAG = "S";
   
   private final static int RN_PAD = 1;
   private final static int FLAG_PAD = 2;
@@ -588,9 +543,7 @@ public class Mrsl extends MainTemplate {
   private void list(MorselFile morsel) {
     MorselPack pack = morsel.getMorselPack();
     
-    var beacons = pack.beaconRows();
-    var entryInfos = pack.availableEntries();
-    List<Long> beaconRns = Lists.map(beacons, b -> b.a);
+    var entryInfos = pack.sources();
     List<Long> entryRns = Lists.map(entryInfos, e -> e.rowNumber());
     List<Long> trailRns = pack.trailedRows();
     List<Long> allRns = pack.getFullRowNumbers();
@@ -614,70 +567,63 @@ public class Mrsl extends MainTemplate {
     // (if it should become an issue)..
 
     for (long rn : allRns) {
-      int bi = Collections.binarySearch(beaconRns, rn);
       int ei = Collections.binarySearch(entryRns, rn);
       int ti = Collections.binarySearch(trailRns, rn);
 
-      String b, e, t;
-      b = bi < 0 ? null : BCN_TAG;
+      String e, t;
       e = ei < 0 ? null : ENT_TAG;
       t = ti < 0 ? null : TRL_TAG;
 
       String date;
       if (t != null)
         date = new Date(pack.crumTrail(rn).crum().utc()).toString();
-      else if (b != null)
-        date = new Date(beacons.get(bi).b).toString();
       else
         date = null;
 
       if (e != null) {
 
-        Entry entry = pack.entry(rn);
-        int size = entry.contentSize();
-        String sizeString; 
-        if (size / 1024 < 9)
-          sizeString = size + " B |";
-        else
-          sizeString = (size / 1024) + " kB |";
+        SourceRow srcRow = pack.getSourceByRowNumber(rn);
+        
+        String srcDesc = srcRow.toString(", ");
+        
+//        int size = entry.contentSize();
+//        String sizeString; 
+//        if (size / 1024 < 9)
+//          sizeString = size + " B |";
+//        else
+//          sizeString = (size / 1024) + " kB |";
 
+        
 
         if (date == null) {
 
-          String out = sizeString;
-          int spaceAvail = postFlagsSpace - out.length();
-          ByteBuffer raw = entry.content();
-          if (raw.remaining() > spaceAvail)
-            raw.limit(raw.position() + spaceAvail);
-          out += Strings.utf8String(raw);
-          table.printRow(rn, b, e, t, out);
+          int spaceAvail = postFlagsSpace;
+          if (srcDesc.length() > spaceAvail)
+            srcDesc = srcDesc.substring(0, spaceAvail - 2) + "..";
+          table.printRow(rn, null, e, t, srcDesc);
 
         } else  {
 
-          String out = sizeString;
-          int spaceAvail = postDateSpace - out.length();
-          ByteBuffer raw = entry.content();
-          if (raw.remaining() > spaceAvail)
-            raw.limit(raw.position() + spaceAvail);
-          out += Strings.utf8String(raw);
-          table.printRow(rn, b, e, t, date, out);
+          int spaceAvail = postDateSpace - date.length();
+          if (srcDesc.length() > spaceAvail)
+            srcDesc = srcDesc.substring(0, spaceAvail - 2) + "..";
+          
+          table.printRow(rn, null, e, t, date, srcDesc);
 
         }
 
 
       } else  // e == null
-        table.printRow(rn, b, e, t, date);
+        table.printRow(rn, null, e, t, date);
     }
 
     table.println();
     int rows = allRns.size();
-    int bcns = beaconRns.size();
     int ents = entryRns.size();
     int trails = trailRns.size();
     table.println(
-        rows + pluralize(" row", rows) + "; " + bcns + pluralize(" beacon", bcns) +
-        "; " + trails + pluralize(" crumtrail", trails) + "; " +
-        ents + pluralize(" entry", ents) + ".");
+        rows + pluralize(" row", rows) + "; " + trails + pluralize(" crumtrail", trails) + "; " +
+        ents + pluralize(" source-row", ents) + ".");
     table.println();
   }
   

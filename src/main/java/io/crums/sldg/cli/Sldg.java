@@ -10,37 +10,36 @@ import static io.crums.util.Strings.*;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 import org.json.simple.JSONObject;
 
 import io.crums.io.Opening;
-import io.crums.model.CrumTrail;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
-import io.crums.sldg.SkipPath;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
-import io.crums.sldg.db.Db;
-import io.crums.sldg.db.Filenaming;
-import io.crums.sldg.db.Finder;
-import io.crums.sldg.db.Format;
-import io.crums.sldg.db.VersionedSerializers;
+import io.crums.sldg.fs.Filenaming;
+import io.crums.sldg.fs.Format;
+import io.crums.sldg.fs.HashLedgerDir;
 import io.crums.sldg.json.PathParser;
-import io.crums.sldg.scraps.Nugget;
-import io.crums.sldg.scraps.NuggetParser;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.sldg.time.WitnessReport;
+import io.crums.sldg.util.Finder;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
+import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
@@ -49,7 +48,7 @@ import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * Manages a {@linkplain Db} from the command line.
+ * Manages a {@linkplain HashLedgerDir} from the command line.
  */
 public class Sldg extends MainTemplate {
 
@@ -64,8 +63,6 @@ public class Sldg extends MainTemplate {
     private boolean add;
     
     private List<ByteBuffer> entryHashes;
-    
-    private boolean addBeacon;
     
     private boolean witness;
     private int toothExponent;
@@ -92,23 +89,16 @@ public class Sldg extends MainTemplate {
     
     private FindCommand find;
     
-    private boolean nug;
     private boolean status;
     
     private File file;
-    private Format format = Format.BINARY;
     private boolean enforceExt = true;
     
     boolean takesRowNumbers() {
-      return path || list || nug;
+      return path || list;
     }
     
     boolean supportsFileOutput() {
-      return state || path || nug;
-    }
-    
-    
-    boolean isPathResponse( ) {
       return state || path;
     }
     
@@ -122,8 +112,6 @@ public class Sldg extends MainTemplate {
   private File dir;
   private Opening mode;
   
-//  private String command;
-  
   private WriteCommand writeCommand;
   
   private ReadCommand readCommand;
@@ -131,7 +119,7 @@ public class Sldg extends MainTemplate {
   
   private boolean info;
 
-  private Db db;
+  private HashLedgerDir db;
   
   
   /**
@@ -167,7 +155,7 @@ public class Sldg extends MainTemplate {
     if (noCommand && mode != Opening.CREATE)
       throw new IllegalArgumentException("missing command");
     
-    this.db = new Db(dir, mode, true);  // (lazy=true)
+    this.db = new HashLedgerDir(dir, mode, true);  // (lazy=true)
     
     
     
@@ -192,17 +180,12 @@ public class Sldg extends MainTemplate {
   @Override
   protected void start() throws InterruptedException, Exception {
     
-    try (Db db = this.db) {
+    try (HashLedgerDir db = this.db) {
       
       // write command
       if (writeCommand != null) {
-        if (writeCommand.addBeacon) {
-          System.out.print("beacon hash");
-          long rowNumber = db.addBeacon();
-          System.out.println(" entered in row [" + rowNumber + "]");
-        }
         if (writeCommand.add) {
-          writeCommand.entryHashes.forEach(h -> db.getLedger().appendRows(h));
+          writeCommand.entryHashes.forEach(h -> db.getSkipLedger().appendRows(h));
           if (info) {
             int count = writeCommand.entryHashes.size();
             System.out.println(count + pluralize(" row", count) + " added");
@@ -213,7 +196,7 @@ public class Sldg extends MainTemplate {
           doIngest();
         
         if (writeCommand.witness) {
-          Db.WitnessReport report =
+          WitnessReport report =
               writeCommand.toothExponent == -1 ?
                   db.witness(writeCommand.witnessLast) :
                     db.witness(writeCommand.toothExponent, writeCommand.witnessLast);
@@ -234,21 +217,21 @@ public class Sldg extends MainTemplate {
       } else if (readCommand != null) {
         
         if (readCommand.state) {
-          Path statePath = db.beaconedStatePath();
+          Path statePath = db.getSkipLedger().statePath();
           if (readCommand.toFile())
             outputState(statePath);
           else
             printPath(statePath);
         
-        } else if (readCommand.nug) {
-          long rowNumber = readCommand.rowNumbers.get(0);
-          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
-          
-          if (readCommand.toFile())
-            outputNug(nuggetOpt);
-          else
-            printNugget(nuggetOpt);
-        
+//        } else if (readCommand.nug) {
+//          long rowNumber = readCommand.rowNumbers.get(0);
+//          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
+//          
+//          if (readCommand.toFile())
+//            outputNug(nuggetOpt);
+//          else
+//            printNugget(nuggetOpt);
+//        
         } else if (readCommand.path) {
           
           long lo, hi;
@@ -263,7 +246,7 @@ public class Sldg extends MainTemplate {
               hi = one;
             }
           }
-          SkipPath path = db.getLedger().skipPath(lo, hi);
+          Path path = db.getSkipLedger().skipPath(lo, hi);
           
           if (readCommand.toFile())
             outputPath(path);
@@ -273,7 +256,7 @@ public class Sldg extends MainTemplate {
         } else if (readCommand.list) {
           List<Row> rows = new ArrayList<>(readCommand.rowNumbers.size());
           for (long rowNumber : readCommand.rowNumbers)
-            rows.add(db.getLedger().getRow(rowNumber));
+            rows.add(db.getSkipLedger().getRow(rowNumber));
           listRows(rows);
           int count = rows.size();
           System.out.println(count + pluralize(" row", count) + ".");
@@ -282,8 +265,8 @@ public class Sldg extends MainTemplate {
           printStatus();
           
         } else if (readCommand.find != null) {
-          Finder finder = new Finder(db.getLedger());
-          List<Row> rows =finder.byEntryPrefix(
+          Finder finder = new Finder(db.getSkipLedger());
+          List<Row> rows =finder.byInputPrefix(
               readCommand.find.prefix,
               readCommand.find.startRn,
               readCommand.find.limit);
@@ -332,7 +315,7 @@ public class Sldg extends MainTemplate {
           buffer.setLength(0);
           ++count;
           if (count >= start)
-            db.getLedger().appendRows(ByteBuffer.wrap(entry));
+            db.getSkipLedger().appendRows(ByteBuffer.wrap(entry));
           
         } else {
           buffer.append(c);
@@ -363,42 +346,31 @@ public class Sldg extends MainTemplate {
 
 
 
-  private void outputPath(SkipPath path) {
+  private void outputPath(Path path) {
     
     File out;
     if (readCommand.file.isDirectory()) {
-      String file = Filenaming.INSTANCE.pathFilename(path, readCommand.format);
+      String file = Filenaming.INSTANCE.pathFilename(path, Format.JSON);
       out = new File(readCommand.file, file);
       exitIfExists(out);
     } else
       out = readCommand.file;
     
-    VersionedSerializers.PATH_SERIALIZER.write(path, out, readCommand.format);
+    writePath(out, path);
     System.out.println("path written to " + out);
   }
-
-
-
-  private void outputNug(Optional<Nugget> nuggetOpt) {
+  
+  
+  private void writePath(File out, Path path) {
     
-    if (nuggetOpt.isEmpty()) {
-      System.err.println("[ERROR] untrailed row (no crumtrail yet for this or later row number)");
-      StdExit.ILLEGAL_ARG.exit();
-      return;
+    String json = PathParser.INSTANCE.toJsonObject(path).toJSONString();
+    
+    try (FileWriter writer = new FileWriter(out, Strings.UTF_8)) {
+      writer.append(json);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on writing " + path, iox);
     }
     
-    Nugget nugget = nuggetOpt.get();
-    
-    File out;
-    if (readCommand.file.isDirectory()) {
-      String file = Filenaming.INSTANCE.nuggetFilename(nugget, readCommand.format);
-      out = new File(readCommand.file, file);
-      exitIfExists(out);
-    } else
-      out = readCommand.file;
-    
-    VersionedSerializers.NUGGET_SERIALIZER.write(nugget, out, readCommand.format);
-    System.out.println("nugget written to " + out);
   }
   
   
@@ -422,13 +394,13 @@ public class Sldg extends MainTemplate {
     
     File out;
     if (readCommand.file.isDirectory()) {
-      String file = Filenaming.INSTANCE.stateFilename(statePath, readCommand.format);
+      String file = Filenaming.INSTANCE.stateFilename(statePath, Format.JSON);
       out = new File(readCommand.file, file);
       exitIfExists(out);
     } else
       out = readCommand.file;
     
-    VersionedSerializers.PATH_SERIALIZER.write(statePath, out, readCommand.format);
+    writePath(out, statePath);
     System.out.println("state-path written to " + out);
   }
   
@@ -440,58 +412,39 @@ public class Sldg extends MainTemplate {
   
   private void printStatus() {
     long size = db.size();
-    List<Long> witnessed = db.getRowNumbersWitnessed();
-    int witCount = witnessed.size();
-    int bnCount = db.getBeaconCount();
+    int witCount = db.getTrailCount();
     DecimalFormat format = new DecimalFormat("#,###.###");
     System.out.println(
         format.format(size) + pluralize(" row", size) + ", " +
-        format.format(bnCount) + pluralize(" of which are beacon", bnCount) + "; " +
         format.format(witCount) + pluralize(" crumtrail", witCount) + " attached");
 
-    if (bnCount != 0) {
-      List<Long> bnRowNums = db.getBeaconRowNumbers();
-      List<Long> bnUtcs = db.getBeaconUtcs();
-      long bnRowNum = bnRowNums.get(0);
-      long bnUtc = bnUtcs.get(0);
-      System.out.println("row [" + format.format(bnRowNum) + "] created after " + new Date(bnUtc));
-    }
     
     if (witCount == 1) {
-      CrumTrail trail = db.getCrumTrailByIndex(0);
-      long witnessedRow = witnessed.get(0);
+      TrailedRow trail = db.getTrailByIndex(0);
       System.out.println(
-          "first (and last) row witnessed: [" + format.format(witnessedRow) + "] " +
-          new Date(trail.crum().utc()));
+          "first (and last) row witnessed: [" + format.format(trail.rowNumber()) + "] " +
+          new Date(trail.trail().crum().utc()));
     } else if (witCount > 1) {
-      long firstRow = witnessed.get(0);
-      long lastRow = witnessed.get(witnessed.size() - 1);
       
-      CrumTrail firstTrail = db.getCrumTrailByIndex(0);
-      CrumTrail lastTrail = db.getCrumTrailByIndex(witnessed.size() - 1);
+      TrailedRow firstTrail = db.getTrailByIndex(0);
+      TrailedRow lastTrail = db.getTrailByIndex(witCount - 1);
       
-      if (firstTrail.crum().utc() > lastTrail.crum().utc())
+      long firstRow = firstTrail.rowNumber();
+      long firstUtc = firstTrail.trail().crum().utc();
+      long lastRow = lastTrail.rowNumber();
+      long lastUtc = lastTrail.trail().crum().utc();
+      
+      if (firstUtc > lastUtc)
         throw new SldgException("corrupt repo: " + db.getDir());
       
       System.out.println(
-          "first row witnessed: [" + format.format(firstRow) + "] " + new Date(firstTrail.crum().utc()));
+          "first row witnessed: [" + format.format(firstRow) + "] " + new Date(firstUtc));
       System.out.println(
-          "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastTrail.crum().utc()));
+          "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastUtc));
     }
     System.out.println("Ledger (last row's) Hash:");
-    System.out.println(IntegralStrings.toHex(db.getLedger().rowHash(size)));
+    System.out.println(IntegralStrings.toHex(db.getSkipLedger().rowHash(size)));
     System.out.println("OK");
-  }
-
-
-
-  private void printNugget(Optional<Nugget> nuggetOpt) {
-    String output =
-        nuggetOpt.isEmpty() ?
-            "{}" :
-              injectVersion(NuggetParser.INSTANCE.toJsonObject(nuggetOpt.get())).toString();
-    
-    System.out.println(output);
   }
 
 
@@ -551,7 +504,7 @@ public class Sldg extends MainTemplate {
 
   private boolean configureReadCommands(ArgList argList) {
     
-    List<String> readCommands = argList.removeContained(STATE, PATH, LIST, FIND, NUG, STATUS);
+    List<String> readCommands = argList.removeContained(STATE, PATH, LIST, FIND, STATUS);
     switch (readCommands.size()) {
     case 0:   return false;
     case 1:   break;
@@ -565,7 +518,6 @@ public class Sldg extends MainTemplate {
     readCommand.state = STATE.equals(command);
     readCommand.path = PATH.equals(command);
     readCommand.list = LIST.equals(command);
-    readCommand.nug = NUG.equals(command);
     readCommand.status = STATUS.equals(command);
     
     if (FIND.equals(command)) {
@@ -594,9 +546,9 @@ public class Sldg extends MainTemplate {
       if (minRowNum < 1)
         throw new IllegalArgumentException("one or more row numbers < 1: " + argList.getArgString());
       
-      if (readCommand.nug && readCommand.rowNumbers.size() != 1)
-        throw new IllegalArgumentException(
-            NUG + " command takes a single row number. Too many given: " + argList.getArgString());
+//      if (readCommand.nug && readCommand.rowNumbers.size() != 1)
+//        throw new IllegalArgumentException(
+//            NUG + " command takes a single row number. Too many given: " + argList.getArgString());
     }
     
 
@@ -621,15 +573,6 @@ public class Sldg extends MainTemplate {
     
     readCommand.file = new File(outpath);
     
-    // set the format
-    String fmt = argList.removeValue(FMT, BINARY);
-    if (BINARY.equals(fmt))
-      readCommand.format = Format.BINARY;
-    else if (JSON.equalsIgnoreCase(fmt))
-      readCommand.format = Format.JSON;
-    else
-      throw new IllegalArgumentException(
-          "illegal setting " + FMT + "=" + fmt + " in arg list: " + argList.getArgString());
     
     readCommand.enforceExt = argList.removeBoolean(EXT, true);
     
@@ -656,11 +599,8 @@ public class Sldg extends MainTemplate {
       // normalize the filename, if it requires an extension
       if (readCommand.enforceExt) {
         String name = readCommand.file.getName();
-        String normalizedName;
-        if (readCommand.isPathResponse())
-          normalizedName = Filenaming.INSTANCE.normalizePathFilename(name, readCommand.format);
-        else
-          normalizedName = Filenaming.INSTANCE.normalizeNuggetFilename(name, readCommand.format);
+        String normalizedName = Filenaming.INSTANCE.normalizePathFilename(name, Format.JSON);
+        
         if (!normalizedName.equals(name)) {
           readCommand.file = new File(parent, normalizedName);
           if (readCommand.file.exists())
@@ -675,13 +615,12 @@ public class Sldg extends MainTemplate {
   
   private boolean configureWriteCommands(ArgList argList) {
 
-    List<String> writeCommands = argList.removeContained(ADD, ADDB, WIT, INGEST);
+    List<String> writeCommands = argList.removeContained(ADD, WIT, INGEST);
     switch (writeCommands.size()) {
     case 0:
       return false;
     case 1:
     case 2:
-    case 3:
       break;
     default:
       throw new IllegalArgumentException(
@@ -690,7 +629,6 @@ public class Sldg extends MainTemplate {
     
     this.writeCommand = new WriteCommand();
     writeCommand.add = writeCommands.contains(ADD);
-    writeCommand.addBeacon = writeCommands.contains(ADDB);
     writeCommand.witness = writeCommands.contains(WIT);
     
     if (writeCommands.contains(INGEST)) {
@@ -834,14 +772,6 @@ public class Sldg extends MainTemplate {
         "of the size of the ledger, so it's always compact. (See '" + STATE + "' command)";
     printer.printParagraph(paragraph, RM);
     printer.println();
-    paragraph =
-        "This same structure is also used to provide a compact, standalone proof that an item at a " +
-        "specific row number is indeed inside the ledger. I.e. a list of rows that connect " +
-        "the latest row to the row of interest. If the row (or any row after it) has been " +
-        "witnessed, then the crumtrail witness evidence together with these rows can be " +
-        "packaged as a \"nugget\". (See '" + NUG + "' command)";
-    printer.printParagraph(paragraph, RM);
-    printer.println();
     System.out.println("Row Age & Witness Evidence:");
     printer.println();
     paragraph =
@@ -861,12 +791,6 @@ public class Sldg extends MainTemplate {
         "exponent of this power of 2 for witnessing is called tooth-exponent. (See '" + WIT + "' command)";
     printer.printParagraph(paragraph, RM);
     printer.println();
-    paragraph =
-        "In order to establish the maximum age of entries in a ledger a beacon hash entry may be added. This hash is just " +
-        "the root of the latest Merkle tree published at crums.io every minute or so. Since it's value cannot be predicted in advance, and it comes with a UTC timestamp, " +
-        "it can be used to establish \"freshness\". The recommended practice is to simplify the evolution of row numbers by either (i) add only a single beacon as the very first row, " +
-        "or (ii) add beacons at row numbers that are always a multiple of some constant that is a power of 2.  (See '" + ADDB + "' command)";
-    printer.printParagraph(paragraph, RM);
     
   }
 
@@ -933,12 +857,6 @@ public class Sldg extends MainTemplate {
     table.printRow(null,  "entered", null);
     out.println();
     
-    table.printRow(ADDB , "adds the latest beacon hash as the next SHA-256 entry", REQ_PLUS);
-    table.printRow(null,  "Establishes how new (!) subsequent rows in the ledger are.", null);
-    table.printRow(null,  "If combined with other commands, then this command executes", null);
-    table.printRow(null,  "first.", null);
-    out.println();
-    
     table.printRow(WIT ,  "witnesses the last row and/or previous unwitnessed rows whose", REQ_PLUS);
     table.printRow(null,  "numbers match the tooth-exponent", null);
     table.printRow(null,  "Establishes how old the latest rows in the ledger are.", null);
@@ -996,13 +914,6 @@ public class Sldg extends MainTemplate {
     table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
     table.printRow(null,        "numbered rows", null);
     out.println();
-    // Deprecating the nugget concept for now. morsels are much more powerful.
-//    table.printRow(NUG,         "prints or outputs a nugget for the given row number argument.", REQ_CH);
-//    table.printRow(null,        "A nugget proves that the entry (input) hash at a given row number is", null);
-//    table.printRow(null,        "linked from a row at a higher number (highest, at the time published)", null);
-//    table.printRow(null,        "in the ledger. It may also contains evidence seting the row's minimum", null);
-//    table.printRow(null,        "age.", null);
-//    out.println();
     table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
     table.println();
     table.printHorizontalTableEdge('-');
@@ -1019,10 +930,6 @@ public class Sldg extends MainTemplate {
     table.printRow(null,        "(Valid only if '" + FILE + "' is not a directory)", null);
     table.printRow(null,        "Valid values: 'true' or 'false'", null);
     table.printRow(null,        "DEFAULT: true", null);
-    table.println();
-    table.printRow(FMT + "=*",  "sets the format for the file output", null);
-    table.printRow(null,        "Valid values: '" + JSON + "' or '" + BINARY + "'", null);
-    table.printRow(null,        "DEFAULT: " + BINARY, null);
     table.println();
     
   }
@@ -1047,7 +954,7 @@ public class Sldg extends MainTemplate {
 
 
   private final static String ADD = "add";
-  private final static String ADDB = "addb";
+//  private final static String ADDB = "addb";
   private final static String INGEST = "ingest";
   
   private final static String WIT = "wit";
@@ -1060,16 +967,13 @@ public class Sldg extends MainTemplate {
   private final static String STATUS = "status";
   private final static String LIST = "list";
   private final static String FIND = "find";
-  private final static String NUG = "nug";
+//  private final static String NUG = "nug";
   
   
 
   private final static String INFO = "info";
   private final static String FILE = "file";
   private final static String EXT = "ext";
-  private final static String FMT = "fmt";
-  private final static String JSON = "json";
-  private final static String BINARY = "binary";
   private final static String LIMIT = "limit";
   private final static String START = "start";
   
@@ -1077,7 +981,7 @@ public class Sldg extends MainTemplate {
   
   public final static String PATH_EXT = ".spath";
   public final static String STATE_EXT = "." + STATE + PATH_EXT;
-  public final static String NUG_EXT = "." + NUG;
+//  public final static String NUG_EXT = "." + NUG;
   
   
   

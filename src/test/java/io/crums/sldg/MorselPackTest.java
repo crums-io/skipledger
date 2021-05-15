@@ -4,15 +4,16 @@
 package io.crums.sldg;
 
 
-import static org.junit.Assert.*;
+import static io.crums.sldg.PathTest.newLedger;
+import static io.crums.sldg.PathTest.newRandomLedger;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -20,18 +21,13 @@ import  org.junit.Test;
 
 import com.gnahraf.test.IoTestCase;
 
-import io.crums.model.Constants;
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
 import io.crums.sldg.bags.MorselBag;
-import io.crums.sldg.db.MorselFile;
-import io.crums.sldg.entry.Entry;
-import io.crums.sldg.entry.TextEntry;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
-import io.crums.util.Lists;
-import io.crums.util.Tuple;
+import io.crums.sldg.src.SourceRow;
 import io.crums.util.hash.Digests;
 import io.crums.util.mrkl.Builder;
 import io.crums.util.mrkl.FixedLeafBuilder;
@@ -54,10 +50,10 @@ public class MorselPackTest extends IoTestCase {
   @Test
   public void testInitState() {
     int initSize = 1000;
-    Ledger ledger = newRandomLedger(initSize);
+    SkipLedger ledger = newRandomLedger(initSize);
     assertEquals(initSize, ledger.size());
     MorselPackBuilder builder = new MorselPackBuilder();
-    builder.initState(ledger);
+    builder.initPath(ledger.statePath(), "comments go here");
     
     Path expected = ledger.statePath();
     assertInBag(expected, builder);
@@ -76,119 +72,19 @@ public class MorselPackTest extends IoTestCase {
   
   
   
-  @Test
-  public void testWithBeaconRows() {
-    final Object label = new Object() { };
-    int initSize = 2000;
-    Ledger ledger = newRandomLedger(initSize);
-    MorselPackBuilder builder = new MorselPackBuilder();
-    builder.initState(ledger);
-    
-    Path state = ledger.statePath();
-    long utc = MIN_UTC;
-    long bcRn = state.rows().get(0).rowNumber();
-    assertTrue( builder.addBeaconRow(bcRn, utc) );
-    
-    final Tuple<Long,Long> bcn = new Tuple<>(bcRn, utc);
-    
-    List<Tuple<Long,Long>> expBeacons = Collections.singletonList(bcn);
-    assertBeaconRows(expBeacons, builder);
-    
-    assertStateDeclaration(ledger, builder);
-    assertEquals(state.rowNumbers(), builder.getFullRowNumbers());
-
-    
-    MorselPack pack = toPack(builder);
-    
-    assertStateDeclaration(ledger, pack);
-    assertBeaconRows(expBeacons, pack);
-    assertEquals(1, pack.declaredPaths().size());
-    assertEquals(state.rowNumbers(), pack.getFullRowNumbers());
-    
-    // add another
-    
-    long utc2 = utc + 90000;
-    long bcRn2 = state.rows().get(4).rowNumber();
-    
-    final Tuple<Long,Long> bcn2 = new Tuple<>(bcRn2, utc2);
-    
-    builder.addBeaconRow(bcRn2, utc2);
-    expBeacons = Arrays.asList(bcn, bcn2);
-    
-    assertBeaconRows(expBeacons, builder);
-    
-    pack = toPack(builder);
-    
-    assertStateDeclaration(ledger, pack);
-    assertBeaconRows(expBeacons, pack);
-    assertEquals(1, pack.declaredPaths().size());
-    assertEquals(state.rowNumbers(), pack.getFullRowNumbers());
-    assertBeaconRows(expBeacons, pack);
-
-    System.out.println(method(label) + " Full row #s: " + builder.getFullRowNumbers());
-    
-    // test adding non-existent row as beacon
-    
-    {
-      long utc3 = utc2 + 90000;
-      long bcRn3 = bcRn2 + 1;
-      assertFalse( builder.addBeaconRow(bcRn3, utc3) );
-    }
-    
-    // test adding out-of-sequence beacon
-    try {
-      long utc3 = utc2 - 1;
-      long bcRn3 = state.rowNumbers().get(6);
-      
-      builder.addBeaconRow(bcRn3, utc3);
-      fail();
-      
-    } catch (IllegalArgumentException expected) {
-      System.out.println("EXPECTED ERROR in " + method(label) + ": " + expected);
-    }
-    
-    // but interleaving is ok, as long as it's consistent..
-    
-    long utcBetween = (utc + utc2) / 2;
-    long bcRnBetween = state.rowNumbers().get(2);
-    
-    assertTrue( builder.addBeaconRow(bcRnBetween, utcBetween) );
-    expBeacons = Arrays.asList(bcn, new Tuple<Long,Long>(bcRnBetween, utcBetween), bcn2);
-    assertBeaconRows(expBeacons, builder);
-    
-    pack = toPack(builder);
-    
-    assertStateDeclaration(ledger, pack);
-    assertBeaconRows(expBeacons, pack);
-    assertEquals(1, pack.declaredPaths().size());
-    assertEquals(state.rowNumbers(), pack.getFullRowNumbers());
-    assertBeaconRows(expBeacons, pack);
-  }
-  
-  
-  
   
   @Test
   public void testWithCrumTrails() {
-    final Object label = new Object() { };
     final int initSize = 2000;
-    final int firstBcnIndex = 3;
     
-    Ledger ledger = newRandomLedger(initSize);
+    SkipLedger ledger = newRandomLedger(initSize);
     MorselPackBuilder builder = new MorselPackBuilder();
-    builder.initState(ledger);
-    
     Path state = ledger.statePath();
+    final String comment = "woohoo";
     
-    // mark some mock beacons
-    List<Long> rns = state.rowNumbers();
-    List<Tuple<Long,Long>> expBcns = new ArrayList<>();
-    for (int index = firstBcnIndex; index < rns.size() - 2 ; ++index) {
-      long rn = rns.get(index);
-      long utc = mockBeaconUtc(rn); 
-      expBcns.add(new Tuple<>(rn, utc));
-      builder.addBeaconRow(rns.get(index), utc);
-    }
+    builder.initPath(state, comment);
+    
+    
     
     // add a valid crumtrail
     final long witRn = initSize;  // (last rn in state path)
@@ -201,36 +97,9 @@ public class MorselPackTest extends IoTestCase {
     MorselPack pack = toPack(builder);
     assertInBag(trail, witRn, pack);
     
-    assertStateDeclaration(ledger, pack);
+    assertStateDeclaration(ledger, pack, comment);
     
-    
-    assertBeaconRows(expBcns, pack);
-    
-    // try out-of-sequence
-    try {
-      long rn = builder.beaconRows().get(1).a;
-      long utc = mockBeaconUtc(rn - 1);
-      CrumTrail bad = mockCrumTrail(builder, rn, utc);
-      
-      builder.addTrail(rn, bad);
-      fail();
-      
-    } catch (IllegalArgumentException expected) {
-      System.out.println("EXPECTED ERROR in " + method(label) + ": " + expected);
-    }
-    
-    // try out-of-sequence (2)
-    try {
-      long rn = rns.get(rns.size() - 2);
-      long utc = mockTrailUtc(initSize + 1);
-      CrumTrail bad = mockCrumTrail(builder, rn, utc);
-      
-      builder.addTrail(rn, bad);
-      fail();
-      
-    } catch (IllegalArgumentException expected) {
-      System.out.println("EXPECTED ERROR in " + method(label) + ": " + expected);
-    }
+    List<Long> rns = state.rowNumbers();
     
     // now add another valid trail
     
@@ -242,91 +111,74 @@ public class MorselPackTest extends IoTestCase {
     MorselPack pack2 = toPack(builder);
     assertInBag(trail2, witRn2, pack2);
     assertInBag(trail, witRn, pack2);
-    assertStateDeclaration(ledger, pack2);
+    assertStateDeclaration(ledger, pack2, comment);
     
-    // adding illegal beacon
-    
-    try {
-      assertFalse(
-          "test premise failure",
-          Lists.map(builder.beaconRows(), t -> t.a).contains(witRn2));
-      
-      long badBeaconUtc = trail.crum().utc();
-      builder.addBeaconRow(witRn2, badBeaconUtc);
-      fail();
-      
-    } catch (IllegalArgumentException expected) {
-      System.out.println("EXPECTED ERROR in " + method(label) + ": " + expected);
-    }
   }
   
   
   
   @Test
-  public void testWithEntries() throws IOException {
+  public void testWithSources_1() throws IOException {
 
     final Object label = new Object() { };
 
     final int finalSize = 2021;
     
-    int[] entryRns = {
+    final String comment = "yes we can";
+    
+    int[] srcRns = {
         1574,
         1580
     };
-    String[] entryTexts = {
+    String[] col1 = {
         "this is a test",
         "this is _only_ a test",
     };
     
+    Number[] col2 = { 23, null };
+    
     // prepare the ledger..
     
-    Ledger ledger = Ledgers.newVolatileLedger();
+    SkipLedger ledger = newLedger();
     Random random = new Random(finalSize);
     
-    TextEntry[] entries = new TextEntry[entryRns.length];
+    SourceRow[] srcs = new SourceRow[srcRns.length];
     byte[] randHash = new byte[SldgConstants.HASH_WIDTH];
     
-    for (int index = 0; index < entryRns.length; ++index) {
-      final long rn = entryRns[index];
+    for (int index = 0; index < srcRns.length; ++index) {
+      
+      final long rn = srcRns[index];
       
       while (ledger.size() + 1 < rn) {
         random.nextBytes(randHash);
         ledger.appendRows(ByteBuffer.wrap(randHash));
       }
       assertTrue( ledger.size() == rn - 1) ;
-      
-      entries[index] = new TextEntry(entryTexts[index], rn);
-      ledger.appendRows(entries[index].hash());
+      srcs[index] = new SourceRow(rn, col1[index], col2[index]);
+      ledger.appendRows(srcs[index].rowHash());
     }
     while (ledger.size() < finalSize) {
       random.nextBytes(randHash);
       ledger.appendRows(ByteBuffer.wrap(randHash));
     }
-
-    TextEntry entry = entries[0];
     
     MorselPackBuilder builder = new MorselPackBuilder();
-    builder.initState(ledger);
-    builder.addPathToTarget(entry.rowNumber(), ledger);
+    builder.initPath(ledger.statePath(), comment);
+    builder.addPathToTarget(srcs[0].rowNumber(), ledger);
     
     MorselPack pack = toPack(builder);
 
-    assertInBag(ledger.skipPath(entry.rowNumber(), builder.hi()), pack);
-    assertStateDeclaration(ledger, pack);
+    assertInBag(ledger.skipPath(srcs[0].rowNumber(), builder.hi()), pack);
+    assertStateDeclaration(ledger, pack, comment);
     
+    builder.addSourceRow(srcs[0]);
     
-    builder.addEntry(entry.rowNumber(), entry.content(), null);
-    
-    assertInBag(entry, builder);
+    assertInBag(srcs[0], builder);
     
     pack = toPack(builder);
-    assertInBag(entry, pack);
+    assertInBag(srcs[0], pack);
     
-    long bcnRow = ((entry.rowNumber() - 1) / 16) * 16;
-    builder.addPathToTarget(bcnRow, ledger);
-    builder.addBeaconRow(bcnRow, mockBeaconUtc(bcnRow));
-    
-    long witRow = ((entry.rowNumber() + 1) / 16) * 16;
+    long witRow = ((srcs[0].rowNumber() + 1) / 16) * 16;
     builder.addPathToTarget(witRow, ledger);
     
     CrumTrail trail = mockCrumTrail(builder, witRow);
@@ -335,8 +187,8 @@ public class MorselPackTest extends IoTestCase {
     pack = toPack(builder);
     
     assertInBag(trail, witRow, pack);
-    assertInBag(entry, builder);
-    assertStateDeclaration(ledger, pack);
+    assertInBag(srcs[0], builder);
+    assertStateDeclaration(ledger, pack, comment);
     
     File mFile = getMethodOutputFilepath(label);
     
@@ -346,8 +198,91 @@ public class MorselPackTest extends IoTestCase {
     
     pack = morselFile.getMorselPack();
     assertInBag(trail, witRow, pack);
-    assertInBag(entry, builder);
-    assertStateDeclaration(ledger, pack);
+    assertInBag(srcs[0], builder);
+    assertStateDeclaration(ledger, pack, comment);
+    
+  }
+  
+  
+  @Test
+  public void testWithSources_2() throws IOException {
+
+    final Object label = new Object() { };
+
+    final int finalSize = 2021;
+    
+    final String comment = "this is not a real comment";
+    
+    int[] srcRns = {
+        1574,
+        1580
+    };
+    String[] col1 = {
+        "this is a test",
+        "this is _only_ a test",
+    };
+    
+    Number[] col2 = { 23, null };
+    
+    // prepare the ledger..
+    
+    SkipLedger ledger = newLedger();
+    Random random = new Random(finalSize);
+    
+    SourceRow[] srcs = new SourceRow[srcRns.length];
+    byte[] randHash = new byte[SldgConstants.HASH_WIDTH];
+    
+    for (int index = 0; index < srcRns.length; ++index) {
+      
+      final long rn = srcRns[index];
+      
+      while (ledger.size() + 1 < rn) {
+        random.nextBytes(randHash);
+        ledger.appendRows(ByteBuffer.wrap(randHash));
+      }
+      assertTrue( ledger.size() == rn - 1) ;
+      srcs[index] = new SourceRow(rn, col1[index], col2[index]);
+      ledger.appendRows(srcs[index].rowHash());
+    }
+    while (ledger.size() < finalSize) {
+      random.nextBytes(randHash);
+      ledger.appendRows(ByteBuffer.wrap(randHash));
+    }
+    
+    MorselPackBuilder builder = new MorselPackBuilder();
+    builder.initPath(ledger.statePath(), comment);
+    for (var src : srcs) {
+      builder.addPathToTarget(src.rowNumber(), ledger);
+      builder.addSourceRow(src);
+    }
+    
+    long witRow = ((srcs[0].rowNumber() + 1) / 16) * 16;
+    builder.addPathToTarget(witRow, ledger);
+    
+    CrumTrail trail = mockCrumTrail(builder, witRow);
+    builder.addTrail(witRow, trail);
+    
+    for (var src : srcs)
+      assertInBag(src, builder);
+    
+    File mFile = getMethodOutputFilepath(label);
+    
+    MorselFile.createMorselFile(mFile, builder);
+    
+    MorselFile morselFile = new MorselFile(mFile);
+    
+    MorselPack pack = morselFile.getMorselPack();
+
+    
+    assertInBag(ledger.skipPath(srcs[0].rowNumber(), builder.hi()), pack);
+    assertStateDeclaration(ledger, pack, comment);
+    
+
+    for (var src : srcs)
+      assertInBag(src, pack);
+    
+    assertInBag(trail, witRow, pack);
+    
   }
   
   
@@ -409,15 +344,8 @@ public class MorselPackTest extends IoTestCase {
   }
   
   
-  public static void assertInBag(Entry expected, MorselBag bag) {
-    Entry actual = bag.entry(expected.rowNumber());
-    assertEquals(expected.rowNumber(), actual.rowNumber());
-    assertEquals(expected.content(), actual.content());
-  }
-  
-  
-  public static void assertStateDeclaration(Ledger expected, MorselBag bag) {
-    PathInfo decl = new PathInfo(1, expected.size());
+  public static void assertStateDeclaration(SkipLedger expected, MorselBag bag, String comment) {
+    PathInfo decl = new PathInfo(1, expected.size(), comment);
     assertTrue(bag.declaredPaths().contains(decl));
     assertInBag(expected.statePath(), bag);
   }
@@ -428,10 +356,9 @@ public class MorselPackTest extends IoTestCase {
   }
   
   
-  public static void assertBeaconRows(List<Tuple<Long,Long>> expected, MorselBag bag) {
-    assertEquals(expected, bag.beaconRows());
+  public static void assertInBag(SourceRow src, MorselBag bag) {
+    assertTrue(bag.sources().contains(src));
   }
-  
   
   
   public static void assertInBag(Path expected, MorselBag bag) {
@@ -445,16 +372,16 @@ public class MorselPackTest extends IoTestCase {
   }
 
   
-  public static Ledger newRandomLedger(int initSize) {
-    Ledger ledger = Ledgers.newVolatileLedger();
-    Random random = new Random(initSize);
-    byte[] randHash = new byte[Constants.HASH_WIDTH];
-    for (int countdown = initSize; countdown-- > 0; ) {
-      random.nextBytes(randHash);
-      ledger.appendRows(ByteBuffer.wrap(randHash));
-    }
-    return ledger;
-  }
+//  public static Ledger newRandomLedger(int initSize) {
+//    Ledger ledger = Ledgers.newVolatileLedger();
+//    Random random = new Random(initSize);
+//    byte[] randHash = new byte[Constants.HASH_WIDTH];
+//    for (int countdown = initSize; countdown-- > 0; ) {
+//      random.nextBytes(randHash);
+//      ledger.appendRows(ByteBuffer.wrap(randHash));
+//    }
+//    return ledger;
+//  }
   
   
   

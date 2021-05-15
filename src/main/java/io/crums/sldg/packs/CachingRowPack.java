@@ -23,6 +23,9 @@ public class CachingRowPack extends RowPack {
    */
   public CachingRowPack(RowPack base) {
     super(base);
+    if (base instanceof CachingRowPack)
+      throw new IllegalArgumentException(
+          "attempt to create nested instance of this class: " + base);
   }
 
   @Override

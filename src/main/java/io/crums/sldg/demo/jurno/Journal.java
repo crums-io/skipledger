@@ -20,10 +20,9 @@ import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
-import io.crums.client.ClientException;
 import io.crums.io.FileLineIterator;
-import io.crums.sldg.Ledger;
-import io.crums.sldg.db.Db;
+import io.crums.sldg.fs.HashLedgerDir;
+import io.crums.sldg.time.WitnessReport;
 import io.crums.util.Lists;
 import io.crums.util.hash.Digests;
 
@@ -112,7 +111,7 @@ public class Journal implements Closeable {
   
   private final File textFile;
   
-  private final Db db;
+  private final HashLedgerDir db;
   
   private State state;
   
@@ -133,7 +132,7 @@ public class Journal implements Closeable {
   
   
   
-  public Journal(File textFile, Db db) {
+  public Journal(File textFile, HashLedgerDir db) {
     this.textFile = Objects.requireNonNull(textFile, "null textFile");
     this.db = Objects.requireNonNull(db, "null db");
     if (!textFile.isFile())
@@ -152,7 +151,7 @@ public class Journal implements Closeable {
   
   
   
-  public Db db() {
+  public HashLedgerDir db() {
     return db;
   }
   
@@ -161,7 +160,8 @@ public class Journal implements Closeable {
    * Returns the last witnessed line, if any; 0 (zero), otherwise.
    */
   public int lastLineWitnessed() {
-    return (int) db.lastSansBeaconRowWitnessed();
+    int trailCount = db.getTrailCount();
+    return trailCount == 0 ? 0 : (int) db.getTrailByIndex(trailCount - 1).rowNumber();
   }
   
   
@@ -182,7 +182,7 @@ public class Journal implements Closeable {
    *  @return {@code db().sizeSansBeacons()}
    */
   public int getLedgeredLines() {
-    return db.sizeSansBeacons();
+    return (int) db.size();
   }
   
   
@@ -251,6 +251,7 @@ public class Journal implements Closeable {
    * @throws IllegalStateException
    */
   public void trim() throws IllegalStateException {
+    
     if (state == null)
       throw new IllegalStateException(
           "trim() method invalid as 1st member invocation on instance: " + this);
@@ -261,7 +262,7 @@ public class Journal implements Closeable {
     if (lastValidRow < 1)
       throw new IllegalStateException("attempt to trim to zero rows");
 
-    db.truncate(lastValidRow);
+    db.trimSize(lastValidRow);
   }
   
   
@@ -281,10 +282,10 @@ public class Journal implements Closeable {
     switch (state) {
     case FORKED:
       assert forkLineNumber > 1;
-      return (int) db.rowNumWithBeacons(forkLineNumber - 1);
+      return forkLineNumber - 1;
     case TRIMMED:
       assert lines > 1;
-      return (int) db.rowNumWithBeacons(lines);
+      return (int) lines;
     default:
       return (int) db.size();
     }
@@ -303,12 +304,12 @@ public class Journal implements Closeable {
    * @see {@link #lastValidLedgerRow()}
    */
   public int lastValidLedgeredLine() throws IllegalStateException {
-    return (int) db.rowNumSansBeacons(lastValidLedgerRow());
+    return (int) lastValidLedgerRow();
   }
   
   
   
-  public Db.WitnessReport witness() {
+  public WitnessReport witness() {
     return db.witness();
   }
 
@@ -414,9 +415,6 @@ public class Journal implements Closeable {
     
     clear();
     
-    List<Long> beaconRns = db.getBeaconRowNumbers();
-    int bcnIndex = 0;
-    long nextBeaconRn = beaconRns.isEmpty() ? Long.MAX_VALUE : beaconRns.get(0);
     
     long rowNumber = 0;
 
@@ -441,15 +439,7 @@ public class Journal implements Closeable {
         ++lines;
         ++rowNumber;
         
-        // if the next row is a beacon, skip over it
-        while (rowNumber == nextBeaconRn) { // in case there are consecutive beacons (?)
-          ++rowNumber;
-          ++bcnIndex;
-          nextBeaconRn = bcnIndex == beaconRns.size() ? Long.MAX_VALUE : beaconRns.get(bcnIndex);
-          assert nextBeaconRn >= rowNumber && rowNumber <= maxRow;
-        }
         
-
         if (!verifyLineFunc.test(line, rowNumber)) {
 
           if (lines == 1)
@@ -518,12 +508,12 @@ public class Journal implements Closeable {
     if (state != null)
       return;
     
-    final long nonBeaconRows = db.sizeSansBeacons();
+    final long rowCount = db.size();
     
-    if (lines > nonBeaconRows) {
+    if (lines > rowCount) {
       state = State.PENDING;
     
-    } else if (lines < nonBeaconRows) {
+    } else if (lines < rowCount) {
       
       throw new IllegalStateException("something's amiss " + this);
     
@@ -567,15 +557,8 @@ public class Journal implements Closeable {
   
   
   private void addLine(String line, MessageDigest digest, int count) {
-    if (count == 0) {
-      try {
-        db.addBeacon();
-      } catch (ClientException x) {
-        // swallow
-      }
-    }
     ByteBuffer hash = lineHash(line, digest);
-    db.getLedger().appendRows(hash);
+    db.getSkipLedger().appendRows(hash);
   }
   
   
@@ -590,7 +573,7 @@ public class Journal implements Closeable {
   
   protected final boolean verifyLine(String line, long rowNumber, MessageDigest digest) {
     ByteBuffer hash = lineHash(line, digest);
-    return db.getLedger().getRow(rowNumber).inputHash().equals(hash);
+    return db.getSkipLedger().getRow(rowNumber).inputHash().equals(hash);
   }
   
   

@@ -3,6 +3,7 @@
  */
 package io.crums.sldg;
 
+
 import java.util.List;
 
 import io.crums.sldg.bags.RowBag;
@@ -17,7 +18,7 @@ public class CachingRowPackTest extends RowBagTest {
   
 
   @Override
-  protected RowBag newBag(Ledger ledger, List<Long> rowNumbers) {
+  protected RowBag newBag(SkipLedger ledger, List<Long> rowNumbers) {
     RowPack bag = RowPackBuilder.createBag(ledger, rowNumbers);
     return new CachingRowPack(bag);
   }

@@ -3,8 +3,7 @@
  */
 package io.crums.sldg.packs;
 
-
-import static io.crums.sldg.SldgConstants.*;
+import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -14,9 +13,9 @@ import java.util.Objects;
 import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
-import io.crums.sldg.Ledger;
+import io.crums.sldg.ByteFormatException;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.bags.RowBag;
-import io.crums.sldg.db.ByteFormatException;
 import io.crums.util.Lists;
 
 /**
@@ -24,6 +23,9 @@ import io.crums.util.Lists;
  * Consequently the cost every full-row lookup is linear in the row number. Not good:
  * validating the pack then is <b>0</b>(n<sup><tiny>2</tiny></sup>). See {@linkplain CachingRowPack}.
  * 
+ * <p>
+ * See the package description for the serial format.
+ * </p>
  * <h2>Serial Format</h2>
  * 
  * <h4>Definitions</h4>
@@ -64,6 +66,7 @@ import io.crums.util.Lists;
  */
 public class RowPack extends RecurseHashRowPack {
   
+
   
   /**
    * Loads and returns a new instance by reading the given buffer. The <em>content</em> of
@@ -89,7 +92,7 @@ public class RowPack extends RecurseHashRowPack {
       
       int inputSize = HASH_WIDTH * fullRows;
       int hashSize =
-          HASH_WIDTH * (Ledger.coverage(inputRns).tailSet(1L).size() - inputRns.size());
+          HASH_WIDTH * (SkipLedger.coverage(inputRns).tailSet(1L).size() - inputRns.size());
       {
         int reqSize = inputSize + hashSize;
         if (in.remaining() < reqSize)
@@ -132,6 +135,18 @@ public class RowPack extends RecurseHashRowPack {
   
   
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   private final List<Long> inputRns;
   private final List<Long> hashRns;
   
@@ -149,7 +164,7 @@ public class RowPack extends RecurseHashRowPack {
   RowPack(List<Long> inputRns, ByteBuffer hashes, ByteBuffer inputs) {
     
     this.inputRns = Objects.requireNonNull(inputRns, "null inputRns");
-    SortedSet<Long> refs = Ledger.refOnlyCoverage(inputRns).tailSet(1L);
+    SortedSet<Long> refs = SkipLedger.refOnlyCoverage(inputRns).tailSet(1L);
     
     this.hashRns = Lists.readOnlyCopy(refs);
     this.hashes = BufferUtils.readOnlySlice(Objects.requireNonNull(hashes, "null hashes"));
@@ -214,31 +229,4 @@ public class RowPack extends RecurseHashRowPack {
     int offset = index * HASH_WIDTH;
     return store.asReadOnlyBuffer().position(offset).limit(offset + HASH_WIDTH).slice();
   }
-  
-  
-  
-  
-  
-  
-  
-  // - -  S T A T E L E S S  - -
-
-  @Override
-  public final int hashWidth() {
-    return HASH_WIDTH;
-  }
-
-  @Override
-  public final String hashAlgo() {
-    return DIGEST.hashAlgo();
-  }
-
-  @Override
-  public final ByteBuffer sentinelHash() {
-    return DIGEST.sentinelHash();
-  }
-
 }
-
-
-

@@ -13,8 +13,6 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 /**
- */
-/**
  * Emergent pattern for implementing parsing and generating JSON,
  * abstracted into an interface.
  * 

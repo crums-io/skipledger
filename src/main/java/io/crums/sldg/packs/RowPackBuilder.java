@@ -14,10 +14,10 @@ import java.util.TreeMap;
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.Ledger;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.SerialRow;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.util.Lists;
 
@@ -420,7 +420,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
 
 
 
-  public static RowPack createBag(Ledger ledger, List<Long> rowNumbers) {
+  public static RowPack createBag(SkipLedger ledger, List<Long> rowNumbers) {
     return createBag(ledger, rowNumbers, true);
   }
   
@@ -433,7 +433,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    * @param copy determines if {@code rowNumbers} is defensively copied
    * @return
    */
-  public static RowPack createBag(Ledger ledger, List<Long> rowNumbers, boolean copy) {
+  public static RowPack createBag(SkipLedger ledger, List<Long> rowNumbers, boolean copy) {
     if (Objects.requireNonNull(rowNumbers, "null rowNumbers").isEmpty())
       throw new IllegalArgumentException("empty rowNumbers");
     
@@ -476,7 +476,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
 
     ByteBuffer hashes;
     {
-      SortedSet<Long> refs = Ledger.refOnlyCoverage(rowNumbers).tailSet(1L);
+      SortedSet<Long> refs = SkipLedger.refOnlyCoverage(rowNumbers).tailSet(1L);
       int hashCount = refs.size();
       
       if (hashCount == 0) {

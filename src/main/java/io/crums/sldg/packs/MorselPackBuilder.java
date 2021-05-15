@@ -5,116 +5,78 @@ package io.crums.sldg.packs;
 
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.Ledger;
 import io.crums.sldg.Path;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.bags.MorselBag;
-import io.crums.sldg.entry.Entry;
-import io.crums.sldg.entry.EntryInfo;
-import io.crums.util.Lists;
+import io.crums.sldg.src.SourceRow;
 import io.crums.util.Sets;
-import io.crums.util.Tuple;
 
 /**
- * A mutable {@code MorselBag} whose serial form can be loaded as an immutable
- * {@linkplain MorselPack}. Unlike the other builders, this enforces the full
- * business rules of the interface.
  * 
- * 
- * @see MorselPack#load(ByteBuffer)
  */
 public class MorselPackBuilder implements MorselBag, Serial {
   
-  private final RowPackBuilder rowPackBuilder = new RowPackBuilder();
   
-  private final PathPackBuilder pathPackBuilder = new PathPackBuilder();
-  
-  private final TrailPackBuilder trailPackBuilder = new TrailPackBuilder();
-  
-  private final EntryPackBuilder entryPackBuilder = new EntryPackBuilder();
+  protected final RowPackBuilder rowPackBuilder = new RowPackBuilder();
+  protected final TrailPackBuilder trailPackBuilder = new TrailPackBuilder();
+  protected final SourcePackBuilder sourcePackBuilder = new SourcePackBuilder();
+  protected final PathPackBuilder pathPackBuilder = new PathPackBuilder();
   
   
-  private Object lock() {
+  
+  protected final Object lock() {
     return rowPackBuilder;
   }
   
   
-  /**
-   * Adds information from the given morsel {@code pack} to this instance.
-   * If {@linkplain #isEmpty() empty}, then the instance is initialized with
-   * all the given information; otherwise (if not empty), then only <em>linked
-   * information</em> is added. I.e. this method only allows adding detail to already
-   * known information.
-   * 
-   * @param pack non-null, but empty OK
-   * 
-   * @return the number of objects added
-   */
-  public int addAll(MorselPack pack) throws HashConflictException {
-    synchronized (lock()) {
-      
-      if (isEmpty())
-        return init(pack);
-      
-      int rows = addRows(pack);
-      int declPaths = addDeclaredPaths(pack);
-      int beacons = addBeaconRows(pack);
-      int trails = addTrails(pack);
-      int entries = addEntries(pack);
-      return rows + declPaths + beacons + trails + entries;
-    }
-  }
-  
-  
-  
   public int init(MorselPack pack) throws IllegalStateException {
     synchronized (lock()) {
-      if (!isEmpty())
-        throw new IllegalStateException("attempt to initialize instance while not empty");
-
-      int rowsAdded = rowPackBuilder.addAll(pack.rowPack());
-      int objectsAdded = pathPackBuilder.addPathPack(pack.pathPack());
-      int trailsAdded = trailPackBuilder.addAll(pack.trailPack());
-      int entriesAdded = entryPackBuilder.addAll(pack.entryPack());
-      return rowsAdded + objectsAdded + trailsAdded + entriesAdded;
+      int rowsAdded = rowPackBuilder.init(pack.getRowPack());
+      int trailsAdded = trailPackBuilder.addAll(pack.getTrailPack());
+      int srcsAdded = sourcePackBuilder.addAll(pack.getSourcePack());
+      int infosAdded = pathPackBuilder.addPathPack(pack.getPathPack());
+      return rowsAdded + trailsAdded + srcsAdded + infosAdded;
     }
   }
   
   
   
-  
-  public int initState(Ledger ledger) throws IllegalStateException {
-    
-    Path path = ledger.statePath();
-    
-    if (path == null)
-      throw new IllegalArgumentException("ledger is empty");
-    else if (path.rows().size() < 2)
-      throw new IllegalArgumentException("ledger is a single row");
-    
-    return initPath(path, true);
-  }
-  
-  
-  public int initPath(Path path, boolean declare) {
+  public int initPath(Path path, String comment) {
     if (Objects.requireNonNull(path, "null path").hiRowNumber() < 2)
       throw new IllegalArgumentException("path is single row number 1");
+    
+    boolean declare = comment != null && !comment.isEmpty();
+    
     
     synchronized (lock()) {
       int count = rowPackBuilder.init(path);
       if (declare) {
-        PathInfo stateDecl = new PathInfo(path.loRowNumber(), path.hiRowNumber());
-        pathPackBuilder.addDeclaredPath(stateDecl);
+        PathInfo info = new PathInfo(path.loRowNumber(), path.hiRowNumber(), comment);
+        pathPackBuilder.addDeclaredPath(info);
         ++count;
       }
+      return count;
+    }
+  }
+  
+  
+  public int addAll(MorselPack pack) {
+    synchronized (lock()) {
+      if (isEmpty())
+        return init(pack);
+      int count = 0;
+      count += addRows(pack);
+      count += addTrails(pack);
+      count += addSourceRows(pack);
+      count += addDeclaredPaths(pack);
       return count;
     }
   }
@@ -125,13 +87,18 @@ public class MorselPackBuilder implements MorselBag, Serial {
     return rowPackBuilder.isEmpty();
   }
   
-  
-  
+  /**
+   * Adds the given row if it can be linked from the last row.
+   * 
+   * @return {@code rowPackBuilder.add(row)}
+   * 
+   * @see RowPackBuilder#add(Row)
+   */
   public boolean addRow(Row row) throws HashConflictException {
     return rowPackBuilder.add(row);
   }
   
-  
+
 
   /**
    * Adds all the rows in the given morsel pack. If this instance {@linkplain #isEmpty() is empty}, then all
@@ -141,10 +108,10 @@ public class MorselPackBuilder implements MorselBag, Serial {
    * @return the number of full rows added
    * 
    * @throws HashConflictException
-   *         if a hash in {@code mp} conflicts with existing hashes.
+   *         if a hash in {@code pack} conflicts with an existing hash
    */
-  public int addRows(MorselPack mp) throws HashConflictException {
-    return rowPackBuilder.addAll(mp.rowPack());
+  public int addRows(MorselPack pack) throws HashConflictException {
+    return rowPackBuilder.addAll(pack.getRowPack());
   }
   
 
@@ -164,7 +131,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
-  
+
   /**
    * Adds a path from the state-row ({@linkplain #hi()}) to the row with the
    * given row number.
@@ -177,7 +144,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
    * @throws HashConflictException
    *         if this instance is not from the given {@code ledger}
    */
-  public int addPathToTarget(long rowNumber, Ledger ledger) throws HashConflictException {
+  public int addPathToTarget(long rowNumber, SkipLedger ledger) throws HashConflictException {
     long hi = Objects.requireNonNull(ledger, "null ledger").size();
     Path path = ledger.skipPath(rowNumber, hi);
     return addPath(path);
@@ -185,7 +152,9 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   
-  
+  /**
+   * Adds the given path declaration, but only if its full rows are already in this morsel.
+   */
   public boolean addDeclaredPath(PathInfo decl) {
     synchronized (lock()) {
       if (!Sets.sortedSetView(getFullRowNumbers()).containsAll(decl.rowNumbers()))
@@ -196,8 +165,16 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
-  public int addDeclaredPaths(MorselPack mp) throws HashConflictException {
-    List<PathInfo> declPaths = mp.declaredPaths();
+  /**
+   * Adds the declared paths from the given morsel. Only those whose full row numbers
+   * are already in this morsel are added.
+   * 
+   * @return the number of declarations added
+   * 
+   * @see #addDeclaredPath(PathInfo)
+   */
+  public int addDeclaredPaths(MorselPack pack) throws HashConflictException {
+    List<PathInfo> declPaths = pack.declaredPaths();
     if (declPaths.isEmpty())
       return 0;
     
@@ -213,63 +190,15 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
-  
-  public boolean addBeaconRow(long rowNumber, long utc) {
-    synchronized (lock()) {
-      if (!hasFullRow(rowNumber))
-        return false;
-      
-      // check the advertised time is consistent with the crumtrails
-      List<Long> trailedRows = trailedRows();
-      if (!trailedRows.isEmpty()) {
-        
-        int searchIndex = Collections.binarySearch(trailedRows, rowNumber);
-        if (searchIndex >= 0) {
-          CrumTrail trail = crumTrail(rowNumber);
-          // the beacon cannot be created *after* it was witnessed
-          if (utc > trail.crum().utc())
-            throw new IllegalArgumentException(
-                "attempt to set beacon status for trailed row " + rowNumber +
-                " (witness-utc " + trail.crum().utc() + ") using beacon-utc " + utc);
-        } else {
-          int insertIndex = -1 - searchIndex;
-          // check next trail
-          if (insertIndex < trailedRows.size()) {
-            Long trailedRn = trailedRows.get(insertIndex);
-            CrumTrail nextTrail = crumTrail(trailedRn);
-            // the beacon could not be created *after* a subsequent row was witnessed
-            if (utc > nextTrail.crum().utc())
-              throw new IllegalArgumentException(
-                  "attempt to set beacon status for row " + rowNumber + " with beacon-utc " +
-                  utc + " while row " + trailedRn + " is recorded as witnessed on " +
-                  nextTrail.crum().utc());
-          }
-        }
-      }
-      
-      
-      return pathPackBuilder.addBeaconRow(rowNumber, utc);
-    }
-  }
-  
-  
-  
-  public int addBeaconRows(MorselPack mp) {
-    List<Tuple<Long,Long>> beacons = mp.beaconRows();
-    if (beacons.isEmpty())
-      return 0;
-    
-    synchronized (lock()) {
-      int count = 0;
-      for (var b : beacons) {
-        if (addBeaconRow(b.a, b.b))
-          ++count;
-      }
-      return count;
-    }
-  }
-  
-  
+
+  /**
+   * Adds the trail for the given row, but only if a full row at the given number exists
+   * in this morsel.
+   * <p>FIXME: this should just take a TrailedRow</p>
+   * 
+   * @throws HashConflictException if the witnessed hash in the crumtrail conflicts
+   *          with the hash of the given row number
+   */
   public boolean addTrail(long rowNumber, CrumTrail trail) throws HashConflictException {
     synchronized (lock()) {
       if (!hasFullRow(rowNumber))
@@ -284,46 +213,25 @@ public class MorselPackBuilder implements MorselBag, Serial {
         throw new HashConflictException(
             "attempt to add crumtrail with inconsistent hashes for row " + rowNumber);
       
-      // sanity-check the trail against any beacons
-      // (again, only a sanity-check since the real check requires network access)
-      
-      var beaconRows = beaconRows();
-      if (!beaconRows.isEmpty()) {
-        int searchIndex = Collections.binarySearch(Lists.map(beaconRows, t -> t.a), rowNumber);
-        
-        if (searchIndex >= 0) {
-          long beaconUtc = beaconRows.get(searchIndex).b;
-          if (beaconUtc >= trail.crum().utc())
-            throw new IllegalArgumentException(
-                "attempt to annotate crumtrail with witness-utc " + trail.crum().utc() +
-                " to beacon row " + beaconRows.get(searchIndex));
-        } else {
-          int insertIndex = -1 - searchIndex;
-          // check previous
-          if (insertIndex > 0) {
-            long prevBcnUtc = beaconRows.get(insertIndex - 1).b;
-            if (prevBcnUtc >= trail.crum().utc())
-              throw new IllegalArgumentException(
-                  "attempt to annotate crumtrail with witness-utc " + trail.crum().utc() +
-                  " to row " + rowNumber + " while this beacon exists: " + beaconRows.get(insertIndex - 1));
-          }
-        }
-      }
-      
       return trailPackBuilder.addTrail(rowNumber, trail);
     }
   }
   
   
-  
-  public int addTrails(MorselPack mp) throws HashConflictException {
-    List<Long> trailedRns = mp.trailedRows();
+  /**
+   * Adds the trailed rows from the given morsel. Only those whose full row numbers
+   * are already in this morsel are added.
+   * 
+   * @return the number of crumtrails added
+   */
+  public int addTrails(MorselPack pack) {
+    List<Long> trailedRns = pack.trailedRows();
     if (trailedRns.isEmpty())
       return 0;
     synchronized (lock()) {
       int count = 0;
       for (long rn : trailedRns) {
-        if (addTrail(rn, mp.crumTrail(rn)))
+        if (addTrail(rn, pack.crumTrail(rn)))
           ++count;
       }
       return count;
@@ -331,53 +239,35 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
-  
   /**
-   * Like set entry, but only works once per row number.
-   * 
-   * @see #setEntry(long, ByteBuffer, String)
+   * Adds the given source-row, but only if its full row already exists in this
+   * morsel.
    */
-  public boolean addEntry(long rowNumber, ByteBuffer content, String meta) {
+  public boolean addSourceRow(SourceRow row) {
     synchronized (lock()) {
-      return
-          !entryPackBuilder.hasEntry(rowNumber) &&
-          setEntry(rowNumber, content, meta);
-    }
-  }
-  
-  
-
-  /**
-   * Sets the entry at the given row number if full-hash information is available
-   * at the given row.
-   * 
-   * @param meta non-empty string (optional: has no effect if empty or null)
-   * 
-   * @return {@code false} if full-hash information is not available; {@code true} o.w.
-   */
-  public boolean setEntry(long rowNumber, ByteBuffer content, String meta) {
-    synchronized (lock()) {
-      if (!hasFullRow(rowNumber))
+      long rn = row.rowNumber();
+      if (!hasFullRow(rn))
         return false;
-      entryPackBuilder.setEntry(rowNumber, content, meta);
-      return true;
+      
+      if (!inputHash(rn).equals(row.rowHash()))
+        throw new HashConflictException("at row " + rn);
+      
+      return sourcePackBuilder.addSourceRow(row);
     }
   }
   
   
   
-  public int addEntries(MorselPack mp) {
-    List<EntryInfo> infos = mp.availableEntries();
-    if (infos.isEmpty())
+  
+  public int addSourceRows(MorselPack pack) {
+    List<SourceRow> sources = pack.sources();
+    if (sources.isEmpty())
       return 0;
     
     synchronized (lock()) {
       int count = 0;
-      for (var info : infos) {
-        ByteBuffer entryContent = mp.entry(info.rowNumber()).content();
-        String meta = info.hasMeta() ? info.meta() : null;
-        boolean added = addEntry(info.rowNumber(), entryContent, meta);
-        if (added)
+      for (SourceRow src : sources) {
+        if (addSourceRow(src))
           ++count;
       }
       return count;
@@ -387,12 +277,25 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   
-  
-  
 
   
-  // - - - MorselBag methods - - -
-
+  //  I N T E R F A C E    M E T H O D S
+  
+  @Override
+  public long lo() {
+    return rowPackBuilder.lo();
+  }
+  
+  @Override
+  public long hi() {
+    return rowPackBuilder.hi();
+  }
+  
+  @Override
+  public boolean hasFullRow(long rowNumber) {
+    return rowPackBuilder.hasFullRow(rowNumber);
+  }
+  
 
   @Override
   public ByteBuffer rowHash(long rowNumber) {
@@ -403,7 +306,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
   public ByteBuffer inputHash(long rowNumber) {
     return rowPackBuilder.inputHash(rowNumber);
   }
-
+  
   @Override
   public Row getRow(long rowNumber) {
     return rowPackBuilder.getRow(rowNumber);
@@ -413,40 +316,6 @@ public class MorselPackBuilder implements MorselBag, Serial {
   public List<Long> getFullRowNumbers() {
     return rowPackBuilder.getFullRowNumbers();
   }
-  
-  @Override
-  public boolean hasFullRow(long rowNumber) {
-    return rowPackBuilder.hasFullRow(rowNumber);
-  }
-  
-  @Override
-  public long lo() {
-    return rowPackBuilder.lo();
-  }
-  
-
-  @Override
-  public long hi() {
-    return rowPackBuilder.hi();
-  }
-  
-  
-  
-  
-
-  @Override
-  public List<Tuple<Long, Long>> beaconRows() {
-    return pathPackBuilder.beaconRows();
-  }
-
-  @Override
-  public List<PathInfo> declaredPaths() {
-    return pathPackBuilder.declaredPaths();
-  }
-  
-  
-  
-
 
   @Override
   public List<Long> trailedRows() {
@@ -457,26 +326,21 @@ public class MorselPackBuilder implements MorselBag, Serial {
   public CrumTrail crumTrail(long rowNumber) {
     return trailPackBuilder.crumTrail(rowNumber);
   }
-  
-  
-  
-  
-  
 
   @Override
-  public List<EntryInfo> availableEntries() {
-    return entryPackBuilder.availableEntries();
+  public List<SourceRow> sources() {
+    return sourcePackBuilder.sources();
   }
 
   @Override
-  public Entry entry(long rowNumber) {
-    return entryPackBuilder.entry(rowNumber);
+  public List<PathInfo> declaredPaths() {
+    return pathPackBuilder.declaredPaths();
   }
-  
-  
-  
-  
 
+  
+  
+  
+  
 
   /**
    * @see MorselPack
@@ -487,9 +351,9 @@ public class MorselPackBuilder implements MorselBag, Serial {
     return
         headerBytes +
         rowPackBuilder.serialSize() +
-        pathPackBuilder.serialSize() +
         trailPackBuilder.serialSize() +
-        entryPackBuilder.serialSize();
+        sourcePackBuilder.serialSize() +
+        pathPackBuilder.serialSize();
   }
 
 
@@ -499,18 +363,15 @@ public class MorselPackBuilder implements MorselBag, Serial {
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
     out.put((byte) 4).putInt(rowPackBuilder.serialSize())
-      .putInt(pathPackBuilder.serialSize())
-      .putInt(trailPackBuilder.serialSize())
-      .putInt(entryPackBuilder.serialSize());
-    
-    rowPackBuilder.writeTo(out);
-    pathPackBuilder.writeTo(out);
-    trailPackBuilder.writeTo(out);
-    entryPackBuilder.writeTo(out);
-    return out;
+    .putInt(trailPackBuilder.serialSize())
+    .putInt(sourcePackBuilder.serialSize())
+    .putInt(pathPackBuilder.serialSize());
+  
+  rowPackBuilder.writeTo(out);
+  trailPackBuilder.writeTo(out);
+  sourcePackBuilder.writeTo(out);
+  pathPackBuilder.writeTo(out);
+  return out;
   }
-
-  
-  
   
 }

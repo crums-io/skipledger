@@ -3,7 +3,6 @@
  */
 package io.crums.sldg.bags;
 
-
 import java.util.List;
 
 import io.crums.model.CrumTrail;

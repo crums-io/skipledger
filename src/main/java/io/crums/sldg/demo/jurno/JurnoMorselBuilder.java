@@ -6,32 +6,27 @@ package io.crums.sldg.demo.jurno;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.Ledger;
-import io.crums.sldg.SldgConstants;
-import io.crums.sldg.db.Db;
-import io.crums.sldg.db.DbMorselBuilder;
-import io.crums.sldg.db.MorselFile;
-import io.crums.util.Strings;
+import io.crums.sldg.MorselFile;
+import io.crums.sldg.packs.LedgerMorselBuilder;
+import io.crums.sldg.src.SourceRow;
 
 /**
  * Builds a morsel from a {@linkplain Journal}.
  * 
  * <h3>Design Note</h3>
  * <p>
- * This builder uses a fixed {@linkplain DbMorselBuilder} internally. It deliberately
+ * This builder uses a fixed {@linkplain LedgerMorselBuilder} internally. It deliberately
  * doesn't derive from it, so that there are fewer code paths to consider.
  * </p>
  */
 public class JurnoMorselBuilder {
   
   private final Journal journal;
-  private final DbMorselBuilder builder;
+  private final LedgerMorselBuilder builder;
 
   /**
    * On construction the builder is initialized with the journal's {@linkplain Ledger#statePath()
@@ -56,7 +51,7 @@ public class JurnoMorselBuilder {
       if (journal.getState().needsMending())
         throw new IllegalStateException(journal.getTextFile() + " is out-of-sync with ledger");
     }
-    this.builder = new DbMorselBuilder(journal.db());
+    this.builder = new LedgerMorselBuilder(journal.db(), journal.getTextFile().getName());
   }
   
   
@@ -70,36 +65,14 @@ public class JurnoMorselBuilder {
    * This method injects also injects any nearest beacon (row) or trailed row/crumtrail, if any. It
    * also injects ledger rows that together with existing rows in the morsel complete a shortest path
    * connectng all the above objects and the entry thru the highest row in the ledger. See also
-   * {@linkplain DbMorselBuilder#addEntry(long, ByteBuffer, String)}.
+   * {@linkplain LedgerMorselBuilder#addSourceRow(SourceRow)}.
    * </p>
    * 
    * @param lineNumbers (ledgerable) line numbers (already ledgered) in strictly ascending order
    * 
    * @return the number entries added (zero, if the entries are already added)
    */
-  public int addEntriesByLineNumber(List<Integer> lineNumbers)
-      throws IllegalArgumentException, HashConflictException {
-    
-    return addEntriesByLineNumber(lineNumbers, true);
-  }
-  
-  /**
-   * Adds entries for the given ledgered line numbers and returns the number of entries
-   * actually added.
-   * <p>
-   * This method injects also injects any nearest beacon (row) or trailed row/crumtrail, if any. It
-   * also injects ledger rows that together with existing rows in the morsel complete a shortest path
-   * connectng all the above objects and the entry thru the highest row in the ledger. See also
-   * {@linkplain DbMorselBuilder#addEntry(long, ByteBuffer, String)}.
-   * </p>
-   * 
-   * @param lineNumbers (ledgerable) line numbers (already ledgered) in strictly ascending order
-   * @param canonicalForm if {@code true} (the default) then each ledgerable line is first transformed
-   *        into canonical form before being added to the morsel
-   * 
-   * @return the number entries added (zero, if the entries are already added)
-   */
-  public int addEntriesByLineNumber(List<Integer> lineNumbers, boolean canonicalForm)
+  public int addSourcesByLineNumber(List<Integer> lineNumbers)
       throws IllegalArgumentException, HashConflictException {
     
     // (also validates the arguments)
@@ -107,36 +80,20 @@ public class JurnoMorselBuilder {
     
     {
       int lastLine = lineNumbers.get(lineNumbers.size() - 1);
-      if (lastLine > journal.db().sizeSansBeacons())
+      if (lastLine > journal.db().size())
         throw new IllegalArgumentException("ledgerable line " + lastLine + " has not been ledgered");
     }
     
     int count = 0;
-    Db db = journal.db();
-    MessageDigest digest = SldgConstants.DIGEST.newDigest();
     
     for (int index = 0; index < lines.size(); ++index) {
       
-      long rowNum = db.rowNumWithBeacons(lineNumbers.get(index));
+      long rowNum = lineNumbers.get(index);
       String line = lines.get(index);
+      line = journal.canonicalizeLine(line);
       
-      // make sure the canonical form of the line hasn't changed;
-      // and turn line into canonical form, if so flagged
-      {
-        String canonical = journal.canonicalizeLine(line);
-        assert canonical != null; // else, it should have been filtered
-        
-        if (!journal.verifyLine(canonical, rowNum, digest))
-          throw new HashConflictException(
-              "line " + lineNumbers.get(index) + " does not match ledger hash at row " + rowNum);
-        
-        if (canonicalForm)
-          line = canonical;
-      }
-      
-      ByteBuffer bytes = ByteBuffer.wrap(line.getBytes(Strings.UTF_8));
-      if (builder.addEntry(rowNum, bytes, null))
-        ++count;
+      if (builder.addSourceRow(new SourceRow(rowNum, line)))
+          ++count;
     }
     
     return count;

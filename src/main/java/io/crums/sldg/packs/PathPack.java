@@ -4,144 +4,78 @@
 package io.crums.sldg.packs;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.crums.model.HashUtc;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.bags.PathBag;
-import io.crums.sldg.db.ByteFormatException;
 import io.crums.util.Lists;
-import io.crums.util.Tuple;
-
 
 /**
+ * <p>{@linkplain PathBag} implementation.</p>
  * 
  * <h2>Serial Format</h2>
  * <p>
- * The serial format is the concatenation of 2 sections BEACON_LIST and PATH_INFOS.
- * </p>
- * 
- * <h4>BEACON_LIST</h4>
- * <p>
- * <pre>
- *    BEACON_CNT  := SHORT      // number of beacons
- *    RN          := LONG       // row number
- *    UTC         := LONG       // beacon time in UTC milliseconds
- *    
- *    BEACON_ITEM := RN UTC
- *    BEACON_LIST := BEACON_CNT [BEACON_ITEM ^BEACON_CNT]
- * </pre>
- * </p>
- * <h4>PATH_INFOS</h4>
- * <p>
- * 
+ * The serial form is a concatenation of variable size {@linkplain PathInfo}s,
+ * with the number of these as premable.
  * </p><p>
  * <pre>
  *    PATH_CNT    := SHORT                              // number of declared paths (<= 64k)
  *    
  *    // per PathInfo
  *    ROW_CNT     := SHORT                              // declarations too are brief
- *    PATH_INFO   := ROW_CNT [RN ^ROW_CNT]
+ *    META_LEN    := SHORT
+ *    
+ *    PATH_INFO   := ROW_CNT META_LEN [RN ^ROW_CNT] [BYTE ^META_LEN]
  *                   
  *    
- *    PATH_INFOS  := PATH_CNT [PATH_INFO ^PATH_CNT]     // but note ea PATH_INFO is var-width
+ *    PATH_PACK   := PATH_CNT [PATH_INFO ^PATH_CNT]     // but note ea PATH_INFO is var-width
  * </pre>
  * </p>
- * <h4>PATH_BAG</h4>
- * <p>
  * 
- * </p><p>
- * <pre>
- *    PATH_BAG    := BEACON_LIST PATH_INFOS
- * </pre>
- * </p>
  */
 public class PathPack implements PathBag {
   
   
+  public final static PathPack EMPTY = new PathPack(Collections.emptyList());
   
   
   public static PathPack load(ByteBuffer in) {
-    final int beaconCount = 0xffff & in.getShort();
+    final int count = 0xffff & in.getShort();
+    if (count == 0)
+      return EMPTY;
     
-    List<Tuple<Long,Long>> beacons;
-    if (beaconCount == 0)
-      beacons = Collections.emptyList();
-    else {
-
-      ArrayList<Tuple<Long,Long>> tuples = new ArrayList<>(beaconCount);
-      Tuple<Long,Long> prev = new Tuple<>(0L, HashUtc.INCEPTION_UTC);
+    PathInfo[] infos = new PathInfo[count];
+    try {
       
-      for (int countdown = beaconCount; countdown-- > 0; ) {
-        Long rn = in.getLong();
-        Long utc = in.getLong();
-        Tuple<Long,Long> next = new Tuple<>(rn, utc);
-        if (rn <= prev.a || utc < prev.b)
-          throw new ByteFormatException("illegal / out-of-sequence beacon record: " + next);
-        tuples.add(next);
-        prev = next;
-      }
-      
-      beacons = Collections.unmodifiableList(tuples);
+      for (int index = 0; index < count; ++index)
+        infos[index] = PathInfo.load(in);
+    
+    } catch (IllegalArgumentException iax) {
+      throw new ByteFormatException("on PathPack.load(): " + iax, iax);
     }
     
-    final int pathCount = 0xffff & in.getShort();
+    List<PathInfo> declaredPaths = Lists.asReadOnlyList(infos);
     
-    List<PathInfo> declaredPaths;
-    if (pathCount == 0)
-      declaredPaths = Collections.emptyList();
-    else {
-      
-      ArrayList<PathInfo> paths = new ArrayList<>(pathCount);
-      for (int index = 0; index < pathCount; ++index) {
-        final int rowCount = 0xffff & in.getShort();
-        if (rowCount < 0)
-          throw new ByteFormatException(
-              "negative row count " + rowCount + " for path-info at index" + index);
-        Long[] rns = new Long[rowCount];
-        Long prev = 0L;
-        for (int r = 0; r < rowCount; ++r) {
-          Long next = in.getLong();
-          if (next <= prev)
-            throw new ByteFormatException(
-                "illegal / out-of-sequence row number " + next + " for path-info at index " + index);
-          rns[r] = next;
-        }
-        paths.add( new PathInfo(Lists.asReadOnlyList(rns)) );
-      }
-      declaredPaths = Collections.unmodifiableList(paths);
-      
-    }
-    
-    return new PathPack(beacons, declaredPaths);
+    return new PathPack(declaredPaths);
   }
   
   
   
-  
-  
-  private final List<Tuple<Long,Long>> beacons;
   
   private final List<PathInfo> declaredPaths;
   
   
-  
-  private PathPack(List<Tuple<Long,Long>> beacons, List<PathInfo> declaredPaths) {
-    this.beacons = beacons;
+  private PathPack(List<PathInfo> declaredPaths) {
     this.declaredPaths = declaredPaths;
   }
   
-
-  @Override
-  public List<Tuple<Long, Long>> beaconRows() {
-    return beacons;
-  }
-
+  
   @Override
   public List<PathInfo> declaredPaths() {
     return declaredPaths;
   }
+  
 
 }

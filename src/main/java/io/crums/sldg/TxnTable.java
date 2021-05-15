@@ -11,11 +11,13 @@ import io.crums.io.buffer.ReadWriteBuffer;
 
 /**
  * Single transaction view over another table.
+ * 
+ * <p>TODO: make package-private.</p>
  */
-final class TxnTable implements Table {
+public final class TxnTable implements SkipTable {
   
   
-  private final Table primary;
+  private final SkipTable primary;
   private final long sizeSnapshot;
   
   private ReadWriteBuffer txnBuffer;
@@ -23,7 +25,7 @@ final class TxnTable implements Table {
   /**
    * 
    */
-  public TxnTable(Table primary, int capacity) {
+  public TxnTable(SkipTable primary, int capacity) {
     this.primary = Objects.requireNonNull(primary, "null primary");
     this.sizeSnapshot = primary.size();
     

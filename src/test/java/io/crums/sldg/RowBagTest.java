@@ -4,8 +4,8 @@
 package io.crums.sldg;
 
 
-import static org.junit.Assert.*;
 import static io.crums.sldg.PathTest.*;
+import static org.junit.Assert.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,14 +22,14 @@ public abstract class RowBagTest {
   
   
   
-  protected abstract RowBag newBag(Ledger ledger, List<Long> rowNumbers);
+  protected abstract RowBag newBag(SkipLedger ledger, List<Long> rowNumbers);
   
   
   
   @Test
   public void testSmallest() {
     final int size = 1;
-    Ledger ledger = newRandomLedger(size);
+    SkipLedger ledger = newRandomLedger(size);
     Path state = ledger.statePath();
     assertEquals(1, state.rows().size());
     RowBag bag = newBag(ledger, state.rowNumbers());
@@ -55,7 +55,7 @@ public abstract class RowBagTest {
   @Test
   public void testComboBagWith2Paths() {
     final int size = 1027;
-    Ledger ledger = newRandomLedger(size);
+    SkipLedger ledger = newRandomLedger(size);
     Path a = ledger.skipPath(1, 1027);
     Path b = ledger.skipPath(22, 1019);
     List<Long> unionRns = mergeRowNumbers(a, b);
@@ -69,7 +69,7 @@ public abstract class RowBagTest {
   @Test
   public void testComboBagWith3Paths() {
     final int size = 1027;
-    Ledger ledger = newRandomLedger(size);
+    SkipLedger ledger = newRandomLedger(size);
     Path a = ledger.skipPath(1, 1027);
     Path b = ledger.skipPath(22, 1019);
     Path c = ledger.skipPath(513, 600);
@@ -100,7 +100,7 @@ public abstract class RowBagTest {
   
   
   private void testAllToHi(int size) {
-    Ledger ledger = newRandomLedger(size);
+    SkipLedger ledger = newRandomLedger(size);
     final int hi = size;
     for (int lo = 1; lo <= hi; ++lo) {
       testSkipPath(ledger, lo, hi);
@@ -108,7 +108,7 @@ public abstract class RowBagTest {
   }
   
   
-  private void testSkipPath(Ledger ledger, int lo, int hi) {
+  private void testSkipPath(SkipLedger ledger, int lo, int hi) {
     Path path = ledger.skipPath(lo, hi);
     RowBag bag = newBag(ledger, path.rowNumbers());
     assertPath(path, bag);

@@ -3,15 +3,12 @@
  */
 package io.crums.sldg.bags;
 
-
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
 import io.crums.sldg.BaggedRow;
 import io.crums.sldg.Row;
-import io.crums.sldg.SldgConstants;
-import io.crums.util.hash.Digest;
 
 /**
  * <p>A bag of rows. The general contract is that if a row's
@@ -23,7 +20,7 @@ import io.crums.util.hash.Digest;
  * this means return values are immutable.
  * </p>
  */
-public interface RowBag extends Digest {
+public interface RowBag {
   
   
   /**
@@ -92,37 +89,15 @@ public interface RowBag extends Digest {
     return Collections.binarySearch(getFullRowNumbers(), rowNumber) >= 0;
   }
   
-  
-  
-  
-  
   /**
    * Returns the row in this bag with the given number.
    * 
    * @param rowNumber one of the {@linkplain #getFullRowNumbers() full-row-numbers}
    * 
-   * @return
    */
   default Row getRow(long rowNumber) {
     return new BaggedRow(rowNumber, this);
   }
-
-
-  @Override
-  default int hashWidth() {
-    return SldgConstants.HASH_WIDTH;
-  }
-
-
-  @Override
-  default String hashAlgo() {
-    return SldgConstants.DIGEST.hashAlgo();
-  }
-
-
-  @Override
-  default ByteBuffer sentinelHash() {
-    return SldgConstants.DIGEST.sentinelHash();
-  }
+  
 
 }

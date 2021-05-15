@@ -13,7 +13,7 @@ import org.junit.Test;
 
 import com.gnahraf.test.SelfAwareTestCase;
 
-import io.crums.sldg.db.VolatileTable;
+import io.crums.sldg.mem.VolatileTable;
 
 /**
  * 
@@ -34,7 +34,7 @@ public class SkipPathTest extends SelfAwareTestCase {
     System.out.println("== " + method(label) + ": ");
     System.out.print("Generating ledger with " + rows + " random entries");
     
-    Ledger ledger = new CompactLedger(new VolatileTable());
+    SkipLedger ledger = new CompactSkipLedger(new VolatileTable());
 
     
 

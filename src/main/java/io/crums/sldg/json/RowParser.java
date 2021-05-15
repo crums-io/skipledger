@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2020-2021 Babak Farhang
  */
 package io.crums.sldg.json;
 
@@ -13,9 +13,9 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-import io.crums.sldg.Ledger;
 import io.crums.sldg.Row;
 import io.crums.sldg.SerialRow;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.util.IntegralStrings;
 
@@ -80,7 +80,7 @@ public class RowParser {
   public Row toRow(JSONObject jObj) {
     try {
       long rowNumber = ((Number) jObj.get(RN)).longValue();
-      int ptrs = Ledger.skipCount(rowNumber);
+      int ptrs = SkipLedger.skipCount(rowNumber);
       
       ByteBuffer data = ByteBuffer.allocate(SldgConstants.HASH_WIDTH * (1 + ptrs));
       data.put( IntegralStrings.hexToBytes(jObj.get(E).toString()) );
@@ -125,3 +125,4 @@ public class RowParser {
   
 
 }
+

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2020-2021 Babak Farhang
  */
 package io.crums.sldg;
 
@@ -46,7 +46,7 @@ public abstract class Row implements Digest {
 
   /**
    * Returns the byte string used to compute the {@linkplain #hash() hash} of this row. This
-   * contains 1 + {@linkplain Ledger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
+   * contains 1 + {@linkplain SkipLedger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
    * {@linkplain #hashWidth()} many bytes wide.
    * <p>
    * <em>Note this has nothing to do with how an instance is serialized for storage or
@@ -111,7 +111,7 @@ public abstract class Row implements Digest {
    * of these referenced rows is available thru the {@linkplain #hash(long)} method.
    */
   public final SortedSet<Long> coveredRowNumbers() {
-    return Ledger.coverage(Collections.singletonList(rowNumber()));
+    return SkipLedger.coverage(Collections.singletonList(rowNumber()));
   }
   
 
@@ -133,7 +133,7 @@ public abstract class Row implements Digest {
    * @return &ge; 1
    */
   public final int prevLevels() {
-    return Ledger.skipCount(rowNumber());
+    return SkipLedger.skipCount(rowNumber());
   }
   
   /**
@@ -146,7 +146,7 @@ public abstract class Row implements Digest {
    */
   public final long prevRowNumber(int level) {
     long rn = rowNumber();
-    Objects.checkIndex(level, Ledger.skipCount(rn));
+    Objects.checkIndex(level, SkipLedger.skipCount(rn));
     return rn - (1L << level);
   }
   
@@ -222,32 +222,5 @@ public abstract class Row implements Digest {
       2 * HEX_DISPLAY_BYTES + CELL_DISPLAY_PREFIX.length() + CELL_DISPLAY_POSTFIX.length();
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

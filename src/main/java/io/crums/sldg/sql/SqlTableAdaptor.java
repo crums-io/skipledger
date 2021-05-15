@@ -16,15 +16,15 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.logging.Logger;
 
+import io.crums.sldg.SkipTable;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.Table;
 import io.crums.util.Base64_32;
 
 /**
  * 
  * 
  */
-public class SqlTableAdaptor implements Table {
+public class SqlTableAdaptor implements SkipTable {
 
 
 
@@ -91,6 +91,8 @@ public class SqlTableAdaptor implements Table {
     if (index != size)
       throw new IllegalArgumentException("on addRows(), index=" + index + ", size=" + size);
     
+    final long base = size + 1;
+    
     // ea row gets a number and 2 hashes
     StringBuilder query = new StringBuilder()
         .append("INSERT INTO ").append(tableName).append('(')
@@ -101,7 +103,7 @@ public class SqlTableAdaptor implements Table {
       encoded[i] = Base64_32.encodeNext32(rows);
     
     for (int r = 0; r < count; ++r) {
-      long rowNum = size + r;
+      long rowNum = base + r;
       int ei = r * 2;
       query.append("\n( ").append(rowNum).append(", '").append(encoded[ei]).append("', '").append(encoded[ei + 1]).append("'),");
     }
@@ -137,7 +139,7 @@ public class SqlTableAdaptor implements Table {
       throw new IllegalArgumentException("index " + index);
     
     try {
-      selectRow.setLong(1, index);
+      selectRow.setLong(1, index + 1);
       ResultSet result = selectRow.executeQuery();
       
       if (!result.next())

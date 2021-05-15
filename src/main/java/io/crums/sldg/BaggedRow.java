@@ -3,7 +3,6 @@
  */
 package io.crums.sldg;
 
-
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
@@ -19,18 +18,20 @@ public class BaggedRow extends BaseRow {
   
   private final long rowNumber;
   private final RowBag bag;
-  
-  
+
+  /**
+   * Constructor does not validate that the bag indeed has the necessary data.
+   * In order to create a subclass that does validate, invoke {@linkplain #hash()}
+   * in the constructor.
+   */
   public BaggedRow(long rowNumber, RowBag bag) {
     this.rowNumber = rowNumber;
     this.bag = Objects.requireNonNull(bag, "null bag");
-    
-    if (rowNumber < 1)
-      throw new IllegalArgumentException("rowNumber out-of-bounds: " + rowNumber);
+    SkipLedger.checkRealRowNumber(rowNumber);
   }
 
   @Override
-  public long rowNumber() {
+  public final long rowNumber() {
     return rowNumber;
   }
 
@@ -47,3 +48,4 @@ public class BaggedRow extends BaseRow {
   }
 
 }
+

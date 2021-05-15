@@ -3,82 +3,55 @@
  */
 package io.crums.sldg.packs;
 
-
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.buffer.Partitioning;
 import io.crums.model.CrumTrail;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
 import io.crums.sldg.bags.MorselBag;
-import io.crums.sldg.db.ByteFormatException;
-import io.crums.sldg.entry.Entry;
-import io.crums.sldg.entry.EntryInfo;
-import io.crums.util.Lists;
+import io.crums.sldg.src.SourceRow;
 import io.crums.util.Sets;
-import io.crums.util.Tuple;
 
 /**
  * <p>
- * Implementation of a {@code MorselBag} using a composition of row-, path-, trail-,
- * and entry-packs. But note, unlike those classes, this actually must validate the
+ * Implementation of a {@linkplain MorselBag} using a composition of row-, trail-, source-,
+ * and path-packs. But note, unlike those classes, this actually must validate the
  * business rules (the subcomponents are kinda ignorant of the larger business rules:
  * they only guarantee well-formed-ness within their own confines).
  * </p>
- * <h2>What's <em>not</em> validated</h2>
- * <p>
- * Beacon rows and Crumtrails reference external resources (hashes) that require a network
- * connection to validate. It would be too onerous to include these checks every time an
- * instance where instantiated, so these are left as a later step in the data validation
- * process.
- * </p><p>
- * Also, we haven't hammered out exactly how an {@linkplain Entry}'s {@linkplain Entry#hash() hash}
- * is computed. For this reason, validation does not include matching entry hashes to
- * that advertised as in the ledger row's {@linkplain Row#inputHash() input hash}.
- * </p>
  * <h2>Serial Format</h2>
  * <p>
- * Rationale for the existence of BAG_SIZES array is that we want to be able to random
+ * Rationale for the existence of PACK_SIZES array is that we want to be able to random
  * access any of the morsel's sections without having to read the whole. This is to support
  * <em>future</em> capabilities; we don't actually need this right now. (Recall, each
  * of the bags is self-delimiting anyway.)
  * </p>
  * <p>
  * <pre>
- *    BAG_COUNT   := BYTE (current version is 4)
- *    BAG_SIZES   := INT ^BAG_COUNT
- *    MORSEL_BAG  := BAG_COUNT BAG_SIZES ROW_BAG PATH_BAG TRAIL_BAG ENTRY_BAG
+ *    PACK_COUNT  := BYTE (current version is 4)
+ *    PACK_SIZES  := INT ^PACK_COUNT
+ *    MORSEL_PACK := PACK_COUNT PACK_SIZES ROW_PACK TRAIL_PACK SRC_PACK PATH_PACK
  * </pre>
  * </p>
+ * 
  */
 public final class MorselPack implements MorselBag {
   
   
   
   
-  /**
-   * Loads and returns an instance from its serial (binary) representation.
-   * 
-   * @param in  caller must not modify contents since much is not copied.
-   *            On return, the position is advanced by the size of the data
-   *            used. (Caller is free to modify positional state, just not
-   *            the contents of what was just "read").
-   * 
-   * @throws ByteFormatException if the data appears to be structurally non-sensical (e.g. read a
-   *                             a negative count)
-   * @throws HashConflictException if the data contains conflicting hashes (aka tampered, or broken)
-   */
-  public static MorselPack load(ByteBuffer in) throws ByteFormatException, HashConflictException {
-    final int bagCount = 0xff & in.get();
+  public static MorselPack load(ByteBuffer in) {
+    final int packCount = 0xff & in.get();
     
-    if (bagCount < 4)
-      throw new ByteFormatException("BAG_COUNT " + bagCount + " < 4");
+    if (packCount < 4)
+      throw new ByteFormatException("PACK_COUNT " + packCount);
     
     ArrayList<Integer> packSizes = new ArrayList<>(4);
     int totalSize = 0;
@@ -92,7 +65,7 @@ public final class MorselPack implements MorselBag {
     
     // ignore the parts we don't understand
     // (maybe lame, but a way to future-proof the format)
-    for (int index = 4; index < bagCount; ++index)
+    for (int index = 4; index < packCount; ++index)
       in.getInt();
     
     ByteBuffer block = BufferUtils.slice(in, totalSize);
@@ -103,56 +76,39 @@ public final class MorselPack implements MorselBag {
     Partitioning parts = new Partitioning(block, packSizes);
     
     RowPack rowPack = RowPack.load(parts.getPart(0));
-    PathPack pathPack = PathPack.load(parts.getPart(1));
-    TrailPack trailPack = TrailPack.load(parts.getPart(2), false);
-    EntryPack entryPack = EntryPack.load(parts.getPart(3));
+    TrailPack trailPack = TrailPack.load(parts.getPart(1));
+    SourcePack sourcePack = SourcePack.load(parts.getPart(2));
+    PathPack pathPack = PathPack.load(parts.getPart(3));
     
-    return new MorselPack(new CachingRowPack(rowPack), pathPack, trailPack, entryPack);
+    return new MorselPack(new CachingRowPack(rowPack), trailPack, sourcePack, pathPack);
   }
   
   
   
-  
-  
-  
-  
   private final RowPack rowPack;
-  
+  private final TrailPack trailPack;
+  private final SourcePack sourcePack;
   private final PathPack pathPack;
   
-  private final TrailPack trailPack;
   
-  private final EntryPack entryPack;
-  
-  
-  private MorselPack(RowPack rowPack, PathPack pathPack, TrailPack trailPack, EntryPack entryPack) {
+  private MorselPack(
+      RowPack rowPack, TrailPack trailPack, SourcePack sourcePack, PathPack pathPack) {
+    
     this.rowPack = rowPack;
-    this.pathPack = pathPack;
     this.trailPack = trailPack;
-    this.entryPack = entryPack;
+    this.sourcePack = sourcePack;
+    this.pathPack = pathPack;
     
     // Validate:
     // the rowPack is the backing "given". Other packs are validated against the row pack
     
-    // validate pathPack
-    SortedSet<Long> rowNums = Sets.sortedSetView(rowPack.getFullRowNumbers());
-    for (PathInfo decl : pathPack.declaredPaths()) {
-      if (!rowNums.containsAll(decl.rowNumbers()))
-          throw new ByteFormatException("declared path " + decl + " references rows not in bag");
-    }
-    
-    var beacons = pathPack.beaconRows();
-    for (Tuple<Long,Long> beacon : beacons) {
-      Long rn = beacon.a;
-      if (!rowNums.contains(rn))
-        throw new ByteFormatException("beacon row " + rn + " not found in row pack");
-    }
-    
+    final SortedSet<Long> rowNums = Sets.sortedSetView(rowPack.getFullRowNumbers());
+
     // validate trailPack
+    //
     if (!rowNums.containsAll(trailPack.trailedRows()))
-      throw new ByteFormatException("trail pack references rows not found in row bag");
+      throw new ByteFormatException("trail pack references rows not found in row-pack");
     
-    List<Long> beaconRows = Lists.map(beacons, b -> b.a);
     for (Long rn : trailPack.trailedRows()) {
       CrumTrail trail = trailPack.crumTrail(rn);
       if (!trail.verify())
@@ -161,66 +117,62 @@ public final class MorselPack implements MorselBag {
       ByteBuffer rowHash = rowPack.rowHash(rn);
       if (!rowHash.equals(witnessedHash))
         throw new HashConflictException("hash referenced in crumtrail does not match row " + rn);
-      {
-        int bindex = Collections.binarySearch(beaconRows, rn);
-        
-        if (bindex < 0) {
-          
-          int insertIndex = -1 - bindex;
-          if (insertIndex != 0 && beacons.get(insertIndex - 1).b > trail.crum().utc())
-            throw new ByteFormatException(
-                "beacon " + beacons.get(insertIndex - 1) +
-                " ahead crumtrail [" + rn + "," + trail.crum().utc() + "]");
-          
-          if (insertIndex < beacons.size() && beacons.get(insertIndex).b < trail.crum().utc())
-            throw new ByteFormatException(
-                "beacon " + beacons.get(insertIndex) +
-                " behind crumtrail [" + rn + "," + trail.crum().utc() + "]");
-        
-        } else if (beacons.get(bindex).b > trail.crum().utc())
-            throw new ByteFormatException(
-                "beacon " + beacons.get(bindex) +
-                " ahead crumtrail [" + rn + "," + trail.crum().utc() + "]");
-        
-      }
     }
     
-    // validate entryPack
-    if (!rowNums.containsAll(Lists.map(entryPack.availableEntries(), ei -> ei.rowNumber())))
-      throw new ByteFormatException("entry pack references rows not found in row bag");
+    // validate sourcePack (yay! .. didn't have a proper model to do this in prev version)
+    //
+    for (SourceRow src : sourcePack.sources()) {
+      Long srn = src.rowNumber();
+      if (!rowNums.contains(srn))
+        throw new ByteFormatException("source-row " + srn + " not found in row-pack");
+      if (!src.rowHash().equals(rowPack.inputHash(srn)))
+        throw new HashConflictException("at source-row " + srn);
+    }
     
     
-    // 
+    // validate pathPack
+    //
+    for (PathInfo decl : pathPack.declaredPaths()) {
+      if (!rowNums.containsAll(decl.rowNumbers()))
+        throw new ByteFormatException(
+            "declared path " + decl + " references rows not found in row-pack");
+    }
+    
   }
-  
-  
-  
-  public RowPack rowPack() {
+
+
+  public RowPack getRowPack() {
     return rowPack;
   }
-  
 
-  
-  public PathPack pathPack() {
-    return pathPack;
-  }
-  
-  
-  public TrailPack trailPack() {
+
+  public TrailPack getTrailPack() {
     return trailPack;
   }
-  
-  
-  public EntryPack entryPack() {
-    return entryPack;
-  }
-  
 
+
+  public SourcePack getSourcePack() {
+    return sourcePack;
+  }
+
+
+  public PathPack getPathPack() {
+    return pathPack;
+  }
+
+  
+  
+  
+  //  I N T E R F A C E    M E T H O D S
+  
+  
+  
 
   @Override
   public ByteBuffer rowHash(long rowNumber) {
     return rowPack.rowHash(rowNumber);
   }
+
 
   @Override
   public ByteBuffer inputHash(long rowNumber) {
@@ -232,27 +184,11 @@ public final class MorselPack implements MorselBag {
     return rowPack.getRow(rowNumber);
   }
 
+
   @Override
   public List<Long> getFullRowNumbers() {
     return rowPack.getFullRowNumbers();
   }
-  
-  
-  
-  
-
-  @Override
-  public List<Tuple<Long, Long>> beaconRows() {
-    return pathPack.beaconRows();
-  }
-
-  @Override
-  public List<PathInfo> declaredPaths() {
-    return pathPack.declaredPaths();
-  }
-  
-  
-  
 
 
   @Override
@@ -260,24 +196,46 @@ public final class MorselPack implements MorselBag {
     return trailPack.trailedRows();
   }
 
+
   @Override
   public CrumTrail crumTrail(long rowNumber) {
     return trailPack.crumTrail(rowNumber);
   }
-  
-  
-  
-  
-  
+
 
   @Override
-  public List<EntryInfo> availableEntries() {
-    return entryPack.availableEntries();
+  public List<SourceRow> sources() {
+    return sourcePack.sources();
   }
 
+
   @Override
-  public Entry entry(long rowNumber) {
-    return entryPack.entry(rowNumber);
+  public List<PathInfo> declaredPaths() {
+    return pathPack.declaredPaths();
   }
+
+
+    
+  
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

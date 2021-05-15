@@ -6,7 +6,9 @@ package io.crums.sldg.packs;
 
 import java.nio.ByteBuffer;
 
+import io.crums.sldg.SldgConstants;
 import io.crums.sldg.bags.RowBag;
+
 
 /**
  * Recursive implementation of {@linkplain RowBag#rowHash(long)} for a
@@ -32,7 +34,7 @@ public abstract class RecurseHashRowPack implements RowBag {
 
     if (rowNumber <= 0) {
       if (rowNumber == 0)
-        return sentinelHash();
+        return SldgConstants.DIGEST.sentinelHash();
       throw new IllegalArgumentException("negative rowNumber: " + rowNumber);
     }
     

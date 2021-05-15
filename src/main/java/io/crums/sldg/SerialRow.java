@@ -46,7 +46,7 @@ public class SerialRow extends BaseRow {
       data = data.slice();
     this.data = data;
     
-    int cellsInRow = 1 + Ledger.skipCount(rowNumber); // (bounds checked)
+    int cellsInRow = 1 + SkipLedger.skipCount(rowNumber); // (bounds checked)
     int expectedBytes = cellsInRow * hashWidth();
     if (remaining != expectedBytes)
       throw new IllegalArgumentException(

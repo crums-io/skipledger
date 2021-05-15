@@ -11,9 +11,9 @@ import java.util.List;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.buffer.Partitioning;
 import io.crums.model.CrumTrail;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.bags.TrailBag;
-import io.crums.sldg.db.ByteFormatException;
 
 /**
  * 

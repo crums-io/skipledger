@@ -4,8 +4,8 @@
 package io.crums.sldg.sql;
 
 
-import static org.junit.Assert.*;
 import static io.crums.sldg.sql.SqlTestHarness.*;
+import static org.junit.Assert.*;
 
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -16,7 +16,7 @@ import org.junit.Test;
 
 import com.gnahraf.test.IoTestCase;
 
-import io.crums.sldg.Table;
+import io.crums.sldg.SkipTable;
 
 
 /**
@@ -40,7 +40,7 @@ public class SqlTableAdaptorTest extends IoTestCase {
     final Object label = new Object() { };
     
     Random rand = new Random(11);
-    byte[] data = new byte[Table.ROW_WIDTH];
+    byte[] data = new byte[SkipTable.ROW_WIDTH];
     ByteBuffer dataBuf = ByteBuffer.wrap(data);
     
     try (SqlTableAdaptor table = newTable(label)) {
