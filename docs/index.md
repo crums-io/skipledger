@@ -2,6 +2,8 @@
 
 A tamper proof data structure for evolving, append-only lists of objects with efficient proof capabilities.
 
+![Components Overview](./images/skip-ledger.svg)
+
 # Overview
 
 A *skip ledger* (new terminology) is a tamper proof, append-only list of objects represented by their SHA-256 hashes.

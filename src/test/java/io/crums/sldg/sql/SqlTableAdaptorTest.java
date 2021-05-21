@@ -28,7 +28,7 @@ public class SqlTableAdaptorTest extends IoTestCase {
   @Test
   public void testEmpty() throws Exception {
     final Object label = new Object() { };
-    try (SqlTableAdaptor table = newTable(label)) {
+    try (SqlSkipTable table = newTable(label)) {
       assertEquals(0, table.size());
     }
     
@@ -43,7 +43,7 @@ public class SqlTableAdaptorTest extends IoTestCase {
     byte[] data = new byte[SkipTable.ROW_WIDTH];
     ByteBuffer dataBuf = ByteBuffer.wrap(data);
     
-    try (SqlTableAdaptor table = newTable(label)) {
+    try (SqlSkipTable table = newTable(label)) {
       
       rand.nextBytes(data);
       table.addRows(dataBuf.clear(), 0);
@@ -58,7 +58,7 @@ public class SqlTableAdaptorTest extends IoTestCase {
   
   
   
-  private SqlTableAdaptor newTable(Object label) throws ClassNotFoundException, SQLException {
+  private SqlSkipTable newTable(Object label) throws ClassNotFoundException, SQLException {
     File dir = getMethodOutputFilepath(label);
     return newAdaptor(dir);
   }

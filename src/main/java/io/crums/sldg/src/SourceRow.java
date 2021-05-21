@@ -304,13 +304,29 @@ public class SourceRow implements Serial {
   }
   
   
-  
+  /**
+   * 
+   * Returns a string representation of the object. This can be quite big. (It doesn't
+   * trim the columns if they're big.) Use sparingly.
+   * 
+   * @return {@code toString(", ")}
+   * 
+   * @see #safeDebugString()
+   */
   public String toString() {
     return toString(", ");
   }
   
   
+  /**
+   * Returns a string representation of the object. This can be quite big. (It doesn't
+   * trim the columns if they're big.) Use sparingly.
+   * 
+   * @param sep the column separator
+   */
   public String toString(String sep) {
+    if (sep == null)
+      sep = "";
     try {
       StringWriter sw = new StringWriter(64);
       writeSource(sw, sep, null);
@@ -318,6 +334,38 @@ public class SourceRow implements Serial {
     } catch (IOException impossible) {
       throw new RuntimeException("assertion failed: " + impossible, impossible);
     }
+  }
+  
+  
+  public String safeDebugString() {
+    int binarySize = serialSize();
+    if (binarySize <= 0xffff)
+      return toString();
+    int maxColumns = Math.min(1024, columns.size());
+    StringBuilder string = new StringBuilder("[rn: ").append(rowNumber).append(", ");
+    for (int index = 0; index < maxColumns; ++index) {
+      var columnVal = columns.get(index);
+      var type = columnVal.getType();
+      string.append(", ").append(type.symbol());
+      switch (type) {
+      case BYTES:
+        string.append('[').append(((BytesValue) columnVal).getBytes().remaining()).append(']');
+        break;
+      case STRING:
+        string.append('[').append(((StringValue) columnVal).getString().length()).append(']');
+        break;
+      case HASH:
+        ByteBuffer hash = ((BytesValue) columnVal).getBytes();
+        string.append('[');
+        IntegralStrings.appendHex(hash.limit(3), string).append("..]");
+        break;
+      case NUMBER:
+        string.append('[').append(((NumberValue) columnVal).getNumber()).append(']');
+        break;
+      case NULL:
+      }
+    }
+    return string.toString();
   }
 
 }

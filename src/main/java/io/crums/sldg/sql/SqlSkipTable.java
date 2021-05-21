@@ -24,26 +24,26 @@ import io.crums.util.Base64_32;
  * 
  * 
  */
-public class SqlTableAdaptor implements SkipTable {
+public class SqlSkipTable implements SkipTable {
 
 
 
 
   /**
-   * Creates a new ledger table in the given database.
+   * Creates a new skip ledger table in the given database.
    * 
    * @param con       the db connection
    * @param tableName the table name (no table by this name should exist in the database)
    * 
-   * @see LedgerSchema#createLedgerTableStatement(String)
+   * @see LedgerSchema#createSkipLedgerTableStatement(String)
    */
-  public static SqlTableAdaptor declareNewTable(Connection con, String tableName) throws SQLException {
+  public static SqlSkipTable declareNewTable(Connection con, String tableName) throws SQLException {
     // create the table
-    String sql = LedgerSchema.createLedgerTableStatement(tableName);
+    String sql = LedgerSchema.createSkipLedgerTableStatement(tableName);
     Statement stmt = Objects.requireNonNull(con, "null con").createStatement();
     stmt.execute(sql);
     con.commit();
-    return new SqlTableAdaptor(con, tableName);
+    return new SqlSkipTable(con, tableName);
   }
   
   
@@ -64,7 +64,7 @@ public class SqlTableAdaptor implements SkipTable {
   /**
    * 
    */
-  public SqlTableAdaptor(Connection con, String tableName) throws SQLException {
+  public SqlSkipTable(Connection con, String tableName) throws SQLException {
     this.con = Objects.requireNonNull(con, "null connection");
     if (!con.isReadOnly())
       con.setAutoCommit(false);

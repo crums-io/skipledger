@@ -10,7 +10,7 @@ import io.crums.sldg.time.WitnessRecord;
 import io.crums.sldg.time.WitnessReport;
 
 /**
- * An opaque ledger, but with time information.
+ * An opaque skip ledger, but with time (witness) information annotated.
  */
 public interface HashLedger extends AutoCloseable {
   
@@ -23,11 +23,16 @@ public interface HashLedger extends AutoCloseable {
   void close();
   
   
-  
+  /**
+   * Returns the skip ledger.
+   */
   SkipLedger getSkipLedger();
   
   
 
+  /**
+   * Returns the number of rows in the ledger.
+   */
   default long size() {
     return getSkipLedger().size();
   }

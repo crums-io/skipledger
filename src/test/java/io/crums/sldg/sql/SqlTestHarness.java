@@ -8,7 +8,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-import io.crums.sldg.sql.SqlTableAdaptor;
+import io.crums.sldg.sql.SqlSkipTable;
 
 /**
  * 
@@ -30,9 +30,9 @@ public class SqlTestHarness {
   }
   
   
-  public static SqlTableAdaptor newAdaptor(File dir) throws ClassNotFoundException, SQLException {
+  public static SqlSkipTable newAdaptor(File dir) throws ClassNotFoundException, SQLException {
     Connection con = newDatabase(dir);
-    return SqlTableAdaptor.declareNewTable(con, LEDGER_TABLENAME);
+    return SqlSkipTable.declareNewTable(con, LEDGER_TABLENAME);
   }
   
 

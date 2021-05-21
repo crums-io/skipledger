@@ -17,20 +17,20 @@ public class SqlSkipLedger extends CompactSkipLedger {
   
   
   public static SqlSkipLedger declareNewLedger(Connection con, String tableName) throws SQLException {
-    SqlTableAdaptor table = SqlTableAdaptor.declareNewTable(con, tableName);
+    SqlSkipTable table = SqlSkipTable.declareNewTable(con, tableName);
     return new SqlSkipLedger(table);
   }
 
   
   
   public SqlSkipLedger(Connection con, String tableName) throws SQLException {
-    this(new SqlTableAdaptor(con, tableName));
+    this(new SqlSkipTable(con, tableName));
   }
   
   /**
    * @param table
    */
-  public SqlSkipLedger(SqlTableAdaptor table) {
+  public SqlSkipLedger(SqlSkipTable table) {
     super(table);
   }
 

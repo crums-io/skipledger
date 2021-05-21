@@ -105,19 +105,22 @@ public class LedgerSchema {
   
   
   
-  private final static String SOFT_TAB = "  ";
+  private final static String SOFT_TAB = "\n  ";
   
   /**
-   * Creates and returns the create-table SQL statement for the given ledger table name.
+   * Creates and returns the create-table SQL statement for a skip ledger table
+   * with the given name.
+   * 
+   * @param ledgerTable
    * 
    * @see LedgerSchema schema
    */
-  public static String createLedgerTableStatement(String ledgerTable) {
+  public static String createSkipLedgerTableStatement(String ledgerTable) {
     return
         "CREATE TABLE " + ledgerTable + " (\n" +
-        SOFT_TAB +    ROW_NUM  + ' ' + BIGINT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    SRC_HASH + ' ' + BASE64_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    ROW_HASH + ' ' + BASE64_TYPE + " NOT NULL,\n" +
+        SOFT_TAB +    ROW_NUM  + ' ' + BIGINT_TYPE + " NOT NULL," +
+        SOFT_TAB +    SRC_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
+        SOFT_TAB +    ROW_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + ROW_NUM + ")\n)";
   }
   
@@ -129,9 +132,9 @@ public class LedgerSchema {
   
   public static String createChainTableStatement(String chainTable) {
     return
-        "CREATE TABLE " + chainTable + " (\n" +
-        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL,\n" +
+        "CREATE TABLE " + chainTable + " (" +
+        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")\n)";
   }
   
@@ -139,15 +142,15 @@ public class LedgerSchema {
   public static String createTrailTableStatement(String trailTable, String ledgerTable, String chainTable) {
     return
         "CREATE TABLE " + trailTable + " (\n" +
-        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    ROW_NUM   + ' ' + BIGINT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    UTC       + ' ' + BIGINT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    MRKL_IDX  + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    MRKL_CNT  + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    CHAIN_LEN + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    CHN_ID    + ' ' + INT_TYPE + " NOT NULL,\n" +
-        SOFT_TAB +    "PRIMARY KEY (" + TRL_ID + "),\n" +
-        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + ledgerTable + "(" + ROW_NUM + "),\n" +
+        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    ROW_NUM   + ' ' + BIGINT_TYPE + " NOT NULL," +
+        SOFT_TAB +    UTC       + ' ' + BIGINT_TYPE + " NOT NULL," +
+        SOFT_TAB +    MRKL_IDX  + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    MRKL_CNT  + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    CHAIN_LEN + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    CHN_ID    + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    "PRIMARY KEY (" + TRL_ID + ")," +
+        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + ledgerTable + "(" + ROW_NUM + ")," +
         SOFT_TAB +    "FOREIGN KEY (" + CHN_ID  + ") REFERENCES " + chainTable + "(" + CHN_ID + ")\n)";
   }
   
@@ -160,13 +163,13 @@ public class LedgerSchema {
 
 
   /**
-   * Default extension for [trail] chains table.
+   * Default extension for [trail] chain[s] table.
    */
-  public final static String CHAIN_TBL_EXT = LEDGER_TBL_EXT + "_chains";
+  public final static String CHAIN_TBL_EXT = LEDGER_TBL_EXT + "_chain";
   /**
-   * Default extension for trails table.
+   * Default extension for trail[s] table.
    */
-  public final static String TRAIL_TBL_EXT = LEDGER_TBL_EXT + "_trails";
+  public final static String TRAIL_TBL_EXT = LEDGER_TBL_EXT + "_trail";
   
   
   
@@ -176,8 +179,8 @@ public class LedgerSchema {
   
   private final String sourceTable;
   private final String ledgerTable;
-  private final String chainsTable;
-  private final String trailsTable;
+  private final String chainTable;
+  private final String trailTable;
   
   
   /**
@@ -206,19 +209,19 @@ public class LedgerSchema {
    * @param sourceTable   the name of the source table (for which we're building a ledger)
    * @param ledgerTable   the name of the ledger table
    * @param beaconsTable  the name of the beacons table
-   * @param chainsTable   the name of the chains table (merkle proof chains)
-   * @param trailsTable   the name of the trails table (crumtrails)
+   * @param chainTable   the name of the chains table (merkle proof chains)
+   * @param trailTable   the name of the trails table (crumtrails)
    */
-  protected LedgerSchema(String sourceTable, String ledgerTable, String chainsTable, String trailsTable) {
+  protected LedgerSchema(String sourceTable, String ledgerTable, String chainTable, String trailTable) {
     this.sourceTable = Objects.requireNonNull(sourceTable, "null sourceTable").trim();
     this.ledgerTable = Objects.requireNonNull(ledgerTable, "null ledgerTable").trim();
-    this.chainsTable = Objects.requireNonNull(chainsTable, "null chainsTable").trim();
-    this.trailsTable = Objects.requireNonNull(trailsTable, "null trailsTable").trim();
+    this.chainTable = Objects.requireNonNull(chainTable, "null chainTable").trim();
+    this.trailTable = Objects.requireNonNull(trailTable, "null trailTable").trim();
     
     checkForm(this.sourceTable, "sourceTable");
     checkForm(this.ledgerTable, "ledgerTable");
-    checkForm(this.chainsTable, "chainsTable");
-    checkForm(this.trailsTable, "trailsTable");
+    checkForm(this.chainTable, "chainsTable");
+    checkForm(this.trailTable, "trailsTable");
     
     checkNoDupNames();
   }
@@ -238,10 +241,10 @@ public class LedgerSchema {
     names.add(sourceTable);
     if (!names.add(ledgerTable))
       throw dupTableX(ledgerTable, "ledgerTable");
-    if (!names.add(chainsTable))
-      throw dupTableX(chainsTable, "chainsTable");
-    if (!names.add(trailsTable))
-      throw dupTableX(trailsTable, "trailsTable");
+    if (!names.add(chainTable))
+      throw dupTableX(chainTable, "chainsTable");
+    if (!names.add(trailTable))
+      throw dupTableX(trailTable, "trailsTable");
     names.clear();
   }
   
@@ -275,25 +278,32 @@ public class LedgerSchema {
    * Returns the table name.
    */
   public final String getChainsTable() {
-    return chainsTable;
+    return chainTable;
   }
 
   /**
    * Returns the table name.
    */
   public final String getTrailsTable() {
-    return trailsTable;
+    return trailTable;
   }
   
   
   
   
+  public String createSkipLedgerTableStatement() {
+    return createSkipLedgerTableStatement(ledgerTable);
+  }
   
   
+  public String createChainTableStatement() {
+    return createChainTableStatement(chainTable);
+  }
   
   
-  
-  
+  public String createTrailTableStatement() {
+    return createTrailTableStatement(trailTable, ledgerTable, chainTable);
+  }
   
   
 
