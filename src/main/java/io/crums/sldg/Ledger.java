@@ -3,9 +3,16 @@
  */
 package io.crums.sldg;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.channels.WritableByteChannel;
+import java.util.List;
 import java.util.Objects;
 
+import io.crums.sldg.packs.LedgerMorselBuilder;
+import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.time.WitnessReport;
 import io.crums.util.TaskStack;
 
 /**
@@ -62,14 +69,19 @@ public class Ledger implements AutoCloseable {
    */
   public long rowsPending() throws IllegalStateException {
     long pending = srcLedger.size() - hashLedger.size();
-    if (pending < 0)
-      throw new IllegalStateException("missing rows in source ledger: " + -pending);
+    checkPending(pending);
     return pending;
   }
   
   
+  private void checkPending(long pending) {
+    if (pending < 0)
+      throw new IllegalStateException("missing rows in source ledger: " + -pending);
+  }
+  
+  
   /**
-   * Validates the entire hash ledger. Note this is linear in the number of rows, so if it's
+   * Validates the entire hash ledger. Note this is linear (2X) in the number of rows, so if it's
    * a big ledger this may take a while.
    * 
    * @see #validateRows(long, long)
@@ -133,5 +145,70 @@ public class Ledger implements AutoCloseable {
   public final long sourceLedgerSize() {
     return srcLedger.size();
   }
+  
+  
+  public long update() {
+    return update(0);
+  }
+  
+  
+  
+  
+  public long update(int commitSlack) {
+    if (commitSlack < 0)
+      throw new IllegalArgumentException("commitSlack " + commitSlack);
+    long lastCommit = hashLedger.size();
+    long lastSrcRow = srcLedger.size();
+    checkPending(lastSrcRow - lastCommit);
+    long lastTargetCommit = lastSrcRow - commitSlack;
+    
+    final long count = lastTargetCommit - lastCommit;
+    if (count <= 0)
+      return 0;
+    
+    for (long nextRow = lastCommit + 1; nextRow <= lastTargetCommit; ++nextRow) {
+      SourceRow srcRow = srcLedger.getSourceByRowNumber(nextRow);
+      hashLedger.getSkipLedger().appendRows(srcRow.rowHash());
+    }
+    
+    return count;
+  }
+  
+  
+  
+  public WitnessReport witness() {
+    return hashLedger.witness();
+  }
+  
+  
+  
+  public File writeMorselFile(File target, List<Long> rowNumbers, String note) throws IOException {
+    var builder = loadBuilder(rowNumbers, note);
+    return MorselFile.createMorselFile(target, builder);
+  }
+  
+  
+  public int writeMorselFile(WritableByteChannel ch, List<Long> rowNumbers, String note) throws IOException {
+    Objects.requireNonNull(ch, "null channel");
+    var builder = loadBuilder(rowNumbers, note);
+    return MorselFile.writeMorselFile(ch, builder);
+  }
+  
+  
+  
+  private MorselPackBuilder loadBuilder(List<Long> rowNumbers, String note) {
+    Objects.requireNonNull(rowNumbers, "null rowNumbers");
+    final long maxRow = hashLedgerSize();
+    LedgerMorselBuilder builder = new LedgerMorselBuilder(hashLedger, note);
+    for (long rn : rowNumbers) {
+      SkipLedger.checkRealRowNumber(rn);
+      if (rn > maxRow)
+        throw new IllegalArgumentException("rowNumber " + rn + " out-of-bounds; max " + maxRow);
+      SourceRow srcRow = srcLedger.getSourceByRowNumber(rn);
+      builder.addSourceRow(srcRow);
+    }
+    return builder;
+  }
+  
 
 }

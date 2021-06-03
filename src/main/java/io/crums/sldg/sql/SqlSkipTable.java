@@ -4,7 +4,7 @@
 package io.crums.sldg.sql;
 
 
-import static io.crums.sldg.sql.LedgerSchema.*;
+import static io.crums.sldg.sql.HashLedgerSchema.*;
 
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -35,11 +35,11 @@ public class SqlSkipTable implements SkipTable {
    * @param con       the db connection
    * @param tableName the table name (no table by this name should exist in the database)
    * 
-   * @see LedgerSchema#createSkipLedgerTableStatement(String)
+   * @see HashLedgerSchema#createSkipLedgerTableSql(String)
    */
   public static SqlSkipTable declareNewTable(Connection con, String tableName) throws SQLException {
     // create the table
-    String sql = LedgerSchema.createSkipLedgerTableStatement(tableName);
+    String sql = HashLedgerSchema.createSkipLedgerTableSql(tableName);
     Statement stmt = Objects.requireNonNull(con, "null con").createStatement();
     stmt.execute(sql);
     con.commit();

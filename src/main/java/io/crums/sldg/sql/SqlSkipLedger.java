@@ -16,7 +16,7 @@ public class SqlSkipLedger extends CompactSkipLedger {
   
   
   
-  public static SqlSkipLedger declareNewLedger(Connection con, String tableName) throws SQLException {
+  public static SqlSkipLedger declareNewSkipLedger(Connection con, String tableName) throws SQLException {
     SqlSkipTable table = SqlSkipTable.declareNewTable(con, tableName);
     return new SqlSkipLedger(table);
   }

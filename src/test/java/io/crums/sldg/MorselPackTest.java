@@ -309,7 +309,7 @@ public class MorselPackTest extends IoTestCase {
   /**
    * 10 minutes between rows.
    */
-  public static long mockBeaconUtc(long rowNumber) {
+  private static long mockBeaconUtc(long rowNumber) {
     return MIN_UTC + rowNumber * 600_000;   // 10 minutes between rows :\
   }
   
@@ -383,6 +383,11 @@ public class MorselPackTest extends IoTestCase {
 //    return ledger;
 //  }
   
+  public static CrumTrail mockTrail(ByteBuffer hash, long utc, int index, int leafCount) {
+    byte[] array = new byte[hash.remaining()];
+    hash.get(array);
+    return mockTrail(array, utc, index, leafCount);
+  }
   
   
   public static CrumTrail mockTrail(byte[] hash, long utc, int index, int leafCount) {

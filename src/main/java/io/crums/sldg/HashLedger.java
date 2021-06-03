@@ -95,7 +95,7 @@ public interface HashLedger extends AutoCloseable {
   
   /**
    * @return {@code WitnessReport.witness(this)}
-   * @see WitnessReport#witness(LedgerDb)
+   * @see WitnessReport#witness(HashLedger)
    */
   default WitnessReport witness() {
     return WitnessReport.witness(this);
@@ -104,7 +104,7 @@ public interface HashLedger extends AutoCloseable {
 
   /**
    * @return {@code WitnessReport.witness(this, includeLast)}
-   * @see WitnessReport#witness(LedgerDb, boolean)
+   * @see WitnessReport#witness(HashLedger, boolean)
    */
   default WitnessReport witness(boolean includeLast) throws ClientException {
     return WitnessReport.witness(this, includeLast);
@@ -113,7 +113,7 @@ public interface HashLedger extends AutoCloseable {
 
   /**
    * @return {@code WitnessReport.witness(this, exponent, includeLast)}
-   * @see WitnessReport#witness(LedgerDb, int, boolean)
+   * @see WitnessReport#witness(HashLedger, int, boolean)
    */
   default WitnessReport witness(int exponent, boolean includeLast) throws ClientException {
     return WitnessReport.witness(this, exponent, includeLast);

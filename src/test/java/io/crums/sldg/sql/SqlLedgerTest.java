@@ -24,7 +24,7 @@ public class SqlLedgerTest extends AbstractSkipLedgerTest {
   protected SkipLedger newLedger(Object methodLabel) throws Exception {
     File dir = getMethodOutputFilepath(methodLabel);
     Connection con = SqlTestHarness.newDatabase(dir);
-    return SqlSkipLedger.declareNewLedger(con, SqlTestHarness.LEDGER_TABLENAME);
+    return SqlSkipLedger.declareNewSkipLedger(con, SqlTestHarness.LEDGER_TABLENAME);
   }
   
 

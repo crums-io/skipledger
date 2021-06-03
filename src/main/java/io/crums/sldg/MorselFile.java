@@ -7,6 +7,7 @@ package io.crums.sldg;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.util.Objects;
 import java.util.logging.Logger;
 
@@ -48,6 +49,11 @@ public class MorselFile {
       HEADER_STRING.substring(0, 5);
   
 
+  /**
+   * Don't use me.
+   * 
+   * @see #header()
+   */
   private final static ByteBuffer HEADER;
   
   static {
@@ -76,17 +82,35 @@ public class MorselFile {
    * @param target target file or directory; {@code null} is interpreted as the current directory
    * 
    * @return the file the morsel was written to
+   * 
+   * @see #writeMorselFile(WritableByteChannel, MorselPackBuilder)
    */
   public static File createMorselFile(File target, MorselPackBuilder builder) throws IOException {
     Objects.requireNonNull(builder, "null builder");
     target = prepareTarget(target, builder);
     
     try (var ch = Opening.CREATE.openChannel(target)) {
-      ChannelUtils.writeRemaining(ch, header());
-      ChannelUtils.writeRemaining(ch, builder.serialize());
+      writeMorselFile(ch, builder);
     }
     
     return target;
+  }
+  
+  
+  /**
+   * Writes a morsel file to the given channel.
+   * 
+   * @param ch the channel, to a file or maybe bound to a socket
+   * @param builder the morsel
+   * 
+   * @return the number of bytes written
+   */
+  public static int writeMorselFile(WritableByteChannel ch, MorselPackBuilder builder) throws IOException {
+    ByteBuffer packBytes = builder.serialize();
+    int size = HEADER_SIZE + packBytes.remaining();
+    ChannelUtils.writeRemaining(ch, header());
+    ChannelUtils.writeRemaining(ch, builder.serialize());
+    return size;
   }
   
   
@@ -145,7 +169,7 @@ public class MorselFile {
   
 
   /**
-   * Creates a new instance. Does not use a direct buffer.
+   * Creates a new instance.
    * 
    * @param file    the morsel file (suggest <em>.mrsl</em> extension)
    * @param direct  if {@code true} then instance will be backed by a direct buffer

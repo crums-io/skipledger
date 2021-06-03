@@ -3,13 +3,17 @@
  */
 package io.crums.sldg.sql;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.Objects;
 
+import io.crums.sldg.HashLedger;
 import io.crums.util.Base64_32;
 
 /**
- * Schema for SQL TABLEs as backing storage for a {@linkplain Ledger}.
+ * Schema for SQL TABLEs as backing storage for a {@linkplain HashLedger}.
  * 
  * <h1>Schema</h1>
  * 
@@ -54,13 +58,13 @@ import io.crums.util.Base64_32;
  *  {@code (trl_id INT NOT NULL,
  *   row_num BIGINT NOT NULL,
  *   utc BIGINT NOT NULL,
- *   mrkl_idx INT NOT NULL,
- *   mrkl_cnt INT NOT NULL,
+ *   mrkl_idx  INT NOT NULL,
+ *   mrkl_cnt  INT NOT NULL,
  *   chain_len INT NOT NULL,
- *   chn_id BIGINT NOT NULL,
+ *   chn_id    INT NOT NULL,
  *   PRIMARY KEY (trl_id),
- *   FOREIGN KEY (row_num) REFERENCES <em>ledgerTable</em>(row_num),
- *   FOREIGN KEY (chn_id) REFERENCES <em>chainTable</em>(chn_id),
+ *   FOREIGN KEY (row_num) REFERENCES} <em>ledgerTable</em> {@code (row_num),
+ *   FOREIGN KEY (chn_id) REFERENCES} <em>chainTable</em> {@code (chn_id),
  *  )}</pre>
  * 
  * <p>
@@ -70,7 +74,7 @@ import io.crums.util.Base64_32;
  * </p>
  * 
  */
-public class LedgerSchema {
+public class HashLedgerSchema {
   
   public final static String ROW_NUM = "row_num";
   
@@ -80,7 +84,6 @@ public class LedgerSchema {
   
   
 
-  public final static String BCN_ID = "bcn_id";
   public final static String CHN_ID = "chn_id";
   public final static String TRL_ID = "trl_id";
   public final static String N_HASH = "n_hash";
@@ -111,47 +114,98 @@ public class LedgerSchema {
    * Creates and returns the create-table SQL statement for a skip ledger table
    * with the given name.
    * 
-   * @param ledgerTable
+   * @param skipTable
    * 
-   * @see LedgerSchema schema
+   * @see HashLedgerSchema schema
    */
-  public static String createSkipLedgerTableStatement(String ledgerTable) {
+  public static String createSkipLedgerTableSql(String skipTable) {
     return
-        "CREATE TABLE " + ledgerTable + " (\n" +
+        "CREATE TABLE " + skipTable + " (\n" +
         SOFT_TAB +    ROW_NUM  + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    SRC_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    ROW_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + ROW_NUM + ")\n)";
   }
+
   
   
   
   
-  
-  
-  
-  public static String createChainTableStatement(String chainTable) {
-    return
-        "CREATE TABLE " + chainTable + " (" +
-        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL," +
-        SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
-        SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")\n)";
-  }
-  
-  
-  public static String createTrailTableStatement(String trailTable, String ledgerTable, String chainTable) {
+  public static String createTrailTableSql(String trailTable, String skipTable) {
     return
         "CREATE TABLE " + trailTable + " (\n" +
-        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL AUTO_INCREMENT," +
         SOFT_TAB +    ROW_NUM   + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    UTC       + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_IDX  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_CNT  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    CHAIN_LEN + ' ' + INT_TYPE + " NOT NULL," +
-        SOFT_TAB +    CHN_ID    + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + TRL_ID + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + ledgerTable + "(" + ROW_NUM + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + CHN_ID  + ") REFERENCES " + chainTable + "(" + CHN_ID + ")\n)";
+        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + skipTable + "(" + ROW_NUM + ")\n)";
+  }
+  
+  
+  
+  /**
+   * Returns a 5-parameter prepared insert statement. The parameter values are (in order)
+   * <ol>
+   * <li>row_num</li>
+   * <li>utc</li>
+   * <li>mrkl_idx</li>
+   * <li>mrkl_cnt></li>
+   * <li>chain_len</li>
+   * </ol>
+   */
+  public static PreparedStatement insertTrailPrepStmt(Connection con, String trailTable) throws SQLException {
+    Objects.requireNonNull(con, "null con");
+    checkForm(trailTable, "trailTable");
+    
+    String sql =
+        "INSERT INTO " + trailTable +
+        " (" + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
+        ") VALUES ( ?, ?, ?, ?, ?)";
+    
+    return con.prepareStatement(sql);
+  }
+  
+  
+
+  
+  /**
+   * Returns a single-parameter prepared select statement. The look-up key (parameter)
+   * is the {@code row_num}.
+   */
+  public static PreparedStatement selectTrailIdPrepStmt(Connection con, String trailTable) throws SQLException {
+    Objects.requireNonNull(con, "null con");
+    checkForm(trailTable, "trailTable");
+    
+    String sql =
+        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
+    
+    return con.prepareStatement(sql);
+  }
+  
+  
+  public static String createChainTableSql(String chainTable, String trailTable) {
+    checkForm(chainTable, "chainTable");
+    checkForm(trailTable, "trailTable");
+    return
+        "CREATE TABLE " + chainTable + " (" +
+        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL AUTO_INCREMENT," +
+        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
+        SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")," +
+        SOFT_TAB +    "FOREIGN KEY (" + TRL_ID + ") REFERENCES " + trailTable + "(" + TRL_ID + ")\n)";
+  }
+  
+  
+  
+
+
+  private static void checkForm(String table, String descName) {
+    Objects.requireNonNull(table, "null " + descName);
+    if (table.length() < 2)
+      throw new SqlLedgerException("table name for " + descName + " too short: '" + table + "'");
   }
   
   
@@ -159,17 +213,17 @@ public class LedgerSchema {
   /**
    * Default extension for skip ledger table.
    */
-  public final static String LEDGER_TBL_EXT = "_sldg";
+  public final static String SKIP_TBL_EXT = "_sldg";
 
 
   /**
    * Default extension for [trail] chain[s] table.
    */
-  public final static String CHAIN_TBL_EXT = LEDGER_TBL_EXT + "_chain";
+  public final static String CHAIN_TBL_EXT = SKIP_TBL_EXT + "_chain";
   /**
    * Default extension for trail[s] table.
    */
-  public final static String TRAIL_TBL_EXT = LEDGER_TBL_EXT + "_trail";
+  public final static String TRAIL_TBL_EXT = SKIP_TBL_EXT + "_trail";
   
   
   
@@ -178,7 +232,7 @@ public class LedgerSchema {
   
   
   private final String sourceTable;
-  private final String ledgerTable;
+  private final String skipTable;
   private final String chainTable;
   private final String trailTable;
   
@@ -189,15 +243,15 @@ public class LedgerSchema {
    * 
    * @param sourceTable   the name of the source table (for which we're building a ledger)
    * 
-   * @see #LEDGER_TBL_EXT
+   * @see #SKIP_TBL_EXT
    * @see #BEACON_TBL_EXT
    * @see #CHAIN_TBL_EXT
    * @see #TRAIL_TBL_EXT
    */
-  public LedgerSchema(String sourceTable) {
+  public HashLedgerSchema(String sourceTable) {
     this(
         sourceTable,
-        sourceTable + LEDGER_TBL_EXT,
+        sourceTable + SKIP_TBL_EXT,
         sourceTable + CHAIN_TBL_EXT,
         sourceTable + TRAIL_TBL_EXT);
   }
@@ -207,19 +261,18 @@ public class LedgerSchema {
    * use, since it's easy to get the arguments mixed up.
    * 
    * @param sourceTable   the name of the source table (for which we're building a ledger)
-   * @param ledgerTable   the name of the ledger table
-   * @param beaconsTable  the name of the beacons table
-   * @param chainTable   the name of the chains table (merkle proof chains)
+   * @param skipTable   the name of the skip ledger table
    * @param trailTable   the name of the trails table (crumtrails)
+   * @param chainTable   the name of the chains table (merkle proof chains)
    */
-  protected LedgerSchema(String sourceTable, String ledgerTable, String chainTable, String trailTable) {
+  protected HashLedgerSchema(String sourceTable, String skipTable, String trailTable, String chainTable) {
     this.sourceTable = Objects.requireNonNull(sourceTable, "null sourceTable").trim();
-    this.ledgerTable = Objects.requireNonNull(ledgerTable, "null ledgerTable").trim();
+    this.skipTable = Objects.requireNonNull(skipTable, "null skipTable").trim();
     this.chainTable = Objects.requireNonNull(chainTable, "null chainTable").trim();
     this.trailTable = Objects.requireNonNull(trailTable, "null trailTable").trim();
     
     checkForm(this.sourceTable, "sourceTable");
-    checkForm(this.ledgerTable, "ledgerTable");
+    checkForm(this.skipTable, "skipTable");
     checkForm(this.chainTable, "chainsTable");
     checkForm(this.trailTable, "trailsTable");
     
@@ -227,20 +280,14 @@ public class LedgerSchema {
   }
 
 
-
-
-  private void checkForm(String table, String descName) {
-    if (table.length() < 2)
-      throw new SqlLedgerException("table name for " + descName + " too short: '" + table + "'");
-  }
   
   
   
   private void checkNoDupNames() {
     HashSet<String> names = new HashSet<>();
     names.add(sourceTable);
-    if (!names.add(ledgerTable))
-      throw dupTableX(ledgerTable, "ledgerTable");
+    if (!names.add(skipTable))
+      throw dupTableX(skipTable, "skipTable");
     if (!names.add(chainTable))
       throw dupTableX(chainTable, "chainsTable");
     if (!names.add(trailTable))
@@ -270,42 +317,64 @@ public class LedgerSchema {
   /**
    * Returns the table name.
    */
-  public final String getLedgerTable() {
-    return ledgerTable;
+  public final String getSkipTable() {
+    return skipTable;
   }
 
   /**
    * Returns the table name.
    */
-  public final String getChainsTable() {
+  public final String getChainTable() {
     return chainTable;
   }
 
   /**
    * Returns the table name.
    */
-  public final String getTrailsTable() {
+  public final String getTrailTable() {
     return trailTable;
   }
   
   
   
   
-  public String createSkipLedgerTableStatement() {
-    return createSkipLedgerTableStatement(ledgerTable);
+  public String createSkipLedgerTableSql() {
+    return createSkipLedgerTableSql(skipTable);
   }
   
   
-  public String createChainTableStatement() {
-    return createChainTableStatement(chainTable);
+  public String createChainTableSql() {
+    return createChainTableSql(chainTable, trailTable);
   }
   
   
-  public String createTrailTableStatement() {
-    return createTrailTableStatement(trailTable, ledgerTable, chainTable);
+  public String createTrailTableSql() {
+    return createTrailTableSql(trailTable, skipTable);
   }
   
   
+
+  /**
+   * Returns a 5-parameter prepared insert statement. The parameter values are (in order)
+   * <ol>
+   * <li>row_num</li>
+   * <li>utc</li>
+   * <li>mrkl_idx</li>
+   * <li>mrkl_cnt></li>
+   * <li>chain_len</li>
+   * </ol>
+   */
+  public PreparedStatement insertTrailPrepStmt(Connection con) throws SQLException {
+    return insertTrailPrepStmt(con, trailTable);
+  }
+  
+  /**
+   * Returns a single-parameter prepared select statement. The look-up key (parameter)
+   * is the {@code row_num}.
+   */
+  public PreparedStatement selectTrailIdPrepStmt(Connection con) throws SQLException {
+    return selectTrailIdPrepStmt(con, trailTable);
+  }
 
 }
   

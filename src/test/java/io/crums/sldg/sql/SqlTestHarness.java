@@ -8,8 +8,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-import io.crums.sldg.sql.SqlSkipTable;
-
 /**
  * 
  */
@@ -34,6 +32,9 @@ public class SqlTestHarness {
     Connection con = newDatabase(dir);
     return SqlSkipTable.declareNewTable(con, LEDGER_TABLENAME);
   }
+  
+  
+  
   
 
 }
