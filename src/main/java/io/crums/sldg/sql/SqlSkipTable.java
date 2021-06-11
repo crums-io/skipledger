@@ -94,7 +94,7 @@ public class SqlSkipTable implements SkipTable {
     final long base = size + 1;
     
     // ea row gets a number and 2 hashes
-    StringBuilder query = new StringBuilder()
+    StringBuilder sql = new StringBuilder()
         .append("INSERT INTO ").append(tableName).append('(')
         .append(ROW_NUM).append(", ").append(SRC_HASH).append(", ").append(ROW_HASH).append(") VALUES");
 
@@ -105,15 +105,15 @@ public class SqlSkipTable implements SkipTable {
     for (int r = 0; r < count; ++r) {
       long rowNum = base + r;
       int ei = r * 2;
-      query.append("\n( ").append(rowNum).append(", '").append(encoded[ei]).append("', '").append(encoded[ei + 1]).append("'),");
+      sql.append("\n( ").append(rowNum).append(", '").append(encoded[ei]).append("', '").append(encoded[ei + 1]).append("'),");
     }
     
     // trim the last comma
-    query.setLength(query.length() - 1);
+    sql.setLength(sql.length() - 1);
     
     try {
       Statement stmt = con.createStatement();
-      stmt.execute(query.toString());
+      stmt.execute(sql.toString());
       int updateCount = stmt.getUpdateCount();
       if (updateCount == count)
         con.commit();

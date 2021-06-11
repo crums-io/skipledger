@@ -47,7 +47,7 @@ import io.crums.util.Base64_32;
  * </p>
  * <pre>
  * {@code CREATE TABLE} <em>chainTable</em>
- *  {@code (chn_id INT NOT NULL,
+ *  {@code (chn_id INT NOT NULL AUTO_INCREMENT,
  *   n_hash CHAR(43) NOT NULL,
  *   PRIMARY KEY (chn_id)
  *  )}</pre>
@@ -55,7 +55,7 @@ import io.crums.util.Base64_32;
  * <h2>Trail table</h2>
  * <pre>
  * {@code CREATE TABLE} <em>trailTable</em>
- *  {@code (trl_id INT NOT NULL,
+ *  {@code (trl_id INT NOT NULL AUTO_INCREMENT,
  *   row_num BIGINT NOT NULL,
  *   utc BIGINT NOT NULL,
  *   mrkl_idx  INT NOT NULL,

@@ -16,7 +16,7 @@ import io.crums.sldg.SkipTable;
 /**
  * 
  */
-public class SqlLedgerTest extends AbstractSkipLedgerTest {
+public class SqlSkipLedgerTest extends AbstractSkipLedgerTest {
   
   
 

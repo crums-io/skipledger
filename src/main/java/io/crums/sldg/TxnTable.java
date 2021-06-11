@@ -11,10 +11,8 @@ import io.crums.io.buffer.ReadWriteBuffer;
 
 /**
  * Single transaction view over another table.
- * 
- * <p>TODO: make package-private.</p>
  */
-public final class TxnTable implements SkipTable {
+final class TxnTable implements SkipTable {
   
   
   private final SkipTable primary;
