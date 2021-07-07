@@ -6,7 +6,6 @@ package io.crums.sldg.src;
 
 import static io.crums.sldg.SldgConstants.DIGEST;
 import static io.crums.sldg.SldgConstants.HASH_WIDTH;
-import static io.crums.util.hash.Digest.bufferDigest;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
@@ -14,34 +13,55 @@ import java.util.Objects;
 
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
-import io.crums.sldg.SldgConstants;
-import io.crums.util.IntegralStrings;
-import io.crums.util.Strings;
+import io.crums.model.Constants;
+import io.crums.util.hash.Digest;
 
 /**
+ * A table-cell value. Since we usually speak of rows and columns (as when we
+ * talk of a row's <em>column-value</em>), this class is uses the <em>Column</em>
+ * moniker in its name.
  * 
+ * <h2>Salting</h2>
+ * <p>
+ * </p>
  */
 public abstract class ColumnValue implements Serial {
   
   
   
-  public static ColumnValue newInstance(Object obj) {
+  /**
+   * @deprecated use salted version instead
+   */
+  public static ColumnValue toInstance(Object obj) {
+    return toInstance(obj, BufferUtils.NULL_BUFFER);
+  }
+  
+  
+  
+  public static ColumnValue toInstance(Object obj, ByteBuffer salt) {
     if (obj == null) {
-      return NULL_VALUE;
+      return NullValue.nullInstance(salt);
     
     } else if (obj instanceof byte[]) {
       ByteBuffer bytes = ByteBuffer.wrap((byte[]) obj);
-      return bytes.remaining() == HASH_WIDTH ? new HashValue(bytes) : new BytesValue(bytes);
+      return bytes.remaining() == HASH_WIDTH ? new HashValue(bytes) : new BytesValue(bytes, salt);
     
     } else if (obj instanceof ByteBuffer) {
       ByteBuffer bytes = (ByteBuffer) obj;
-      return bytes.remaining() == HASH_WIDTH ? new HashValue(bytes) : new BytesValue(bytes);
+      return bytes.remaining() == HASH_WIDTH ? new HashValue(bytes) : new BytesValue(bytes, salt);
     
     } else if (obj instanceof CharSequence) {
-      return new StringValue(obj.toString());
+      return new StringValue(obj.toString(), salt);
     
     } else if (obj instanceof Number) {
-      return new NumberValue((Number) obj);
+      Number num = (Number) obj;
+      if (num instanceof Float || num instanceof Double)
+        return new DoubleValue(num.doubleValue(), salt);
+      else
+        return new LongValue(((Number) obj).longValue());
+    
+    } else if (obj instanceof ColumnValue) {
+      return (ColumnValue) obj;
     
     } else
       throw new IllegalArgumentException("unrecognized object: " + obj);
@@ -49,14 +69,24 @@ public abstract class ColumnValue implements Serial {
   
   
   public static ColumnValue loadValue(ByteBuffer in) {
-    byte type = in.get(in.position());
+    int type = in.get();
+    ByteBuffer salt;
+    if (type < 0) {
+      salt = BufferUtils.slice(in, HASH_WIDTH);
+      type = -type;
+    } else {
+      assert type != 0;
+      salt = BufferUtils.NULL_BUFFER;
+    }
     // this double switching is hopefully jitted out under load
     switch (ColumnType.forCode(type)) {
-    case NULL:    in.get(); return NULL_VALUE;
-    case HASH:    return HashValue.load(in);
-    case BYTES:   return BytesValue.load(in);
-    case STRING:  return StringValue.load(in);
-    case NUMBER:  return NumberValue.load(in);
+    case NULL:    return NullValue.nullInstance(salt);
+    case HASH:    assert !salt.hasRemaining();
+                  return HashValue.loadHash(in);
+    case BYTES:   return BytesValue.loadBytes(in, salt);
+    case STRING:  return StringValue.loadString(in, salt);
+    case LONG:    return LongValue.loadLong(in, salt);
+    case DOUBLE:  return DoubleValue.loadDouble(in, salt);
     default:
       throw new RuntimeException("unaccounted type " + type);
     }
@@ -65,32 +95,115 @@ public abstract class ColumnValue implements Serial {
   
   
   
+  
+  
+  
   private final ColumnType type;
+  private final ByteBuffer salt;
+  
+  /**
+   * 
+   */
+  ColumnValue(ColumnType type) {
+    this(type, BufferUtils.NULL_BUFFER);
+  }
 
   /**
    * 
    */
-  private ColumnValue(ColumnType type) {
+  ColumnValue(ColumnType type, ByteBuffer salt) {
     this.type = Objects.requireNonNull(type, "null type");
+    this.salt = BufferUtils.readOnlySlice(salt);
+    if (this.salt.hasRemaining() && this.salt.remaining() != Constants.HASH_WIDTH)
+      throw new IllegalArgumentException(
+          "salt must either be empty or have exactly 32 bytes remaining: " + salt);
   }
   
   
   /**
    * Returns the column type for this column value.
    */
-  public ColumnType getType() {
+  public final ColumnType getType() {
     return type;
   }
   
+  
+  /**
+   * Determines if an instance is salted.
+   * 
+   * @return {@code getSalt().hasRemaining()}
+   */
+  public final boolean isSalted() {
+    return salt.hasRemaining();
+  }
+  
+  
+  
+  /**
+   * Writes either 1 or 33 bytes to the given {@code out} buffer encoding
+   * both the type, whether it is salted, and if so, the value of the salt.
+   */
+  protected final ByteBuffer writeTypeAndSalt(ByteBuffer out) {
+    if (salt.hasRemaining())
+      out.put((byte) - type.code()).put(getSalt());
+    else
+      out.put(type.code());
+    return out;
+  }
+  
+  
+  /**
+   * @return {@code isSalted() ? HASH_WIDTH + 1 : 1}
+   */
+  protected final int headSize() {
+    return salt.hasRemaining() ? SALTED_HEAD_SIZE : 1;
+  }
+  
+  private final static int SALTED_HEAD_SIZE = HASH_WIDTH + 1;
+  
 
+  /**
+   * Returns the salt.
+   * 
+   * @return non-null, but possibly empty
+   */
+  public final ByteBuffer getSalt() {
+    return BufferUtils.readOnlySlice(salt);
+  }
   
   
   
+  
+  /**
+   * Returns the cell-value's hash.
+   * 
+   * @return {@code getHash(DIGEST.newDigest())}
+   */
   public ByteBuffer getHash() {
     return getHash(DIGEST.newDigest());
   }
   
-  public abstract ByteBuffer getHash(MessageDigest digest);
+  
+  public ByteBuffer getHash(MessageDigest digest) {
+    Objects.requireNonNull(digest, "null digest");
+    ByteBuffer hash = unsaltedHash(digest);
+    if (isSalted()) {
+      digest.reset();
+      digest.update(getSalt());
+      digest.update(hash);
+      hash = Digest.bufferDigest(digest);
+    }
+    return hash;
+  }
+  
+  
+  /**
+   * Returns the column (cell) value's hash without accounting for the
+   * salt (which may or may not be present).
+   * 
+   * @param digest a SHA-256 <em>work</em> digest
+   */
+  public abstract ByteBuffer unsaltedHash(MessageDigest digest);
   
 
   @Override
@@ -106,287 +219,12 @@ public abstract class ColumnValue implements Serial {
   protected abstract void appendValue(StringBuilder s);
 
 
-
-
-  /**
-   * All integral values are expressed as 8-byte {@code long}s.
-   */
-  public static class NumberValue extends ColumnValue {
-    
-    
-    static NumberValue load(ByteBuffer in) {
-      byte type = in.get();
-      assert type == ColumnType.NUMBER.code();
-      return new NumberValue(in.getLong());
-    }
-    
-    private final long number;
-    
-    
-    public NumberValue(Number number) {
-      this(number.longValue());
-    }
-    
-    public NumberValue(long number) {
-      super(ColumnType.NUMBER);
-      this.number = number;
-    }
-    
-    
-    
-    
-    public long getNumber() {
-      return number;
-    }
-    
-
-    @Override
-    public ByteBuffer getHash(MessageDigest digest) {
-      ByteBuffer lngBuff = ByteBuffer.allocate(8).putLong(number).flip();
-      digest.reset();
-      digest.update(lngBuff);
-      return bufferDigest(digest);
-    }
-
-
-
-
-    @Override
-    public int serialSize() {
-      return 9;
-    }
-
-
-
-
-    @Override
-    public ByteBuffer writeTo(ByteBuffer out) {
-      return out.put(getType().code()).putLong(number);
-    }
-    
-    @Override
-    protected void appendValue(StringBuilder s) {
-      s.append(number);
-    }
-
-    
-  }
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  public static class StringValue extends ColumnValue {
-    
-    static StringValue load(ByteBuffer in) {
-      byte type = in.get();
-      assert type == ColumnType.STRING.code();
-      int len = 0xffff & in.getShort();
-      byte[] bytes = new byte[len];
-      in.get(bytes);
-      return new StringValue(new String(bytes, Strings.UTF_8));
-    }
-    
-    private final String string;
-    private final byte[] bytes;
-    
-    
-    public StringValue(String string) {
-      super(ColumnType.STRING);
-      this.string = Objects.requireNonNull(string, "null string argument");
-      this.bytes = string.isEmpty() ? new byte[0] : string.getBytes(Strings.UTF_8);
-      if (bytes.length > 0xffff)
-        throw new IllegalArgumentException(
-            "string byte-length greater than capacity (64k): " + bytes.length);
-    }
-    
-    
-    private StringValue(String string, byte[] bytes) {
-      super(ColumnType.STRING);
-      this.string = string;
-      this.bytes = bytes;
-    }
-    
-    
-    public String getString() {
-      return string;
-    }
-    
-
-    @Override
-    public ByteBuffer getHash(MessageDigest digest) {
-      ByteBuffer intBuff = ByteBuffer.allocate(4).putInt(bytes.length).flip();
-      digest.reset();
-      digest.update(intBuff);
-      digest.update(bytes);
-      return bufferDigest(digest);
-    }
-
-
-    @Override
-    public int serialSize() {
-      return 3 + bytes.length;
-    }
-
-
-    @Override
-    public ByteBuffer writeTo(ByteBuffer out) {
-      return out.put(getType().code()).putShort((short) bytes.length).put(bytes);
-    }
-
-
-    @Override
-    protected void appendValue(StringBuilder s) {
-      s.append(string);
-    }
-    
-
-  }
-  
-  
   public static int MAX_TO_STRING_CHARS = 480;
-  
-  
-  public static class BytesValue extends ColumnValue {
-    
-    static BytesValue load(ByteBuffer in) {
-      byte type = in.get();
-      assert type == ColumnType.BYTES.code();
-      int len = 0xffff & in.getShort();
-      ByteBuffer bytes = len == 0 ? BufferUtils.NULL_BUFFER : BufferUtils.slice(in, len);
-      return new BytesValue(bytes);
-    }
-    
-    private final ByteBuffer bytes;
-    
-    public BytesValue(ByteBuffer bytes) {
-      this(bytes, ColumnType.BYTES);
-    }
-    
-    BytesValue(ByteBuffer bytes, ColumnType type) {
-      super(type);
-      this.bytes = BufferUtils.readOnlySlice(bytes);
-      if (bytes.remaining() > 0xffff)
-        throw new IllegalArgumentException(
-            "string byte-length greater than capacity (64k): " + bytes);
-    }
-    
-    
-    public ByteBuffer getBytes() {
-      return bytes.asReadOnlyBuffer();
-    }
-    
-    
-    public int size() {
-      return bytes.remaining();
-    }
-
-
-    @Override
-    public ByteBuffer getHash(MessageDigest digest) {
-      int count = bytes.remaining();
-      ByteBuffer intBuff = ByteBuffer.allocate(4).putInt(count).flip();
-      digest.reset();
-      digest.update(intBuff);
-      digest.update(getBytes());
-      return bufferDigest(digest);
-    }
-
-    @Override
-    public int serialSize() {
-      return 3 + size();
-    }
-
-    @Override
-    public ByteBuffer writeTo(ByteBuffer out) {
-      return out.put(getType().code()).putShort((short) size()).put(getBytes());
-    }
-
-    @Override
-    protected void appendValue(StringBuilder s) {
-      ByteBuffer b = getBytes();
-      if (bytes.remaining() > MAX_TO_STRING_CHARS / 2)
-        b.limit(-1 + MAX_TO_STRING_CHARS / 2);
-      IntegralStrings.appendHex(b, s).append("..");
-    }
-    
-  }
-  
-  
-  public static class HashValue extends BytesValue {
-
-    static HashValue load(ByteBuffer in) {
-      byte type = in.get();
-      assert type == ColumnType.HASH.code();
-      ByteBuffer bytes = BufferUtils.slice(in, SldgConstants.HASH_WIDTH);
-      return new HashValue(bytes);
-    }
-    
-    @Override
-    public int serialSize() {
-      return 1 + SldgConstants.HASH_WIDTH;
-    }
-
-    @Override
-    public ByteBuffer writeTo(ByteBuffer out) {
-      return out.put(getType().code()).put(getBytes());
-    }
-
-    public HashValue(ByteBuffer bytes) {
-      super(bytes, ColumnType.HASH);
-      if (size() != HASH_WIDTH)
-        throw new IllegalArgumentException("bytes not expected hash-width: " + bytes);
-    }
-    
-    
-    @Override
-    public ByteBuffer getHash(MessageDigest digest) {
-      return getBytes();
-    }
-    
-  }
   
   
   /**
    * 
    */
-  public final static ColumnValue NULL_VALUE =
-      new ColumnValue(ColumnType.NULL) {
-        
-        @Override
-        public ByteBuffer getHash(MessageDigest digest) {
-          return DIGEST.sentinelHash();
-        }
-
-        @Override
-        public int serialSize() {
-          return 1;
-        }
-
-        @Override
-        public ByteBuffer writeTo(ByteBuffer out) {
-          return out.put(getType().code());
-        }
-        
-
-        @Override
-        public String toString() {
-          return getType().symbol();
-        }
-
-        @Override
-        protected void appendValue(StringBuilder s) {
-        }
-      };
+  public final static ColumnValue NULL_VALUE = NullValue.UNSALTED_NULL;
 
 }

@@ -551,12 +551,11 @@ public class Journal implements Closeable {
    */
   protected Consumer<String> newLineProc() {
     MessageDigest digest = Digests.SHA_256.newDigest();
-    int[] countPtr = { 0 };
-    return line ->  addLine(line, digest, countPtr[0]++);
+    return line ->  addLine(line, digest);
   }
   
   
-  private void addLine(String line, MessageDigest digest, int count) {
+  private void addLine(String line, MessageDigest digest) {
     ByteBuffer hash = lineHash(line, digest);
     db.getSkipLedger().appendRows(hash);
   }

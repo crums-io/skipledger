@@ -23,7 +23,8 @@ import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.TaskStack;
 
 /**
- * 
+ * A {@linkplain HashLedger} with direct storage on the file system. Naturally,
+ * this is much faster than on a general purpose SQL engine.
  */
 public class HashLedgerDir implements HashLedger {
   

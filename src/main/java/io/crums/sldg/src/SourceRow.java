@@ -20,9 +20,6 @@ import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.src.ColumnValue.BytesValue;
-import io.crums.sldg.src.ColumnValue.NumberValue;
-import io.crums.sldg.src.ColumnValue.StringValue;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
@@ -39,14 +36,25 @@ public class SourceRow implements Serial {
   
   public static SourceRow load(ByteBuffer in) {
     final long rowNumber = in.getLong();
+    SkipLedger.checkRealRowNumber(rowNumber);
     final int count = 0xffff & in.getShort();
+    if (count < 1)
+      throw new IllegalArgumentException("empty column values");
     ColumnValue[] columns = new ColumnValue[count];
     for (int index = 0; index < count; ++index)
       columns[index] = ColumnValue.loadValue(in);
-    return new SourceRow(rowNumber, columns);
+    return new SourceRow(rowNumber, Lists.asReadOnlyList(columns), false);
   }
   
   
+  
+  public static SourceRow newSaltedInstance(long rowNumber, TableSalt shaker, Object...colValues) {
+    SkipLedger.checkRealRowNumber(rowNumber);
+    ColumnValue[] columns = new ColumnValue[colValues.length];
+    for (int index = colValues.length; index-- > 0; )
+      columns[index] = ColumnValue.toInstance(colValues[index], shaker.salt(rowNumber, index + 1));
+    return new SourceRow(rowNumber, Lists.asReadOnlyList(columns), false);
+  }
   
   
   
@@ -57,35 +65,32 @@ public class SourceRow implements Serial {
   public SourceRow(long rowNumber, Object... colValues) {
     this(
         rowNumber,
-        Lists.map(Arrays.asList(colValues), o -> ColumnValue.newInstance(o)));
+        Lists.map(Arrays.asList(colValues), o -> ColumnValue.toInstance(o)));
   }
   
   public SourceRow(long rowNumber, ColumnValue... colValues) {
     this(rowNumber, Arrays.asList(colValues));
   }
-
+  
+  
   /**
    * 
    */
   public SourceRow(long rowNumber, List<ColumnValue> colValues) {
-    this.columns = Lists.readOnlyCopy(colValues);
     this.rowNumber = rowNumber;
+    this.columns = Lists.readOnlyCopy(colValues);
+    SkipLedger.checkRealRowNumber(rowNumber);
     if (columns.isEmpty())
       throw new IllegalArgumentException("empty column values");
-    if (columns.size() > 0xffff)
+    if (columns.size() > Short.MAX_VALUE)
       throw new IllegalArgumentException(
-          "number of columns exceeds 0xffff: " + columns.size());
-    SkipLedger.checkRealRowNumber(rowNumber);
-    int nullCount = 0;
-    for (int index = columns.size(); index-- > 0;) {
-      if (columns.get(index).getType() == ColumnType.NULL)
-        ++nullCount;
-    }
-    if (nullCount == columns.size())
-      throw new IllegalArgumentException("row consists of all nulls: " + columns);
+          "number of columns exceeds model capacity (" + Short.MAX_VALUE + "): " + columns.size());
   }
   
   
+  /**
+   * Used by pseudo-constructors.
+   */
   private SourceRow(long rowNumber, List<ColumnValue> columns, boolean ignored) {
     this.rowNumber = rowNumber;
     this.columns = columns;
@@ -126,14 +131,11 @@ public class SourceRow implements Serial {
       throw new IllegalArgumentException("attempt to redact non-existent col " + col + ": " + this);
     
     int index = col - 1;
-    switch (columns.get(index).getType()) {
-    case HASH:
-    case NULL:
+    if (columns.get(index).getType().isHash())
       return this;
-    default:
-    }
+    
     ColumnValue[] values = columns.toArray(new ColumnValue[columns.size()]);
-    values[index] = new ColumnValue.HashValue(values[index].getHash());
+    values[index] = new HashValue(values[index].getHash());
     return new SourceRow(rowNumber, Lists.asReadOnlyList(values), false);
   }
   
@@ -239,21 +241,23 @@ public class SourceRow implements Serial {
     case HASH:
       ChannelUtils.writeRemaining(ch, ((BytesValue) col).getBytes());
       break;
-    case NUMBER:
-      {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putLong(0, ((NumberValue) col).getNumber());
-        ChannelUtils.writeRemaining(ch, buf);
-      }
-      break;
     case STRING:
       {
         byte[] utf8 = ((StringValue) col).getString().getBytes(Strings.UTF_8);
         ChannelUtils.writeRemaining(ch, ByteBuffer.wrap(utf8));
       }
+      break;    case LONG:
+      {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putLong(0, ((LongValue) col).getNumber());
+        ChannelUtils.writeRemaining(ch, buf);
+      }
       break;
-      
-    default:
-      throw new RuntimeException("unaccounted type: " + col.getType());
+    case DOUBLE:
+      {
+        ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putDouble(0, ((DoubleValue) col).getValue());
+        ChannelUtils.writeRemaining(ch, buf);
+      }
+      break;
     }
   }
   
@@ -291,8 +295,8 @@ public class SourceRow implements Serial {
     case HASH:
       writer.write(IntegralStrings.toHex(((BytesValue) col).getBytes()));
       break;
-    case NUMBER:
-      writer.write(String.valueOf(((NumberValue) col).getNumber()));
+    case LONG:
+      writer.write(String.valueOf(((LongValue) col).getNumber()));
       break;
     case STRING:
       writer.write(((StringValue) col).getString());
@@ -359,9 +363,11 @@ public class SourceRow implements Serial {
         string.append('[');
         IntegralStrings.appendHex(hash.limit(3), string).append("..]");
         break;
-      case NUMBER:
-        string.append('[').append(((NumberValue) columnVal).getNumber()).append(']');
+      case LONG:
+        string.append('[').append(((LongValue) columnVal).getNumber()).append(']');
         break;
+      case DOUBLE:
+        string.append(((DoubleValue) columnVal).getValue()).append(']');
       case NULL:
       }
     }

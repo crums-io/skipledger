@@ -7,44 +7,59 @@ package io.crums.sldg.src;
 /**
  * Data type for a column value in a row. The classification here concerns
  * how data is hashed, not the exact data type.
+ * 
+ * <h3>About the Salted Moniker</h3>
+ * <p>
+ * There are 2 principal ways to hash a column value: salted and unsalted. The
+ * reason why a value may be salted prior to hashing is in order to guard against
+ * a rainbow attacks--which if this library is successful, will be quite common.
+ * Therefore, unsalted types are expected to tbe exception rather than the norm.
+ * Unsalted types have a '0' (zero) appended to their symbol.
+ * </p>
  */
 public enum ColumnType {
   
+  
+  /**
+   * Signed floating point value. (A bit concerned about
+   * equality tests, read consistency with <code>0 +/-</code> values, that sort of thing.)
+   * Including this type for now although it will likely be deprecated soon.
+   */
+  DOUBLE(6, "D"),
+  
   /**
    * Signed long. All numeric values are to be mapped to {@code long}s.
-   * Floating point numbers are not supported. We want fixed precision.
-   * Therefore, if a column in a source table in a database is a floating point value,
-   * it must somehow be mapped to an integral value.
    */
-  NUMBER(4, "L"),
+  LONG(5, "L"),
   /**
    * UTF-8 string.
    */
-  STRING(3, "S"),
+  STRING(4, "S"),
   /**
    * Sequence of byte literals, like a blob but hopefully not too large.
    * In fact, the smaller the better.
    */
-  BYTES(2, "B"),
+  BYTES(3, "B"),
   
   /**
    * A SHA-256 hash of some other value.
    */
-  HASH(1, "H"),
+  HASH(2, "H"),
   
   /**
-   * A null value is marked specially.
+   * A null value is specially marked.
    */
-  NULL(0, "NULL");
+  NULL(1, "NULL");
   
   
-  public static ColumnType forCode(byte code) {
+  public static ColumnType forCode(int code) {
     switch (code) {
-    case 0:   return NULL;
-    case 1:   return HASH;
-    case 2:   return BYTES;
-    case 3:   return STRING;
-    case 4:   return NUMBER;
+    case 1:   return NULL;
+    case 2:   return HASH;
+    case 3:   return BYTES;
+    case 4:   return STRING;
+    case 5:   return LONG;
+    case 6:   return DOUBLE;
     default:
       throw new IllegalArgumentException("unknown code " + code);
     }
@@ -69,15 +84,26 @@ public enum ColumnType {
   }
   
   
+  public boolean isNull() {
+    return this == NULL;
+  }
   
-  public boolean isOpaque() {
-    switch (this) {
-    case NULL:
-    case HASH:
-      return true;
-    default:
-      return false;
-    }
+  public boolean isHash() {
+    return this == HASH;
+  }
+  
+  public boolean isBytes() {
+    return this == BYTES;
+  }
+  
+  public boolean isString() {
+    return this == STRING;
+  }
+  
+  
+  public boolean isNumber() {
+    return this == LONG;
   }
 
 }
+

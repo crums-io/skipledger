@@ -18,8 +18,9 @@ import  org.junit.Test;
 import com.gnahraf.test.IoTestCase;
 
 import io.crums.sldg.src.ColumnType;
-import io.crums.sldg.src.ColumnValue;
+import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.src.StringValue;
 
 /**
  * 
@@ -150,7 +151,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       assertNumberValue(srcRow, 2, 5317400);
       assertNullValue(srcRow, 3);
       
-      ColumnValue.NumberValue dateValue = (ColumnValue.NumberValue) srcRow.getColumns().get(4);
+      LongValue dateValue = (LongValue) srcRow.getColumns().get(4);
       // don't want to get bogged down in timezone issues, so just check the UTC time is in the
       // right range
       Calendar min = Calendar.getInstance();
@@ -172,13 +173,13 @@ public class SqlSourceQueryTest extends IoTestCase {
   
   
   private void assertNumberValue(SourceRow srcRow, int index, long value) {
-    assertEquals(ColumnType.NUMBER, srcRow.getColumns().get(index).getType());
-    assertEquals(value, ((ColumnValue.NumberValue) srcRow.getColumns().get(index)).getNumber());
+    assertEquals(ColumnType.LONG, srcRow.getColumns().get(index).getType());
+    assertEquals(value, ((LongValue) srcRow.getColumns().get(index)).getNumber());
   }
   
   private void assertStringValue(SourceRow srcRow, int index, String value) {
     assertEquals(ColumnType.STRING, srcRow.getColumns().get(index).getType());
-    assertEquals(value, ((ColumnValue.StringValue) srcRow.getColumns().get(index)).getString());
+    assertEquals(value, ((StringValue) srcRow.getColumns().get(index)).getString());
   }
   
   

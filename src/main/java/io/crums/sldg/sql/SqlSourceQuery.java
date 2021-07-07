@@ -25,8 +25,12 @@ import java.util.Objects;
 
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SourceLedger;
+import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.ColumnValue;
+import io.crums.sldg.src.HashValue;
+import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.src.StringValue;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 
@@ -190,23 +194,23 @@ public class SqlSourceQuery implements SourceLedger {
     case Types.BIGINT:
       {
         long longVal = rs.getLong(col);
-        return rs.wasNull() ? NULL_VALUE : new NumberValue(longVal);
+        return rs.wasNull() ? NULL_VALUE : new LongValue(longVal);
       }
     case Types.DATE:
       {
         Date date = rs.getDate(col);
-        return date == null ? NULL_VALUE : new NumberValue(date.getTime());
+        return date == null ? NULL_VALUE : new LongValue(date.getTime());
       }
     case Types.TIME:
       {
         Time time = rs.getTime(col);
-        return time == null ? NULL_VALUE : new NumberValue(time.getTime());
+        return time == null ? NULL_VALUE : new LongValue(time.getTime());
       }
     case Types.TIMESTAMP:
       {
         
         Timestamp timestamp = rs.getTimestamp(col);
-        return timestamp == null ? NULL_VALUE : new NumberValue(timestamp.getTime());
+        return timestamp == null ? NULL_VALUE : new LongValue(timestamp.getTime());
       }
     case Types.NULL: return NULL_VALUE;
     
@@ -252,7 +256,7 @@ public class SqlSourceQuery implements SourceLedger {
       // see https://docs.oracle.com/javase/tutorial/jdbc/basics/retrieving.html#retrieve_rs
       //
       String stringVal = rs.getString(col);
-      return stringVal == null ? ColumnValue.NULL_VALUE : new ColumnValue.StringValue(stringVal);
+      return stringVal == null ? ColumnValue.NULL_VALUE : new StringValue(stringVal);
     }
   }
 
