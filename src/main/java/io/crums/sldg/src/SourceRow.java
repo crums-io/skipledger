@@ -19,27 +19,62 @@ import java.util.List;
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.io.channels.ChannelUtils;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SkipLedger;
+import io.crums.sldg.SourceLedger;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 
 /**
- * A simple model for the source data that makes up the <em>input-hash</em> for a
- * skip ledger row.
+ * A simple model for a source row that makes up the <em>input-hash</em> in an
+ * individual row in a skip ledger.
+ * 
+ * <h2>Data Model</h2>
+ * <p>
+ * A row is a non-empty, ordered list of {@linkplain ColumnValue}s. There is no other constraint
+ * on the structure of rows across a {@linkplain SourceLedger} (the rows' columns may vary in number
+ * or type).
+ * </p>
+ * 
+ * <h2>Row Hash</h2>
+ * <p>
+ * A source row's SHA-256 hash is computed from the concatentation of the hashes
+ * of its individual column-values. This supports redacting individual column-values
+ * by substituting the column-value's hash for its actual value.
+ * </p>
+ * <h3>Salting</h3>
+ * <p>
+ * Column-values are salted before hashing. Moreover, each column-value is salted uniquely
+ * across the ledger.
+ * The purpose of this salting is to guard against reverse-engineering a
+ * value from its hash using rainbow attacks. Therefore, whenever a column-value
+ * is revealed, it's unique salt must be included so that its hash can be validated.
+ * </p><p>
+ * Fortunately, we don't have to store these individual column-value (table-cell) salts
+ * anywhere: instead, they can each be derived deterministically from a single, secret,
+ * user-generated key (see {@linkplain TableSalt}).
+ * </p>
  */
 public class SourceRow implements Serial {
   
   
 
   
-  
-  public static SourceRow load(ByteBuffer in) {
+  /**
+   * Loads the given row from memory. The remaining bytes in the given buffer must not be
+   * modified once this method is called.
+   *  
+   * @param in
+   * @return
+   */
+  public static SourceRow load(ByteBuffer in) throws ByteFormatException {
     final long rowNumber = in.getLong();
-    SkipLedger.checkRealRowNumber(rowNumber);
+    if (rowNumber <= 0)
+      throw new ByteFormatException("read illegal row number " + rowNumber);
     final int count = 0xffff & in.getShort();
     if (count < 1)
-      throw new IllegalArgumentException("empty column values");
+      throw new ByteFormatException("empty column values");
     ColumnValue[] columns = new ColumnValue[count];
     for (int index = 0; index < count; ++index)
       columns[index] = ColumnValue.loadValue(in);
@@ -47,8 +82,14 @@ public class SourceRow implements Serial {
   }
   
   
-  
-  public static SourceRow newSaltedInstance(long rowNumber, TableSalt shaker, Object...colValues) {
+  /**
+   * Creates and returns a salted instance.
+   * 
+   * @param shaker non-null
+   * 
+   * @see ColumnValue#toInstance(Object, ByteBuffer)
+   */
+  public static SourceRow newSaltedInstance(long rowNumber, TableSalt shaker, Object... colValues) {
     SkipLedger.checkRealRowNumber(rowNumber);
     ColumnValue[] columns = new ColumnValue[colValues.length];
     for (int index = colValues.length; index-- > 0; )
@@ -62,6 +103,10 @@ public class SourceRow implements Serial {
   private final List<ColumnValue> columns;
   
   
+  /**
+   * Creates an unsalted instance. This constructor will likely be deprecated in a future
+   * version. It's included here for now for completeness.
+   */
   public SourceRow(long rowNumber, Object... colValues) {
     this(
         rowNumber,

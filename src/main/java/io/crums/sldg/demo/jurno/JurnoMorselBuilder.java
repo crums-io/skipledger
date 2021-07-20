@@ -15,7 +15,7 @@ import io.crums.sldg.packs.LedgerMorselBuilder;
 import io.crums.sldg.src.SourceRow;
 
 /**
- * Builds a morsel from a {@linkplain Journal}.
+ * Builds a morsel from a {@linkplain ProtoJournal}.
  * 
  * <h3>Design Note</h3>
  * <p>
@@ -25,7 +25,7 @@ import io.crums.sldg.src.SourceRow;
  */
 public class JurnoMorselBuilder {
   
-  private final Journal journal;
+  private final ProtoJournal journal;
   private final LedgerMorselBuilder builder;
 
   /**
@@ -34,13 +34,13 @@ public class JurnoMorselBuilder {
    * 
    * @param journal non-empty journal
    */
-  public JurnoMorselBuilder(Journal journal) {
+  public JurnoMorselBuilder(ProtoJournal journal) {
     this(journal, true);
   }
   
   
   
-  public JurnoMorselBuilder(Journal journal, boolean checkState) {
+  public JurnoMorselBuilder(ProtoJournal journal, boolean checkState) {
     if (Objects.requireNonNull(journal, "null journal").getLedgeredLines() == 0)
       throw new IllegalArgumentException("empty journal: " + journal);
     

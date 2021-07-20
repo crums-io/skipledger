@@ -8,17 +8,40 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Objects;
 
+import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.SldgConstants;
 
 /**
  * A method to salt table cells with <em>unique</em> values per cell coordinate. In this model
  * the <em>seed salt</em> is kept secret.
+ * 
+ * <p>Since this seed is secret, this class manages erasing it with the {@linkplain #close()}
+ * method.</p>
  */
-public class TableSalt {
+public class TableSalt implements AutoCloseable {
   
-  private final MessageDigest digest = SldgConstants.DIGEST.newDigest();
+  
+  /**
+   * Null instance. Does not salt; overrides {@linkplain #salt(long, long)} to return an
+   * empty buffer. Stateless: closing this instance has no effect.
+   */
+  public final static TableSalt NULL_SALT = new TableSalt() {
+    @Override
+    public ByteBuffer salt(long row, long col) {
+      return BufferUtils.NULL_BUFFER;
+    }
+    @Override
+    public void close() { }
+  };
+  
   
   private final ByteBuffer seed;
+  
+  private final MessageDigest digest;
+  
+  public TableSalt(byte[] seed) {
+    this(ByteBuffer.wrap(seed));
+  }
   
   
   /**
@@ -30,7 +53,14 @@ public class TableSalt {
   public TableSalt(ByteBuffer seed) {
     if (Objects.requireNonNull(seed, "null seed").remaining() != SldgConstants.HASH_WIDTH)
       throw new IllegalArgumentException("illegal remaining bytes: " + seed);
-    this.seed = ByteBuffer.allocate(SldgConstants.HASH_WIDTH).put(seed).flip().asReadOnlyBuffer();
+    this.seed = ByteBuffer.allocate(SldgConstants.HASH_WIDTH).put(seed).flip();
+    this.digest = SldgConstants.DIGEST.newDigest();
+  }
+  
+  
+  private TableSalt() {
+    seed = null;
+    digest = null;
   }
   
   
@@ -51,8 +81,13 @@ public class TableSalt {
    * @param col  column number
    * 
    * @return 32-bytes
+   * 
+   * @throws IllegalStateException if closed
+   * @see #close()
    */
-  public synchronized ByteBuffer salt(long row, long col) {
+  public synchronized ByteBuffer salt(long row, long col) throws IllegalStateException {
+    if (!seed.hasRemaining())
+      throw new IllegalStateException("instance is closed");
     digest.reset();
     digest.update(seed.slice());
     ByteBuffer coordinates = ByteBuffer.allocate(16);
@@ -62,7 +97,13 @@ public class TableSalt {
   }
   
   
-  
-  
+  /**
+   * Erases the instance's seed from memory. On return, {@linkplain #salt(long, long)}
+   * throws an exception.
+   */
+  @Override
+  public synchronized void close() {
+    seed.put(SldgConstants.DIGEST.sentinelHash());
+  }
 
 }

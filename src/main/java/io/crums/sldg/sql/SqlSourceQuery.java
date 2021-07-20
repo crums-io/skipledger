@@ -29,8 +29,10 @@ import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.HashValue;
 import io.crums.sldg.src.LongValue;
+import io.crums.sldg.src.NullValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
+import io.crums.sldg.src.TableSalt;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 
@@ -80,11 +82,16 @@ public class SqlSourceQuery implements SourceLedger {
     
     
     public SqlSourceQuery build(Connection con) throws SqlLedgerException {
+      return build(con, TableSalt.NULL_SALT);
+    }
+    
+    
+    public SqlSourceQuery build(Connection con, TableSalt shaker) throws SqlLedgerException {
       Objects.requireNonNull(con, "null connection");
       try {
         var szQuery = createSizeQuery(con);
         var rowByNumQuery = createRowByNumberQuery(con);
-        return new SqlSourceQuery(szQuery, rowByNumQuery);
+        return new SqlSourceQuery(szQuery, rowByNumQuery, shaker);
       
       } catch (SQLException sqx) {
         throw new SqlLedgerException("on build(" + con + "): " + sqx, sqx);
@@ -109,18 +116,28 @@ public class SqlSourceQuery implements SourceLedger {
   
   
   
-  private PreparedStatement sizeQuery;
-  private PreparedStatement rowByNumberQuery;
+  private final PreparedStatement sizeQuery;
+  private final PreparedStatement rowByNumberQuery;
+  private final TableSalt shaker;
 
   /**
    * 
    */
   public SqlSourceQuery(PreparedStatement sizeQuery, PreparedStatement rowByNumberQuery)
       throws SqlLedgerException {
+    this(sizeQuery, rowByNumberQuery, TableSalt.NULL_SALT);
+  }
+
+  /**
+   * 
+   */
+  public SqlSourceQuery(PreparedStatement sizeQuery, PreparedStatement rowByNumberQuery, TableSalt shaker)
+      throws SqlLedgerException {
     
     try {
       this.sizeQuery = Objects.requireNonNull(sizeQuery, "null sizeQuery");
       this.rowByNumberQuery = Objects.requireNonNull(rowByNumberQuery, "null rowByNumberQuery");
+      this.shaker = Objects.requireNonNull(shaker, "null shaker");
       
       if (sizeQuery.isClosed() || rowByNumberQuery.isClosed())
         throw new IllegalArgumentException("prepared statement[s] is closed");
@@ -135,6 +152,7 @@ public class SqlSourceQuery implements SourceLedger {
     try (TaskStack closer = new TaskStack()) {
       closer.pushClose(sizeQuery);
       closer.pushClose(rowByNumberQuery);
+      closer.pushClose(shaker);
     }
   }
 
@@ -169,7 +187,7 @@ public class SqlSourceQuery implements SourceLedger {
       // the row number is returned in the result set
       ColumnValue[] columns = new ColumnValue[columnCount - 1];
       for (int col = 2; col <= columnCount; ++col)
-        columns[col - 2] = getColumnValue(rs, meta, col);
+        columns[col - 2] = getColumnValue(rs, meta, rn, col);
       
       return new SourceRow(rn, columns);
       
@@ -179,12 +197,7 @@ public class SqlSourceQuery implements SourceLedger {
   }
   
   
-  private ColumnValue getColumnValue(ResultSet rs, ResultSetMetaData meta, int col) throws SQLException {
-    return getColumnValue(rs, meta, col, DEFAULT_MAX_COL_MEM_SIZE);
-  }
-  
-  
-  private ColumnValue getColumnValue(ResultSet rs, ResultSetMetaData meta, int col, int hashTriggerLen) throws SQLException {
+  private ColumnValue getColumnValue(ResultSet rs, ResultSetMetaData meta, long rn, int col) throws SQLException {
     int sqlType = meta.getColumnType(col);
     switch (sqlType) {
     case Types.BOOLEAN:
@@ -194,23 +207,23 @@ public class SqlSourceQuery implements SourceLedger {
     case Types.BIGINT:
       {
         long longVal = rs.getLong(col);
-        return rs.wasNull() ? NULL_VALUE : new LongValue(longVal);
+        return rs.wasNull() ? new NullValue(shaker.salt(rn, col)) : new LongValue(longVal, shaker.salt(rn, col));
       }
     case Types.DATE:
       {
         Date date = rs.getDate(col);
-        return date == null ? NULL_VALUE : new LongValue(date.getTime());
+        return date == null ? new NullValue(shaker.salt(rn, col)) : new LongValue(date.getTime());
       }
     case Types.TIME:
       {
         Time time = rs.getTime(col);
-        return time == null ? NULL_VALUE : new LongValue(time.getTime());
+        return time == null ? new NullValue(shaker.salt(rn, col)) : new LongValue(time.getTime());
       }
     case Types.TIMESTAMP:
       {
         
         Timestamp timestamp = rs.getTimestamp(col);
-        return timestamp == null ? NULL_VALUE : new LongValue(timestamp.getTime());
+        return timestamp == null ? new NullValue(shaker.salt(rn, col)) : new LongValue(timestamp.getTime());
       }
     case Types.NULL: return NULL_VALUE;
     
@@ -222,14 +235,13 @@ public class SqlSourceQuery implements SourceLedger {
         
         final long len = blob.length();
         try (var stream = blob.getBinaryStream()) {
-          if (len > hashTriggerLen) {
+          if (len > DEFAULT_MAX_COL_MEM_SIZE) {
             MessageDigest digest = SldgConstants.DIGEST.newDigest();
-            byte[] in = new byte[Math.min(hashTriggerLen, 4096)];
+            byte[] in = new byte[DEFAULT_MAX_COL_MEM_SIZE];
             while (true) {
               int amtRead = stream.read(in);
               if (amtRead == -1)
                 break;
-              assert amtRead > 0;
               digest.update(in, 0, amtRead);
             }
             

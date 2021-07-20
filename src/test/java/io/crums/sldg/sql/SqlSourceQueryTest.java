@@ -10,6 +10,7 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.Calendar;
+import java.util.Random;
 
 import static io.crums.sldg.sql.SqlTestHarness.*;
 
@@ -17,10 +18,12 @@ import  org.junit.Test;
 
 import com.gnahraf.test.IoTestCase;
 
+import io.crums.sldg.SldgConstants;
 import io.crums.sldg.src.ColumnType;
 import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
+import io.crums.sldg.src.TableSalt;
 
 /**
  * 
@@ -30,7 +33,28 @@ public class SqlSourceQueryTest extends IoTestCase {
   
   @Test
   public void testOne() throws Exception {
-    final Object label = new Object() { };
+    Object label = new Object() { };
+    testOneImpl(TableSalt.NULL_SALT, label);
+  }
+  
+  @Test
+  public void testOneSalted() throws Exception {
+    Object label = new Object() { };
+    testOneImpl(randomShaker(1), label);
+  }
+  
+  
+  private TableSalt randomShaker(long init) {
+
+    Random random = new Random(init);
+    byte[] seed = new byte[SldgConstants.HASH_WIDTH];
+    random.nextBytes(seed);
+    return new TableSalt(seed);
+  }
+  
+  
+  private void testOneImpl(TableSalt shaker, Object label) throws Exception {
+
     String createSql =
         "CREATE TABLE inventory (\n" +
         "  entry_no BIGINT NOT NULL AUTO_INCREMENT,\n" +
@@ -50,7 +74,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       
       SqlSourceQuery srcLedger = new SqlSourceQuery.Builder(
           "inventory",
-          "entry_no", "entry_type", "serial_no_1", "serial_no_2", "entry_date", "entry_name").build(con);
+          "entry_no", "entry_type", "serial_no_1", "serial_no_2", "entry_date", "entry_name").build(con, shaker);
 
       
       assertEquals(0, srcLedger.size());
@@ -169,7 +193,6 @@ public class SqlSourceQueryTest extends IoTestCase {
       assertStringValue(srcRow, 5, "K 6x Muha");
     }
   }
-  
   
   
   private void assertNumberValue(SourceRow srcRow, int index, long value) {

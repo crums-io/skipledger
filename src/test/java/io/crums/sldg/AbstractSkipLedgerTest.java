@@ -194,6 +194,9 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
         ByteBuffer entryHash = ByteBuffer.wrap(mHashes[index]);
         assertRowPointers(ledger, rowNumber, entryHash);
       }
+    } catch (Throwable t) {
+      t.printStackTrace();
+      throw t;
     }
 
     System.out.println(" [DONE]");

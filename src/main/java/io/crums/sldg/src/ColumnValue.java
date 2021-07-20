@@ -30,14 +30,40 @@ public abstract class ColumnValue implements Serial {
   
   
   /**
-   * @deprecated use salted version instead
+   * Returns an unsalted instance. Generally not a good idea. This may be marked
+   * deprecated in a future version. For now included for closure.
    */
   public static ColumnValue toInstance(Object obj) {
     return toInstance(obj, BufferUtils.NULL_BUFFER);
   }
   
   
-  
+  /**
+   * Converts and returns the given object as an instance of this class using the given {@code salt},
+   * if any. If the object is already an instance of this class, then it is returned as-is;
+   * If the given salt buffer is empty, then an unsalted instance is returned.
+   * 
+   * <h2>Supported Object Types</h2>
+   * 
+   * <p>
+   * <ul>
+   * <li>{@code byte[]}. Maximum 64kB.</li>
+   * <li>{@code ByteBuffer}. Maximum 64kB.</li>
+   * <li>{@code CharSequence}. Maximum 64kB in UTF-8.</li>
+   * <li>{@code Number}. Whether floating-point or integral, represented by 8-byte values (doubles and longs).
+   * Note if a value falls outside the range of a {@code double} or {@code long}, then undefined behavior (bad)
+   * ensues.</li>
+   * <li>{@code null}. Nulls are mapped to a special type and are usually salted.</li>
+   * </ul>
+   * </p><p>
+   * Note in addition to the special handling for numbers, the byte-types {@code byte[]} and @code ByteBuffer}
+   * specially interpret 32-byte values as hashes. Such hashes are converted to {@linkplain HashValue} instances.
+   * </p>
+   * 
+   * @param obj  either {@code null}, or one of the allowed object types
+   * @param salt
+   * @return
+   */
   public static ColumnValue toInstance(Object obj, ByteBuffer salt) {
     if (obj == null) {
       return NullValue.nullInstance(salt);
@@ -58,7 +84,7 @@ public abstract class ColumnValue implements Serial {
       if (num instanceof Float || num instanceof Double)
         return new DoubleValue(num.doubleValue(), salt);
       else
-        return new LongValue(((Number) obj).longValue());
+        return new LongValue(num.longValue(), salt);
     
     } else if (obj instanceof ColumnValue) {
       return (ColumnValue) obj;

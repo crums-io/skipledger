@@ -10,6 +10,8 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Objects;
 
+import io.crums.sldg.cache.RowCache;
+
 /**
  * Base implementation. This uses a pluggable storage abstraction
  * {@linkplain SkipTable}.
@@ -19,10 +21,25 @@ import java.util.Objects;
 public class CompactSkipLedger extends SkipLedger {
   
   private final SkipTable table;
-  
+  protected final RowCache cache;
   
   public CompactSkipLedger(SkipTable table) {
+    this(table, null);
+  }
+  
+  public CompactSkipLedger(SkipTable table, RowCache cache) {
     this.table = Objects.requireNonNull(table, "null table");
+    this.cache = cache;
+  }
+  
+  protected void primeCache() {
+    if (cache == null)
+      return;
+    
+    cache.clearAll();
+    long lastRn = size();
+    if (lastRn != 0)
+      getRow(lastRn);
   }
   
   @Override
@@ -107,11 +124,31 @@ public class CompactSkipLedger extends SkipLedger {
 
   @Override
   public Row getRow(long rowNumber) {
-    return new LazyRow(rowNumber, table.readRow(rowNumber - 1));
+    Row row;
+    
+    if (cache != null) {
+      row = cache.getRow(rowNumber);
+      if (row != null)
+        return row;
+      
+      row = new LazyRow(rowNumber, table.readRow(rowNumber - 1));
+      cache.pushRow(row);
+    
+    } else
+      row = new LazyRow(rowNumber, table.readRow(rowNumber - 1));
+    
+    return row;
   }
 
   @Override
   public ByteBuffer rowHash(long rowNumber) {
+    if (cache != null) {
+      if (rowNumber == 0)
+        return sentinelHash();
+      SerialRow row = cache.getRow(rowNumber);
+      if (row != null)
+        return row.hash();
+    }
     return rowHash(rowNumber, table);
   }
   
@@ -157,8 +194,7 @@ public class CompactSkipLedger extends SkipLedger {
       this.rowNumber = rowNumber;
       this.row = row.remaining() == row.capacity() ? row : row.slice();
 
-      assert rowNumber > 0;
-      assert row.remaining() == SkipTable.ROW_WIDTH;
+      assert rowNumber > 0 && row.remaining() == SkipTable.ROW_WIDTH;
     }
 
     @Override

@@ -19,7 +19,7 @@ import java.util.List;
 import io.crums.client.ClientException;
 import io.crums.io.Opening;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.demo.jurno.Journal;
+import io.crums.sldg.demo.jurno.ProtoJournal;
 import io.crums.sldg.demo.jurno.JurnoMorselBuilder;
 import io.crums.sldg.fs.HashLedgerDir;
 import io.crums.sldg.time.TrailedRow;
@@ -34,7 +34,7 @@ import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * Manages a {@linkplain Journal journal}ed text file from the command line.
+ * Manages a {@linkplain ProtoJournal journal}ed text file from the command line.
  */
 public class Jurno extends MainTemplate {
   
@@ -92,7 +92,7 @@ public class Jurno extends MainTemplate {
   private boolean abortOnFork;
   
   
-  private Journal journal;
+  private ProtoJournal journal;
   
   private MakeMorselCmd makeMorsel;
   
@@ -217,7 +217,7 @@ public class Jurno extends MainTemplate {
   protected void start() throws IOException {
     if (opening != null) {
       HashLedgerDir db = new HashLedgerDir(ledgerDir, opening, true);
-      this.journal = new Journal(textFile, db);
+      this.journal = new ProtoJournal(textFile, db);
       switch (command) {
       case CREATE:
       case UPDATE:

@@ -237,6 +237,20 @@ public class Path implements Digest {
   
   
   
+  public Row getRowByNumber(long rowNumber) throws IllegalArgumentException {
+    
+    final List<Long> rowNumbers = rowNumbers();
+    
+    int index = Collections.binarySearch(rowNumbers, rowNumber);
+    
+    if (index < 0)
+      throw new IllegalArgumentException("no such row [" + rowNumber + "]");
+    
+    return rows().get(index);
+  }
+  
+  
+  
   /**
    * Returns the row with lowest row-number that knows about the given <tt>rowNumber</tt>.
    * I.e. if this path instance has a row with the given <tt>rowNumber</tt> then that row

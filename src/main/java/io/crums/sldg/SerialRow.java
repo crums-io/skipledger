@@ -13,6 +13,14 @@ import java.util.Objects;
 public class SerialRow extends BaseRow {
 
   
+  /**
+   * Returns the given row as an instance of this class, if it already
+   * isn't one.
+   */
+  public static SerialRow toInstance(Row row) {
+    return (row instanceof SerialRow) ? (SerialRow) row : new SerialRow(row);
+  }
+  
   
   
   private final long rowNumber;
@@ -32,11 +40,14 @@ public class SerialRow extends BaseRow {
   
   /**
    * Copy constructor.
+   * 
+   * @throws NullPointerException if the argument is null
    */
   public SerialRow(Row copy) {
     this.rowNumber = copy.rowNumber();
     this.data = copy.data();
     // we can do above cuz subclass cannot be defined outside package
+    // (well not exactly: I broke this rule with BaggedRow)
   }
 
   SerialRow(long rowNumber, ByteBuffer data, boolean ignored) {

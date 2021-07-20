@@ -11,6 +11,7 @@ import io.crums.io.Opening;
 import io.crums.sldg.CompactSkipLedger;
 import io.crums.sldg.Row;
 import io.crums.sldg.SerialRow;
+import io.crums.sldg.cache.RowCache;
 
 /**
  * A skip ledger stored directly in a file.
@@ -51,7 +52,26 @@ public class SkipLedgerFile extends CompactSkipLedger {
    * @param lazy if {@code true} then the row's hashpointers are lazily loaded ({@code false} by default)
    */
   public SkipLedgerFile(File file, Opening mode, boolean lazy) throws IOException {
-    super(new SkipTableFile(file, mode));
+    this(file, mode, lazy, null);
+  }
+
+  /**
+   * Creates a new or loads an existing ledger at the given {@code file} path with
+   * the given {@linkplain Opening opening} {@code mode}.
+   * 
+   * <p>By default, {@linkplain Row} instances <em>are not lazily loaded</em>,
+   * i.e. they're pre-loaded, since if the row is to be serialized
+   * externally anyway, it's better to fetch the data immediately while "disk" caches are still
+   * hot. If the user however is just scanning rows, then the lazy version generally
+   * performs better.
+   * 
+   * @param file path to a regular file
+   * @param mode non-null
+   * @param lazy if {@code true} then the row's hashpointers are lazily loaded ({@code false} by default)
+   * @param cache row-cache. <em>Optional argument.</em>
+   */
+  public SkipLedgerFile(File file, Opening mode, boolean lazy, RowCache cache) throws IOException {
+    super(new SkipTableFile(file, mode), cache);
     this.lazy = lazy;
   }
 
@@ -59,7 +79,7 @@ public class SkipLedgerFile extends CompactSkipLedger {
   @Override
   public Row getRow(long rowNumber) {
     Row row = super.getRow(rowNumber);
-    return lazy ? row : new SerialRow(row);
+    return lazy ? row : SerialRow.toInstance(row);
   }
 
 }

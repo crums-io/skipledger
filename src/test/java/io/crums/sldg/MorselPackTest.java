@@ -28,6 +28,7 @@ import io.crums.sldg.bags.MorselBag;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.src.TableSalt;
 import io.crums.util.hash.Digests;
 import io.crums.util.mrkl.Builder;
 import io.crums.util.mrkl.FixedLeafBuilder;
@@ -242,6 +243,102 @@ public class MorselPackTest extends IoTestCase {
       }
       assertTrue( ledger.size() == rn - 1) ;
       srcs[index] = new SourceRow(rn, col1[index], col2[index]);
+      ledger.appendRows(srcs[index].rowHash());
+    }
+    while (ledger.size() < finalSize) {
+      random.nextBytes(randHash);
+      ledger.appendRows(ByteBuffer.wrap(randHash));
+    }
+    
+    MorselPackBuilder builder = new MorselPackBuilder();
+    builder.initPath(ledger.statePath(), comment);
+    for (var src : srcs) {
+      builder.addPathToTarget(src.rowNumber(), ledger);
+      builder.addSourceRow(src);
+    }
+    
+    long witRow = ((srcs[0].rowNumber() + 1) / 16) * 16;
+    builder.addPathToTarget(witRow, ledger);
+    
+    CrumTrail trail = mockCrumTrail(builder, witRow);
+    builder.addTrail(witRow, trail);
+    
+    for (var src : srcs)
+      assertInBag(src, builder);
+    
+    File mFile = getMethodOutputFilepath(label);
+    
+    MorselFile.createMorselFile(mFile, builder);
+    
+    MorselFile morselFile = new MorselFile(mFile);
+    
+    MorselPack pack = morselFile.getMorselPack();
+
+    
+    assertInBag(ledger.skipPath(srcs[0].rowNumber(), builder.hi()), pack);
+    assertStateDeclaration(ledger, pack, comment);
+    
+
+    for (var src : srcs)
+      assertInBag(src, pack);
+    
+    assertInBag(trail, witRow, pack);
+    
+  }
+  
+  
+
+  
+  
+  private TableSalt randomShaker(long init) {
+
+    Random random = new Random(init);
+    byte[] seed = new byte[SldgConstants.HASH_WIDTH];
+    random.nextBytes(seed);
+    return new TableSalt(seed);
+  }
+  
+  
+  @Test
+  public void testWithSources_3_Salty() throws IOException {
+
+    final Object label = new Object() { };
+
+    final int finalSize = 2021;
+    
+    final String comment = "this is not a real comment";
+    
+    final TableSalt shaker = randomShaker(101);
+    
+    int[] srcRns = {
+        1574,
+        1580
+    };
+    String[] col1 = {
+        "this is a test",
+        "this is _only_ a test",
+    };
+    
+    Number[] col2 = { 23, null };
+    
+    // prepare the ledger..
+    
+    SkipLedger ledger = newLedger();
+    Random random = new Random(finalSize);
+    
+    SourceRow[] srcs = new SourceRow[srcRns.length];
+    byte[] randHash = new byte[SldgConstants.HASH_WIDTH];
+    
+    for (int index = 0; index < srcRns.length; ++index) {
+      
+      final long rn = srcRns[index];
+      
+      while (ledger.size() + 1 < rn) {
+        random.nextBytes(randHash);
+        ledger.appendRows(ByteBuffer.wrap(randHash));
+      }
+      assertTrue( ledger.size() == rn - 1) ;
+      srcs[index] = SourceRow.newSaltedInstance(rn, shaker, col1[index], col2[index]);
       ledger.appendRows(srcs[index].rowHash());
     }
     while (ledger.size() < finalSize) {

@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 
 /**
  * Storage interface for skip ledger. Note the row indexing here, unlike
- * {@linkplain Ledger}, is 0-based.
+ * {@linkplain SkipLedger}, is 0-based.
  * 
  * @see SldgConstants#DIGEST
  */
