@@ -170,7 +170,7 @@ public class SqlSourceQuery implements SourceLedger {
   }
 
   @Override
-  public synchronized SourceRow getSourceByRowNumber(long rn) {
+  public synchronized SourceRow getSourceRow(long rn) {
     try {
       rowByNumberQuery.setLong(1, rn);
       ResultSet rs = rowByNumberQuery.executeQuery();

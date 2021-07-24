@@ -7,32 +7,23 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Collections;
-import java.util.Objects;
 import java.util.SortedSet;
 
 import io.crums.util.IntegralStrings;
-import io.crums.util.hash.Digest;
 
 /**
  * A row in a ledger. Instances have immutable state.
+ * 
+ * @see RowHash#prevLevels()
+ * @see RowHash#prevRowNumber(int)
  */
-public abstract class Row implements Digest {
+public abstract class Row extends RowHash {
   
   
   /**
    * Concrete (base) implementations defined only in this package.
    */
   Row() {  }
-  
-  
-  /**
-   * Returns the row number.
-   * 
-   * @return &ge; 1
-   * 
-   * @see #equals(Object)
-   */
-  public abstract long rowNumber();
   
 
   /**
@@ -65,7 +56,7 @@ public abstract class Row implements Digest {
   }
   
   /**
-   * Returns the hash of this row.
+   * {@inheritDoc}
    * 
    * @return may be read-only, {@linkplain #hashWidth()} bytes remaining
    * 
@@ -123,60 +114,6 @@ public abstract class Row implements Digest {
    * @return non-null, {@linkplain #hashWidth()} bytes wide
    */
   public abstract ByteBuffer prevHash(int level);
-  
-
-  /**
-   * Returns the number of hash pointers in this row referencing previous rows.
-   * These are called levels, because each successive {@linkplain #prevHash(int) previous hash}
-   * points to a row numbered twice as far away as the level before it.
-   * 
-   * @return &ge; 1
-   */
-  public final int prevLevels() {
-    return SkipLedger.skipCount(rowNumber());
-  }
-  
-  /**
-   * Returns the row number linked to at the given {@code level}.
-   * 
-   * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
-   * 
-   * @return {@code rowNumber() - (1L << level)}
-   * @see #hash(long)
-   */
-  public final long prevRowNumber(int level) {
-    long rn = rowNumber();
-    Objects.checkIndex(level, SkipLedger.skipCount(rn));
-    return rn - (1L << level);
-  }
-  
-
-  /**
-   * Equality semantics depend on {@linkplain #hash() hash}, and
-   * {@linkplain #rowNumber() row number}.
-   * 
-   * @see #hashCode()
-   */
-  @Override
-  public final boolean equals(Object o) {
-    if (o == this)
-      return true;
-    else if (o instanceof Row) {
-      Row other = (Row) o;
-      return other.rowNumber() == rowNumber() && other.hash().equals(hash());
-    } else
-      return false;
-  }
-  
-
-  /**
-   * Consistent with {@linkplain #equals(Object)}. Implemented for the Java
-   * Collections classes.
-   */
-  @Override
-  public final int hashCode() {
-    return Long.hashCode(rowNumber());
-  }
   
   
   @Override

@@ -38,7 +38,7 @@ public interface SourceLedger extends AutoCloseable {
    * 
    * @return non-null
    */
-  SourceRow getSourceByRowNumber(long rn);
+  SourceRow getSourceRow(long rn);
   
   
   

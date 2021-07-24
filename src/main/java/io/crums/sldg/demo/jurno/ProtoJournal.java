@@ -142,8 +142,6 @@ public class ProtoJournal implements Closeable {
   
   /**
    * Returns the directory the backing ledger is kept in.
-   * 
-   * @see #ledgerDir()
    */
   public File ledgerDir() {
     return db.getDir();

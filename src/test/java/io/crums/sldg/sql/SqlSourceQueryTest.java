@@ -92,7 +92,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       
       assertEquals(1L, srcLedger.size());
       
-      SourceRow srcRow = srcLedger.getSourceByRowNumber(1);
+      SourceRow srcRow = srcLedger.getSourceRow(1);
       assertEquals(1, srcRow.rowNumber());
       assertEquals(6, srcRow.getColumns().size());
       
@@ -155,7 +155,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       
       assertEquals(2L, srcLedger.size());
       
-      SourceRow srcRow = srcLedger.getSourceByRowNumber(1);
+      SourceRow srcRow = srcLedger.getSourceRow(1);
       assertEquals(1, srcRow.rowNumber());
       assertEquals(6, srcRow.getColumns().size());
       
@@ -166,7 +166,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       assertNullValue(srcRow, 4);
       assertStringValue(srcRow, 5, "V 3.125 AFR 90");
       
-      srcRow = srcLedger.getSourceByRowNumber(2);
+      srcRow = srcLedger.getSourceRow(2);
       assertEquals(2, srcRow.rowNumber());
       assertEquals(6, srcRow.getColumns().size());
       

@@ -14,7 +14,7 @@ import io.crums.sldg.bags.RowBag;
  * plus other classes like {@linkplain Path} validate data on construction,
  * besides.
  */
-public class BaggedRow extends BaseRow {
+public class BaggedRow extends Row {
   
   private final long rowNumber;
   private final RowBag bag;

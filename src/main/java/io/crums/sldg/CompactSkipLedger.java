@@ -185,7 +185,7 @@ public class CompactSkipLedger extends SkipLedger {
   /**
    * Lazy-loading row.
    */
-  final class LazyRow extends BaseRow {
+  final class LazyRow extends Row {
     
     private final long rowNumber;
     private final ByteBuffer row;

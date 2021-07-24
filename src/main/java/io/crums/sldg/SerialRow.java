@@ -10,7 +10,7 @@ import java.util.Objects;
 /**
  * A row loaded from serial form.
  */
-public class SerialRow extends BaseRow {
+public class SerialRow extends Row {
 
   
   /**

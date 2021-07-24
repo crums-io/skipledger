@@ -187,6 +187,16 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  public SourceLedger getSourceLedger() {
+    return srcLedger;
+  }
+  
+  
+  public HashLedger getHashLedger() {
+    return hashLedger;
+  }
+  
+  
   /**
    * Sets the progress ticker.
    * 
@@ -515,7 +525,7 @@ public class Ledger implements AutoCloseable {
     
     while (rows.hasNext()) {
       long rn = rows.next();
-      SourceRow srcRow = srcLedger.getSourceByRowNumber(rn);
+      SourceRow srcRow = srcLedger.getSourceRow(rn);
       Row row = skipLedger.getRow(rn);
       ticker.tick();
       
@@ -621,7 +631,7 @@ public class Ledger implements AutoCloseable {
     
     SkipLedger skipLedger = hashLedger.getSkipLedger();
     for (long nextRow = lastCommit + 1; nextRow <= lastTargetCommit; ++nextRow) {
-      SourceRow srcRow = srcLedger.getSourceByRowNumber(nextRow);
+      SourceRow srcRow = srcLedger.getSourceRow(nextRow);
       skipLedger.appendRows(srcRow.rowHash());
       ticker.tick();
     }
@@ -659,7 +669,7 @@ public class Ledger implements AutoCloseable {
       SkipLedger.checkRealRowNumber(rn);
       if (rn > maxRow)
         throw new IllegalArgumentException("rowNumber " + rn + " out-of-bounds; max " + maxRow);
-      SourceRow srcRow = srcLedger.getSourceByRowNumber(rn);
+      SourceRow srcRow = srcLedger.getSourceRow(rn);
       builder.addSourceRow(srcRow);
     }
     return builder;

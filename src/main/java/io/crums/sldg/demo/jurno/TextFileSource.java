@@ -39,6 +39,11 @@ import io.crums.util.TaskStack;
  * <li>The first line doesn't count. You can use it as a comment line that can be edited.</li>
  * </ul>
  * </p>
+ * <h2>Implementation</h2>
+ * <p>
+ * At load time (instantiation), the instance parses the file to create an index of ledgerable
+ * lines and their offsets.
+ * </p>
  */
 public class TextFileSource implements SourceLedger {
   
@@ -94,6 +99,12 @@ public class TextFileSource implements SourceLedger {
   }
   
   
+  /**
+   * Refreshes the row-count, line numbers, and offsets.
+   * 
+   * @throws UncheckedIOException if an I/O error occurs, in which case the instance is automatically
+   *          closed on throwing this exception
+   */
   public synchronized void refresh() throws UncheckedIOException {
     try  {
       raf.seek(0);
@@ -146,6 +157,7 @@ public class TextFileSource implements SourceLedger {
       } // while
       
     } catch (IOException iox) {
+      close();
       throw new UncheckedIOException("on refresh()", iox);
     }
   }
@@ -162,8 +174,22 @@ public class TextFileSource implements SourceLedger {
     return lineOffsets.size();
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * <h3>Implementation Note</h3>
+   * <p>
+   * Each invocation causes a disk access. If the file has been modified since construction,
+   * or the last {@linkplain #refresh()} (appends are OK), then results are undefined.
+   * </p><p>
+   * Unlike {@linkplain #refresh()}, I/O errors in this method <em>do not</em> automatically
+   * {@linkplain #close() close} the instance. The rationale is that if the text file is
+   * changed from an external process, and an I/O error occurs, then the instance may
+   * recover with a refresh.
+   * </p>
+   */
   @Override
-  public synchronized SourceRow getSourceByRowNumber(long rn) {
+  public synchronized SourceRow getSourceRow(long rn) {
     if (rn < 1 || rn > lineOffsets.size())
       throw new IllegalArgumentException("rn out-of-bounds: " + rn);
     

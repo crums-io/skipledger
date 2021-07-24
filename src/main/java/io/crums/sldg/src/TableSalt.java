@@ -39,6 +39,14 @@ public class TableSalt implements AutoCloseable {
   
   private final MessageDigest digest;
   
+  
+
+  /**
+   * Constructs a new instance by copying the given the secret seed. By design, instances do not
+   * expose this value.
+   * 
+   * @param seed 32-byte high-entropy, secret seed (zero-ed on return)
+   */
   public TableSalt(byte[] seed) {
     this(ByteBuffer.wrap(seed));
   }
@@ -48,13 +56,18 @@ public class TableSalt implements AutoCloseable {
    * Constructs a new instance by copying the given the secret seed. By design, instances do not
    * expose this value.
    * 
-   * @param seed 32-byte high-entropy, secret seed
+   * @param seed 32-byte high-entropy, secret seed (zero-ed on return)
    */
   public TableSalt(ByteBuffer seed) {
     if (Objects.requireNonNull(seed, "null seed").remaining() != SldgConstants.HASH_WIDTH)
       throw new IllegalArgumentException("illegal remaining bytes: " + seed);
+    seed.mark();
     this.seed = ByteBuffer.allocate(SldgConstants.HASH_WIDTH).put(seed).flip();
     this.digest = SldgConstants.DIGEST.newDigest();
+    // clear the seed
+    if (!seed.isReadOnly()) {
+      seed.reset().put(SldgConstants.DIGEST.sentinelHash());
+    }
   }
   
   
