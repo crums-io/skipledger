@@ -163,7 +163,7 @@ public class MorselFile {
    * @throws ByteFormatException    if the file format is malformed
    * @throws HashConflictException  if the file is somehow corrupted, then the hashes won't match
    */
-  public MorselFile(File file) throws IOException, ByteFormatException, HashConflictException {
+  public MorselFile(File file) throws ByteFormatException, HashConflictException {
     this(file, false);
   }
   
@@ -178,7 +178,7 @@ public class MorselFile {
    * @throws ByteFormatException    if the file format is malformed
    * @throws HashConflictException  if the file is somehow corrupted, then the hashes won't match
    */
-  public MorselFile(File file, boolean direct) throws IOException, ByteFormatException, HashConflictException {
+  public MorselFile(File file, boolean direct) throws ByteFormatException, HashConflictException {
     int size;
     {
       long bytes =  Objects.requireNonNull(file, "null file").length();

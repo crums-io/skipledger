@@ -3,11 +3,15 @@
  */
 package io.crums.sldg;
 
+import java.util.Collections;
+import java.util.List;
+
 import io.crums.client.ClientException;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 import io.crums.sldg.time.WitnessReport;
+import io.crums.util.Lists;
 
 /**
  * An opaque skip ledger, but with time (witness) information annotated.
@@ -37,6 +41,45 @@ public interface HashLedger extends AutoCloseable {
     return getSkipLedger().size();
   }
   
+  
+  default List<TrailedRow> getTrailedRows() {
+    return new Lists.RandomAccessList<TrailedRow>() {
+      final int size = getTrailCount();
+      @Override
+      public TrailedRow get(int index) {
+        return getTrailByIndex(index);
+      }
+      @Override
+      public int size() {
+        return size;
+      }
+    };
+  }
+  
+
+  /**
+   * Returns the row numbers that have {@linkplain CrumTrail}s. I.e.
+   * the rows that have been witnessed.
+   * 
+   * @return strictly ascending list of row numbers, possibly empty
+   * 
+   * @see #getCrumTrailByIndex(int)
+   */
+  default List<Long> getTrailedRowNumbers() {
+    return new Lists.RandomAccessList<Long>() {
+      final int size = getTrailCount();
+      @Override
+      public Long get(int index) {
+        return getTrailByIndex(index).rowNumber();
+      }
+      @Override
+      public int size() {
+        return size;
+      }
+    };
+  }
+  
+  
   /**
    * Adds the crumtrail in given witness record, if it's not already saved.
    * 
@@ -49,9 +92,11 @@ public interface HashLedger extends AutoCloseable {
   
   
   /**
-   * Returns the number of rows that have crumtrails.
+   * Returns the number of rows that have crumtrails (represented as {@linkplain TrailedRow} instances).
    * 
    * @return &ge; 0
+   * 
+   * @see #getTrailByIndex(int)
    */
   int getTrailCount();
   
@@ -71,7 +116,16 @@ public interface HashLedger extends AutoCloseable {
    * 
    * @param rowNumber &ge; 1
    */
-  TrailedRow nearestTrail(long rowNumber);
+  default TrailedRow nearestTrail(long rowNumber) {
+    var witRns = getTrailedRowNumbers();
+    int sindex = Collections.binarySearch(witRns, rowNumber);
+    if (sindex < 0) {
+      sindex = -1 - sindex;
+      if (sindex == witRns.size())
+        return null;
+    }
+    return getTrailByIndex(sindex);
+  }
   
   
   /**
@@ -79,7 +133,10 @@ public interface HashLedger extends AutoCloseable {
    * a witnessed row is just a ledger row with a {@linkplain CrumTrail} annotation
    * (represented as a {@linkplain TrailedRow}).
    */
-  long lastWitnessedRowNumber();
+  default long lastWitnessedRowNumber() {
+    List<Long> witRns = getTrailedRowNumbers();
+    return witRns.isEmpty() ? 0 : witRns.get(witRns.size() - 1);
+  }
   
   
 

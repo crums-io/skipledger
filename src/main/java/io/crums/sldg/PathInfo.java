@@ -33,7 +33,7 @@ public class PathInfo implements Serial {
     }
     String meta;
     {
-      int size = 0xff & in.getShort();
+      int size = 0xffff & in.getShort();
       if (size == 0)
         meta = null;
       else {
@@ -53,7 +53,8 @@ public class PathInfo implements Serial {
   public final static int MAX_DECLARATION_SIZE = 0xffff;
 
   /**
-   * Maximum number of characters in the meta string.
+   * Maximum number of characters in the meta string. (Allowing for 2-byte unicode,
+   * this should add up no greater than 64k inside a morsel.)
    */
   public final static int MAX_META_SIZE = 0xffff / 2;
   

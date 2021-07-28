@@ -35,7 +35,7 @@ import io.crums.util.Lists;
  * numbers, one loads an instance starting from the previous row number (via {@linkplain
  * #loadFrontier(SkipLedger, long)}) and then runs it forward (consuming the sequence of hashes)
  * to the last row number in the range (which doesn't involve accessing the skipledger) and then
- * verifies the frontier's {@linkplain #leadRow() hi-row} {@linkplain RowHash#hash() hash} matches
+ * verifies the frontier's {@linkplain #frontierRow() hi-row} {@linkplain RowHash#hash() hash} matches
  * the skipledger's {@linkplain SkipLedger#rowHash(long) row-hash} at that last row number in
  * the range.</p><br/></li>
  * <li><em>Internal use in skipledger write-path.</em><p>Appending rows to a skipledger
@@ -48,6 +48,16 @@ import io.crums.util.Lists;
  *   </ul>
  * </p></li>
  * </ol>
+ * </p>
+ * 
+ * <h2>Model &amp; state transitons</h2>
+ * <p>
+ * This class adds row-hash information to the parent model. (See {@linkplain Frontier}).
+ * </p><p>
+ * Instances are <em>immutable</em>. An instance itself doesn't track input-hashes, but it
+ * takes one in order to transiton from one {@linkplain #rowNumber() row number} to the next:
+ * {@linkplain #nextFrontier(ByteBuffer)}. In this way, the state of a skipledger can be
+ * "played forward" by only accessing the source-ledger.
  * </p>
  * 
  * @see #firstRow(ByteBuffer, MessageDigest)
@@ -68,11 +78,14 @@ public class HashFrontier extends Frontier {
    * Creates a first-row instance.
    * 
    * @param inputHash the input-hash for the first row (the hash of a row in a source ledger)
-   * @param digest    Optional. If non-null, its algo is <em>not checked for validity</em>.
+   * @param digest    Optional. Note if non-null, the algo is <em>not checked for validity</em>.
    * 
    * @return an instance positioned on row [1]
+   * 
+   * @throws NullPointerException if {@code inputHash} is {@code null}
    */
   public static HashFrontier firstRow(ByteBuffer inputHash, MessageDigest digest) {
+    inputHash = sliceInput(inputHash);
     if (inputHash.remaining() != SldgConstants.HASH_WIDTH)
       throw new IllegalArgumentException("inputHash has invalid remaining bytes: " + inputHash);
     if (digest == null)
@@ -95,6 +108,8 @@ public class HashFrontier extends Frontier {
    * @param rowNumber   &ge; 1 and &le; {@code skipLedger.size()}
    * 
    * @return an instance positioned at row [rowNumber] of the skipledger
+   * 
+   * @throws NullPointerException
    */
   public static HashFrontier loadFrontier(SkipLedger skipLedger, long rowNumber) {
     ByteBuffer hash = skipLedger.rowHash(rowNumber);
@@ -114,6 +129,7 @@ public class HashFrontier extends Frontier {
   
   
   
+  //        M E M B E R S   /   C O N S T R U C T O R S
   
   
   
@@ -128,10 +144,10 @@ public class HashFrontier extends Frontier {
    * 
    * @param frontierRows bag of rows that iterate in level order
    * 
-   * 
+   * @throws NullPointerException if argument is {@code null}
+   * @throws IllegalArgumentException if {@code frontierRows} don't form a valid frontier
    */
   public HashFrontier(Collection<? extends RowHash> frontierRows) {
-    Objects.requireNonNull(frontierRows, "null frontierRows");
     final int levels = frontierRows.size();
     if (levels == 0)
       throw new IllegalArgumentException("empty frontier rows");
@@ -199,14 +215,11 @@ public class HashFrontier extends Frontier {
   
   
   
+  //      M E T H O D S
   
   
   
-  
-  
-  
-  
-  
+  @Override
   public final int levelCount() {
     return levelFrontier.length;
   }
@@ -214,15 +227,30 @@ public class HashFrontier extends Frontier {
   
   
   
-  public final RowHash leadRow() {
+  /**
+   * Returns the frontier row.
+   * 
+   * @return row numbered {@linkplain #rowNumber()}
+   */
+  public final RowHash frontierRow() {
     return levelFrontier[0];
   }
   
   
   /**
+   * Returns the hash of the frontier row.
    * 
-   * @param level
-   * @return
+   * @return {@code frontierRow().hash()}
+   */
+  public final ByteBuffer frontierHash() {
+    return levelFrontier[0].hash();
+  }
+  
+  
+  /**
+   * Returns the row at the given level.
+   * 
+   * @param level &ge; 1 and &lt; {@linkplain #levelCount()}
    */
   public RowHash levelRow(int level) {
     return levelFrontier[level];
@@ -249,11 +277,11 @@ public class HashFrontier extends Frontier {
   
   
   public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
+    
     inputHash = sliceInput(inputHash);
-    final long rn = lead() + 1;
+    final long rn = rowNumber() + 1;
     
     final int skipCount = SkipLedger.skipCount(rn);
-    
     
     assert skipCount != levelFrontier.length; // cuz there can't be 2 top levels
     
@@ -261,9 +289,6 @@ public class HashFrontier extends Frontier {
     final boolean expand = skipCount > levelFrontier.length;
     
     assert !expand || skipCount == levelFrontier.length + 1 && rn == 2 * tail();
-    
-    
-    
     
 
     // compute the hash for the new row
@@ -319,7 +344,7 @@ public class HashFrontier extends Frontier {
   
 
   @Override
-  public final long lead() {
+  public final long rowNumber() {
     return levelFrontier[0].rowNumber();
   }
 

@@ -18,6 +18,29 @@ import io.crums.util.Lists;
  * An instance models the <em>minimum</em> information necessary to construct the next row
  * in a {@linkplain SkipLedger} <em>and every row after</em>.
  * </p>
+ * <h2>Model</h2>
+ * <p>
+ * Information in a frontier is broken into levels.
+ * Instead of a normative spec, let's describe this by example.
+ * Suppose the frontier is at row number {@code 101101} (in binary digits). An instance
+ * of this class for this row number would have as many levels as there are significant
+ * digits in the row number (i.e. as written here, or more concretely, 1 + high-bit-position
+ * of its 64-bit reprsentation). In our example our frontier has 6 levels.
+ * </p><p><pre><b>
+ *    Level  Row-number</b><code>
+ *    
+ *      0       101101
+ *      1       101100
+ *      2       101100
+ *      3       101000
+ *      4       101000
+ *      5       100000
+ * 
+ * </code></pre></p><p>
+ * Each of the row numbers at a these levels represents the row with which a next row
+ * will connect to, if that next row has a [hash] pointer connecting at that level to a
+ * previous row.
+ * </p>
  * 
  * @see HashFrontier
  */
@@ -64,7 +87,7 @@ public abstract class Frontier {
   /**
    * Returns the number of existing levels for this instance.
    * 
-   * @return {@code frontierRowNumbers().size()}
+   * @return the equivalent of {@code frontierRowNumbers().size()}
    */
   public int levelCount() {
     return levelRowNumbers().size();
@@ -74,9 +97,9 @@ public abstract class Frontier {
   /**
    * Returns the highest row number in the frontier. This just the row number at level zero.
    * 
-   * @return {@code levelRowNumbers().get(0)}
+   * @return the equivalent of {@code levelRowNumbers().get(0)}
    */
-  public long lead() {
+  public long rowNumber() {
     return levelRowNumbers().get(0);
   }
   
@@ -84,7 +107,7 @@ public abstract class Frontier {
   /**
    * Returns the lowest row number in the frontier.
    * 
-   * @return {@code levelRowNumbers().get(levelCount() - 1)}
+   * @return the equivalent of {@code levelRowNumbers().get(levelCount() - 1)}
    */
   public long tail() {
     return levelRowNumbers().get(levelCount() - 1);
@@ -92,7 +115,11 @@ public abstract class Frontier {
   
 
   
-  
+  /**
+   * Returns an instance of this class for the given row number.
+   * @param frontier
+   * @return
+   */
   public static Frontier newFrontier(long frontier) {
     return new Numbers(frontier);
   }
@@ -135,7 +162,7 @@ public abstract class Frontier {
     
     
     @Override
-    public final long lead() {
+    public final long rowNumber() {
       return frontierRn;
     }
     

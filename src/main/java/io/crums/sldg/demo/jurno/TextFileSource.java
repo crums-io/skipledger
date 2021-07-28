@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.StringTokenizer;
 
@@ -16,6 +18,7 @@ import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
 import io.crums.sldg.src.TableSalt;
+import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 
@@ -69,6 +72,8 @@ public class TextFileSource implements SourceLedger {
   private final TableSalt shaker;
   
   private final RandomAccessFile raf;
+  
+  private int linesInFile;
 
   /**
    * 
@@ -91,11 +96,23 @@ public class TextFileSource implements SourceLedger {
   }
   
   
+  public synchronized int getLinesInFile() {
+    return linesInFile;
+  }
+  
+  
   
   public synchronized int lineNumber(long rowNumber) {
     if (rowNumber > lineOffsets.size() || rowNumber < 1)
       throw new IllegalArgumentException("rowNumber out-of-bounds: " + rowNumber);
     return lineOffsets.get((int) rowNumber - 1).lineNo;
+  }
+  
+  
+  public synchronized int lineToRowNumber(int lineNumber) {
+    List<Integer> ledgeredLines = Lists.map(lineOffsets, loff -> loff.lineNo);
+    int si = Collections.binarySearch(ledgeredLines, lineNumber);
+    return si < 0 ? 0 : si + 1;
   }
   
   
@@ -109,6 +126,7 @@ public class TextFileSource implements SourceLedger {
     try  {
       raf.seek(0);
       lineOffsets.clear();
+      linesInFile = 0;
       
       // the first line is skipped: it can count as a neutral comment line
       //
@@ -122,11 +140,15 @@ public class TextFileSource implements SourceLedger {
           return;
       }
       
-      long lastLineOffset = raf.getFilePointer();
-      int lastLineNo = 1;
+      long pos = raf.getFilePointer();
+      long lineOffset = pos;
+      int lineNo = 2;
       boolean nonspaceHit = false;
       
+      
+      
       while (true) {
+        ++pos;
         
         switch (raf.read()) {
         case '\t':
@@ -136,18 +158,20 @@ public class TextFileSource implements SourceLedger {
           break;
         case '\n':
           if (nonspaceHit)
-            lineOffsets.add(new LineOffset(lastLineOffset, lastLineNo));
+            lineOffsets.add(new LineOffset(lineOffset, lineNo));
           
-          lastLineOffset = raf.getFilePointer();
-          ++lastLineNo;
-          assert lastLineNo > 1;  // int OVERFLOW check would go here
+          lineOffset = pos;
+          ++lineNo;
+          assert lineNo > 1;  // 2GB (of lines) OVERFLOW check
           nonspaceHit = false;
           break;
         
         case -1:
           // EOF
           if (nonspaceHit)
-            lineOffsets.add(new LineOffset(lastLineOffset, lastLineNo));
+            lineOffsets.add(new LineOffset(lineOffset, lineNo));
+          
+          linesInFile = lineNo;
           return;
         
         default:

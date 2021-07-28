@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.logging.Logger;
 
+import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.packs.LedgerMorselBuilder;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.SourceRow;
@@ -41,6 +42,16 @@ import io.crums.util.ticker.Ticker;
  * <li>If the hash-ledger is corrupted (internal consistency broken).</li>
  * <li>If the hash-ledger's first row does not match the source-ledger's first row.</li>
  * </ol>
+ * </p>
+ * <h2>Single Thread Model</h2>
+ * <p>
+ * An instance is an <em>oberserver</em> if {@linkplain SourceLedger} state. It cannot
+ * control or enforce the append-only protocol the source-ledger is supposed to observe,
+ * so it can only report if the source-ledger fails to do so. This requires an inherent
+ * single-thread model. 
+ * </p><p>
+ * Furthermore, since instances update their {@linkplain HashLedger}s, it's a bad idea
+ * to run 2 or the same instance concurrently against the same backing data.
  * </p>
  * 
  * @see SourceLedger
@@ -149,7 +160,16 @@ public class Ledger implements AutoCloseable {
   private final SourceLedger srcLedger;
   private final HashLedger hashLedger;
   
+  /**
+   * There are 2 columns in a skipledger's internal table: input-hash and row-hash.
+   * If we suspect someone other than this program may have somehow modified the
+   * the table, then this value is {@code true}. In that event, we must also
+   * check the input-hash "column" in the skip ledger jives with its row-hash column.
+   */
+  private final boolean trustHashLedger;
+  
   private Ticker ticker = Ticker.NOOP;
+  private int validateCheckpointSize = 1000;
   
   private State state;
   private long firstConflict;
@@ -165,7 +185,7 @@ public class Ledger implements AutoCloseable {
    * @see #close()
    */
   public Ledger(SourceLedger srcLedger, HashLedger hashLedger) {
-    this(srcLedger, hashLedger, null);
+    this(srcLedger, hashLedger, null, false);
   }
 
   /**
@@ -174,14 +194,17 @@ public class Ledger implements AutoCloseable {
    * @param srcLedger the source
    * @param hashLedger the hash ledger matching the source
    * @param progress optional progress ticker, ticked once per source-row
+   * @param trustHashLedger if {@code false}, then on checks, the hash ledger
+   *                        is also verified not to have been tampered with or otherwise broken
    * 
    * @see #checkEndRows() Invokes {@code checkEndRows()}
    * @see #setProgressTicker(Ticker)
    * @see #close()
    */
-  public Ledger(SourceLedger srcLedger, HashLedger hashLedger, Ticker progress) {
+  public Ledger(SourceLedger srcLedger, HashLedger hashLedger, Ticker progress, boolean trustHashLedger) {
     this.srcLedger = Objects.requireNonNull(srcLedger, "null srcLedger");
     this.hashLedger = Objects.requireNonNull(hashLedger, "null hashLedger");
+    this.trustHashLedger = trustHashLedger;
     setProgressTicker(progress);
     checkEndRows();
   }
@@ -197,8 +220,13 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  public boolean trustHashLedger() {
+    return trustHashLedger;
+  }
+  
+  
   /**
-   * Sets the progress ticker.
+   * Sets the progress ticker. Do not set under concurrent access.
    * 
    * @param progress optional progress ticker, ticked once per source-row. May be set to {@code null}.
    */
@@ -226,6 +254,27 @@ public class Ledger implements AutoCloseable {
   public long getFirstConflict() {
     return firstConflict;
   }
+  
+  
+  /**
+   * Returns the last known valid row. It may not in fact be valid.
+   * <p>
+   * The semantics of this method seem less strange when you consider the following:
+   * every existing row in the ledger is assumed to be valid until demonstrated otherwise.
+   * </p>
+   * 
+   * @return  the size of the hash-ledger, if the state is {@linkplain State#ok() OK};
+   *          {@linkplain #getFirstConflict()}{@code  - 1}, if {@linkplain State#FORKED forked};
+   *          the source-ledger size if {@linkplain State#TRIMMED trimmed}
+   */
+  public long lastValidRow() {
+    if (state.ok())
+      return hashLedger.size();
+    if (state.isForked())
+      return firstConflict - 1;
+    else  // (isTrimmed)
+      return srcLedger.size();
+  }
 
   
   
@@ -250,8 +299,6 @@ public class Ledger implements AutoCloseable {
    */
   public boolean checkEndRows() {
     
-    
-    
     final long hSize = hashLedger.size();
     final long srcSize = srcLedger.size();
     
@@ -265,9 +312,7 @@ public class Ledger implements AutoCloseable {
       
     // sanity check source ledger is not empty
     } else if (srcSize == 0) {
-      throw new SldgException(
-          "illegal configuration: source-ledger " + srcLedger +
-          " is empty, while hash-ledger " + hashLedger + " is not");
+      throw emptySourceException().fillInStackTrace();
     }
     
     // sanity check the first row
@@ -325,14 +370,19 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  private SldgException emptySourceException() {
+    return new SldgException(
+        "illegal configuration: source-ledger " + srcLedger +
+        " is empty, while hash-ledger " + hashLedger + " is not");
+  }
+  
+  
   private long setFork(long conflict) {
     if (conflict == 0)
-      return 0;
+      return 0L;
     
     else if (conflict == 1)
-      throw new HashConflictException(
-          "illegal configuration: source-ledger " + srcLedger + " and hash-ledger " +
-          hashLedger + " conflict at row [1]");
+      failRowOne();
     
     else if (firstConflict == 0 || firstConflict > conflict) {
       String msg;
@@ -350,12 +400,22 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  /**
+   * @throws HashConflictException every time
+   */
+  private void failRowOne() throws HashConflictException {
+    throw new HashConflictException(
+        "illegal configuration: source-ledger " + srcLedger + " and hash-ledger " +
+        hashLedger + " conflict at row [1]");
+  }
+  
+  
   
   /**
    * Checks the given range of row numbers for conflicts and returns the first conflicting
    * row number; zero if none are found. If a conflict is found, the state is set to
    * {@linkplain State#FORKED FORKED}, and the {@linkplain #getFirstConflict() first conflict}ing
-   * row number is set to it, if it's non-zero and greater than the returned number.
+   * row number is set to it (if it was previously zero or greater than the returned number).
    * 
    * @param lo &ge; 1
    * @param hi &le; {@linkplain #lesserSize()}
@@ -364,14 +424,89 @@ public class Ledger implements AutoCloseable {
    * 
    * @return the first conflicting row number found; 0 (zero) if none found
    */
-  public long checkRowRange(long lo, long hi, boolean asc) {
+  public long checkRowRange(long lo, long hi) {
     checkRangeArgs(lo, hi);
     
-    List<Long> range = Lists.longRange(lo, hi);
-    if (!asc)
-      range = Lists.reverse(range);
-    long conflict = firstConflict(range);
+    long conflict = firstConflictInRange(lo, hi);
     return setFork(conflict);
+  }
+  
+  
+  
+  public State validateState() {
+    return validateState(this.trustHashLedger);
+  }
+  
+  
+  public State validateState(boolean trustHashLedger) {
+    
+    final long hLedgeSz = hashLedger.size();
+    final long sLedgeSz = srcLedger.size();
+    final long hi = Math.min(hLedgeSz, sLedgeSz);
+    
+    if (hi == 0) {
+      if (hLedgeSz != 0)
+        throw emptySourceException().fillInStackTrace();
+      state = sLedgeSz == 0 ? State.COMPLETE : State.PENDING;
+      firstConflict = 0;
+      return state;
+    }
+    
+    // set the state provisionally
+    firstConflict = 0;
+    if (hLedgeSz == sLedgeSz)
+      state = State.COMPLETE;
+    else if (hLedgeSz < sLedgeSz)
+      state = State.PENDING;
+    else
+      state = State.TRIMMED;
+    
+
+    if (!trustHashLedger) {
+      long conflict = firstConflictInRange(1, hi, true);
+      setFork(conflict);
+      return state;
+    }
+    
+    var skipLedger = hashLedger.getSkipLedger();
+    var digest = SldgConstants.DIGEST.newDigest();
+    HashFrontier frontier;
+    {
+      ByteBuffer inputHash = srcLedger.getSourceRow(1L).rowHash();
+      ticker.tick();
+      frontier = HashFrontier.firstRow(inputHash, digest);
+
+      if (! skipLedger.rowHash(1L).equals(frontier.frontierHash()))
+        failRowOne();
+    }
+    
+    var goodFrontier = frontier;
+    for (long rn = 2; rn <= hi; ) {
+      
+      // compute the hash of row [checkRn] from source ledger only
+      // (represented as the frontier hash)
+      final long checkRn = Math.min(rn + validateCheckpointSize, hi);
+      for (; rn <= checkRn; ++rn) {
+        ByteBuffer inputHash = srcLedger.getSourceRow(rn).rowHash();
+        ticker.tick();
+        frontier = frontier.nextFrontier(inputHash, digest);
+      }
+      
+      // verify this hash matches the one in the ledger
+      if (skipLedger.rowHash(checkRn).equals(frontier.frontierHash())) {
+        goodFrontier = frontier;
+      } else {
+        // ahh.. the hash for row [checkRn] doesn't checkout
+        // narrow down which it must be..
+        long conflict = firstConflictInRange(goodFrontier, skipLedger, checkRn, false);
+        assert conflict != 0;
+        setFork(conflict);
+        break;
+      }
+    }
+    
+    
+    return state;
   }
   
   
@@ -387,7 +522,7 @@ public class Ledger implements AutoCloseable {
    * returns the first conflicting
    * row number; zero if none are found. If a conflict is found, the state is set to
    * {@linkplain State#FORKED FORKED}, and the {@linkplain #getFirstConflict() first conflict}ing
-   * row number is set to it, if it's zero or if its greater than the returned number.
+   * row number is set to it (if it was previously zero or greater than the returned number).
    * 
    * @param lo &ge; 1
    * @param hi &le; {@linkplain #lesserSize()}
@@ -409,7 +544,7 @@ public class Ledger implements AutoCloseable {
     final long rangeSize = hi - lo + 1;
     
     if (rangeSize / (double) count <= WHOLE_CHECK_RATIO && rangeSize <= Integer.MAX_VALUE)
-      return checkRowRange(lo, hi, true);
+      return checkRowRange(lo, hi);
     
     final Random rand = random == null ? new Random() : random;
     
@@ -520,35 +655,83 @@ public class Ledger implements AutoCloseable {
     return firstConflict(rows.iterator());
   }
   
+  /**
+   * Returns the first given row number where <em>input-hash</em> in the hash-ledger conflicts
+   * with the source's row-hash; zero if none conflict.
+   */
   private long firstConflict(Iterator<Long> rows) {
     SkipLedger skipLedger = hashLedger.getSkipLedger();
     
     while (rows.hasNext()) {
       long rn = rows.next();
       SourceRow srcRow = srcLedger.getSourceRow(rn);
-      Row row = skipLedger.getRow(rn);
       ticker.tick();
+      Row row = skipLedger.getRow(rn);
       
-      // Note, if *row* is a lazy instance, then below cascades to multiple (on average 2)
-      // additional calls to the skip-ledger to retrieve each row-hash referenced at that
-      // row number
-      if (! SerialRow.toInstance(row).hash().equals(row.hash())) {
-        // this message applies to every subclass CompactSkipLedger
-        // which, as of July '21, is the parent of every implementation--
-        // so, presently, the message below is always apt
-        String msg =
-            "row-hash [" + rn + "] in skip ledger " + skipLedger +
-            " conflicts with row-hash calculated from row's input-hash + " +
-            "hashpointers. Either row [" + rn + "] is corrupted (its <input-hash>/<row-hash>" +
-            " columns), or one of the rows it references has a corrupted <row-hash> column.";
-        log().severe(msg);
-        throw new HashConflictException(msg);
-      }
+      // check the skip ledger input hash matches the row hash
       ByteBuffer expectHash = row.inputHash();
       if (! srcRow.rowHash().equals(expectHash))
         return rn;
     }
     return 0L;
+  }
+  
+  private HashFrontier prepareFrontier(SkipLedger skipLedger, long lo) {
+    HashFrontier frontier;
+    if (lo == 1) {
+      ByteBuffer inputHash = srcLedger.getSourceRow(1L).rowHash();
+      ticker.tick();
+      frontier = HashFrontier.firstRow(inputHash);
+      if (conflict(inputHash, frontier, skipLedger, false))
+        failRowOne();
+    } else
+      frontier = HashFrontier.loadFrontier(skipLedger, lo - 1);
+    
+    return frontier;
+  }
+  
+  
+  private long firstConflictInRange(long lo, long hi) {
+    return firstConflictInRange(lo, hi, this.trustHashLedger);
+  }
+  
+  
+  private long firstConflictInRange(long lo, long hi, boolean trustHashLedger) {
+    var skipLedger = hashLedger.getSkipLedger();
+    HashFrontier frontier = prepareFrontier(skipLedger, lo);
+    return firstConflictInRange(frontier, skipLedger, hi, trustHashLedger);
+  }
+  
+  
+  private long firstConflictInRange(HashFrontier frontier, SkipLedger skipLedger, long hi, boolean trustHashLedger) {
+
+    var digest = SldgConstants.DIGEST.newDigest();
+    
+    for (long rn = frontier.rowNumber() + 1; rn <= hi; ++rn) {
+      ByteBuffer inputHash = srcLedger.getSourceRow(rn).rowHash();
+      ticker.tick();
+      frontier = frontier.nextFrontier(inputHash, digest);
+      if (conflict(inputHash, frontier, skipLedger, trustHashLedger))
+        return rn;
+    }
+    
+    return 0L;
+  }
+  
+  
+  private boolean conflict(ByteBuffer inputHash, HashFrontier frontier, SkipLedger skipLedger, boolean trustHashLedger) {
+    long rn = frontier.rowNumber();
+    boolean ok;
+    if (trustHashLedger) {
+      ok = skipLedger.rowHash(rn).equals(frontier.frontierHash());
+    } else {
+      Row row = skipLedger.getRow(rn);
+      ok =
+          row.inputHash().equals(inputHash.clear()) &&
+          row.hash().equals(frontier.frontierHash());
+    }
+    
+    return !ok;
   }
   
   
@@ -605,14 +788,26 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  /**
+   * Updates the hash-ledger with new inputs from the source-ledger.
+   * 
+   * @return the number of rows appended to the hash-ledger
+   */
   public long update() {
-    return update(0, null);
+    return update(0);
   }
   
   
   
-  
-  public long update(int commitSlack, Ticker progress) {
+
+  /**
+   * Updates the hash-ledger with new inputs from the source-ledger.
+   * 
+   * @param commitSlack
+   * 
+   * @return the number of rows appended to the hash-ledger
+   */
+  public long update(int commitSlack) {
     if (state.needsMending())
       throw new IllegalStateException("Ledger needs mending. State: " + state);
     if (commitSlack < 0)
@@ -626,8 +821,6 @@ public class Ledger implements AutoCloseable {
     final long count = lastTargetCommit - lastCommit;
     if (count <= 0)
       return 0;
-    
-    Ticker ticker = progress == null ? Ticker.NOOP : progress;
     
     SkipLedger skipLedger = hashLedger.getSkipLedger();
     for (long nextRow = lastCommit + 1; nextRow <= lastTargetCommit; ++nextRow) {
@@ -643,6 +836,16 @@ public class Ledger implements AutoCloseable {
   
   public WitnessReport witness() {
     return hashLedger.witness();
+  }
+  
+  
+  public long lastWitnessedRowNumber() {
+    return hashLedger.lastWitnessedRowNumber();
+  }
+  
+  
+  public long unwitnessedRowCount() {
+    return hashLedger.unwitnessedRowCount();
   }
   
   

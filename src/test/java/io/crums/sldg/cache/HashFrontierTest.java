@@ -101,8 +101,8 @@ public class HashFrontierTest extends SelfAwareTestCase {
     
     long frontLap = System.nanoTime() - now;
     
-    assertEquals(rows, frontier.lead());
-    var hiRow = frontier.leadRow();
+    assertEquals(rows, frontier.rowNumber());
+    var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
     assertEquals(rows, hiRow.rowNumber());
     
@@ -161,8 +161,8 @@ public class HashFrontierTest extends SelfAwareTestCase {
       frontier = frontier.nextFrontier(inputHash.clear());
     }
 
-    assertEquals(rows, frontier.lead());
-    var hiRow = frontier.leadRow();
+    assertEquals(rows, frontier.rowNumber());
+    var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
     assertEquals(rows, hiRow.rowNumber());
   }

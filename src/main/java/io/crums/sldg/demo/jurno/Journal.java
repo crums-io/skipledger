@@ -62,6 +62,7 @@ public class Journal extends Ledger {
       onFailCloser.pushClose(hashLedger);
       
       Journal journal = new Journal(textSource, hashLedger);
+      
       onFailCloser.clear();
       
       return journal;
@@ -73,13 +74,14 @@ public class Journal extends Ledger {
     }
   }
   
-
-  /**
-   * @param textSource
-   * @param hashLedger
-   */
+  
   public Journal(TextFileSource textSource, HashLedger hashLedger) {
-    super(textSource, hashLedger);
+    this(textSource, hashLedger, true);
+  }
+
+  
+  public Journal(TextFileSource textSource, HashLedger hashLedger, boolean trustHashLedger) {
+    super(textSource, hashLedger, null, trustHashLedger);
     this.textSource = textSource;
   }
   
@@ -101,7 +103,28 @@ public class Journal extends Ledger {
   }
   
   
+  public int getLedgeredLines() {
+    return (int) getHashLedger().size();
+  }
   
+  
+  public int lastValidLedgeredLine() {
+    long lastValidRn = lastValidRow();
+    return lastValidRn == 0 ? 0 : getLineNumber(lastValidRn);
+  }
+  
+  
+  /**
+   * @return the equivalent of {@code getSourceLedger().size()}
+   */
+  public int getLedgerableLines() {
+    return (int) textSource.size();
+  }
+  
+  
+  public int getLinesInFile() {
+    return textSource.getLinesInFile();
+  }
   
 
 }

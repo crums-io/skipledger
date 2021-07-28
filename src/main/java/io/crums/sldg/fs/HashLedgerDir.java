@@ -77,20 +77,7 @@ public class HashLedgerDir implements HashLedger {
     return skipLedger;
   }
 
-  /**
-   * Returns the row numbers that have {@linkplain CrumTrail}s. I.e.
-   * the rows that have been witnessed.
-   * <p>
-   * <em>This method is non-standard: it's not part of the interface</em>.
-   * (The reason why it's not in the interface, is that while super-efficient
-   * here, it's hard to make efficient if implemented on top of a relational
-   * database, for example.)
-   * </p>
-   * 
-   * @return strictly ascending list of row numbers, possibly empty
-   * 
-   * @see #getCrumTrailByIndex(int)
-   */
+  @Override
   public List<Long> getTrailedRowNumbers() {
     return witnessRepo.getIds();
   }
@@ -147,12 +134,6 @@ public class HashLedgerDir implements HashLedger {
     assert witRn >= rowNumber;
     
     return new TrailedRow(witRn, trail);
-  }
-
-  @Override
-  public long lastWitnessedRowNumber() {
-    List<Long> ids = getTrailedRowNumbers();
-    return ids.isEmpty() ? 0 : ids.get(ids.size() - 1);
   }
   
   
