@@ -16,7 +16,7 @@ import io.crums.io.buffer.BufferUtils;
  * Prefer this over {@linkplain DoubleValue}. (So if doing fixed
  * precision arithmetic, first convert to integral units.)
  */
-public final class LongValue extends ColumnValue {
+public class LongValue extends ColumnValue {
   
   
   static LongValue loadLong(ByteBuffer in, ByteBuffer salt) {
@@ -32,9 +32,15 @@ public final class LongValue extends ColumnValue {
   }
     
   public LongValue(long number, ByteBuffer salt) {
-    super(ColumnType.LONG, salt);
+    this(ColumnType.LONG, number, salt);
+  }
+  
+  
+  LongValue(ColumnType type, long number, ByteBuffer salt) {
+    super(type, salt);
     this.number = number;
   }
+  
   
   
   

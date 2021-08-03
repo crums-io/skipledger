@@ -20,7 +20,6 @@ import io.crums.client.ClientException;
 import io.crums.io.Opening;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.demo.jurno.Journal;
-import io.crums.sldg.fs.HashLedgerDir;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessReport;
 import io.crums.util.IntegralStrings;
@@ -33,7 +32,7 @@ import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * Manages a {@linkplain ProtoJournal journal}ed text file from the command line.
+ * Manages a {@linkplain Journal journal}ed text file from the command line.
  */
 public class Jurno extends MainTemplate {
   
@@ -45,19 +44,48 @@ public class Jurno extends MainTemplate {
     jurno.doMain(args);
   }
   
-  private static class MakeMorselCmd {
-    
-    File morselFile = new File(".");
-    
+
+  
+  
+  private static class RowCommand {
+
     /**
      * Ledgered lines
      */
-    List<Long> lineNums = Collections.emptyList();
+    List<Long> rowNums = Collections.emptyList();
     
-    void setMorselFile(String filepath) {
-      this.morselFile = new File(filepath);
+    
+//    void setRowNums(List<Integer> rowNums) {
+//      if (rowNums == null || rowNums.isEmpty())
+//        throw new IllegalArgumentException("missing or illegally formatted row numbers");
+//      if (rowNums.get(0) < 1 || !Lists.isSortedNoDups(rowNums))
+//        throw new IllegalArgumentException(
+//            "row numbers must be > 0 and strictly ascending. Numbers parsed: " + rowNums);
+//      
+//      this.rowNums = Lists.map(rowNums, rn -> (long) rn);
+//    }
+    
+    
+    void setRowNums(ArgList args) {
+      String match = args.removeSingle(NumbersArg.MATCHER);
+      if (match == null)
+        throw new IllegalArgumentException("missing row-numbers arg");
+      
+      rowNums = NumbersArg.parse(match);
+      if (rowNums.get(0) < 1 || !Lists.isSortedNoDups(rowNums))
+        throw new IllegalArgumentException(
+            "row numbers must be > 0 and strictly ascending. Numbers parsed: " + rowNums);
+    }
+    
+  }
+  
+  private static class MakeMorselCmd extends RowCommand {
+    
+    File morselFile = new File(".");
+    
+    void setMorselFile(ArgList args) {
+      this.morselFile = new File(args.removeValue(FILE, "."));
       File parent = morselFile.getParentFile();
-      // don't care if failing after set.. we won't be see this instance again
       if (parent != null && !parent.exists())
         throw new IllegalArgumentException(
             "expected parent directory for morsel file does not exist: " + this.morselFile);
@@ -65,16 +93,6 @@ public class Jurno extends MainTemplate {
       if (morselFile.isFile())
         throw new IllegalArgumentException("morsel file already exists: " + morselFile);
       
-    }
-    
-    private void setLineNums(List<Integer> lineNums) {
-      if (lineNums == null || lineNums.isEmpty())
-        throw new IllegalArgumentException("missing or illegally formatted line numbers");
-      if (lineNums.get(0) < 1 || !Lists.isSortedNoDups(lineNums))
-        throw new IllegalArgumentException(
-            "line numbers must be > 0 and strictly ascending. Numbers parsed: " + lineNums);
-      
-      this.lineNums = Lists.map(lineNums, rn -> (long) rn);
     }
   }
   
@@ -92,6 +110,7 @@ public class Jurno extends MainTemplate {
   private Journal journal;
   
   private MakeMorselCmd makeMorsel;
+  private RowCommand list;
   
 
   /**
@@ -104,12 +123,13 @@ public class Jurno extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, MAKE_MORSEL, STATE_MORSEL);
+    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, LIST, MAKE_MORSEL, STATE_MORSEL);
     
     
     // set the opening preamble
     switch (command) {
     case STATUS:
+    case LIST:
     case MAKE_MORSEL:
     case STATE_MORSEL:
       this.opening = Opening.READ_ONLY;
@@ -123,43 +143,22 @@ public class Jurno extends MainTemplate {
       break;
     }
     
-    if (opening != null)
-      setJournoFiles(argList);
+    setJournoFiles(argList);
     
-    if (MAKE_MORSEL.equals(command)) {
-
+    switch (command) {
+    case MAKE_MORSEL:
       this.makeMorsel = new MakeMorselCmd();
-      
-      List<String> remainingArgs = argList.argsRemaining();
-      switch (remainingArgs.size()) {
-      case 0:
-        throw new IllegalArgumentException("missing line numbers");
-      case 1:
-        makeMorsel.setLineNums(NumbersArg.parseInts(remainingArgs.get(0)));
-        argList.removeContained(remainingArgs.get(0));
-        break;
-      case 2:
-        String file = argList.removeValue(FILE, ".");
-        if (argList.size() != 1)
-          throw new IllegalArgumentException(
-              "unrecognized (or too many) command line args in remaining in pipeline [a]: " + remainingArgs);
-        
-        List<Integer> lineNums = NumbersArg.parseInts(argList.removeFirst());
-        
-        makeMorsel.setLineNums(lineNums);
-        makeMorsel.setMorselFile(file);
-        break;
-      default:
-        throw new IllegalArgumentException(
-            "unrecognized (or too many) command line args in remaining in pipeline [b]: " + remainingArgs);
-      }
-      
-      argList.removeContained(remainingArgs);
-      
-    } else if (STATE_MORSEL.equals(command)) {
-      
+      makeMorsel.setRowNums(argList);
+      makeMorsel.setMorselFile(argList);
+      break;
+    case LIST:
+      this.list = new RowCommand();
+      list.setRowNums(argList);
+      break;
+    case STATE_MORSEL:
       this.makeMorsel = new MakeMorselCmd();
-      makeMorsel.setMorselFile(argList.removeValue(FILE, "."));
+      makeMorsel.setMorselFile(argList);
+      break;
     }
     
     argList.enforceNoRemaining();
@@ -222,131 +221,19 @@ public class Jurno extends MainTemplate {
     switch (command) {
     case CREATE:
     case UPDATE:
-      
-      
-      String message;
-      {
-        final int alreadyLedgered = journal.getLedgeredLines();
-        switch (journal.getState()) {
-        case FORKED:
-          int textLineNo = journal.getForkedLineNumber();
-          long forkRn = journal.getFirstConflict();
-          message = textFile + " has forked from its ledger at line # " + textLineNo;
-          if (textLineNo != forkRn) {
-            message += " (which was the " + nTh(forkRn) + " row (ledgerable line)";
-          }
-          break;
-        case TRIMMED:
-          int ledgeredLines = journal.getLedgeredLines();
-          int actualLines = journal.getLedgerableLines();
-          message =
-              textFile + " has been trimmed to fewer rows (ledgerable lines):" +
-              ledgeredLines + " -> " + actualLines;
-          break;
-        case PENDING:
-          
-          journal.update();
-          
-        case COMPLETE:
-          
-          int newLines = journal.getLedgeredLines() - alreadyLedgered;
-          if (opening == Opening.CREATE) {
-            message =
-                "Created journal with " + newLines + pluralize(" new row", newLines) +
-                pluralize(" (ledgerable line", newLines) + ")";
-          } else {
-            message =
-                newLines + pluralize(" new row", newLines) +
-                pluralize(" (ledgerable line", newLines) + ") added";
-          }
-          try {
-            WitnessReport witReport = journal.witness();
-            if (witReport.nothingDone())
-              message += "." + System.lineSeparator() + "Up-to-date.";
-            else {
-              int crums = witReport.getRecords().size();
-              int crumtrails = witReport.getStored().size();
-              message += "." + System.lineSeparator() +
-                  crums + pluralize(" crum", crums) + " submitted; " + crumtrails +
-                  pluralize(" crumtrail", crumtrails) + pluralize(" (witness record", crumtrails) +
-                  ") stored";
-              
-              if (crumtrails == 0)
-                message += System.lineSeparator() + "Run '" + UPDATE + "' in a few";
-            }
-          } catch (ClientException cx) {
-            message += "." + System.lineSeparator();
-            long lastWitRn = journal.lastWitnessedRowNumber();
-            int unwitnessed = (int) (journal.hashLedgerSize() - lastWitRn);
-            message += unwitnessed + pluralize(" row", unwitnessed);
-            message += singularVerb(" remain", unwitnessed) + " unwitnessed.";
-            message += System.lineSeparator() + "error message: " + cx.getMessage();
-            Throwable cause = cx.getRootCause();
-            if (cause != null)
-              message += System.lineSeparator() + "cause: " + cause;
-          }
-          break;
-        
-        default:
-          throw new RuntimeException("unaccounted state assertion: " + journal.getState());
-        }
-        
-        if (journal.getState().needsMending()) {
-          message += "." + System.lineSeparator() + "The only way to fix this is to ";
-          if (journal.getState().isForked())
-            message += "either restore the text at the forked line number, or ";
-          
-          message +=  "run '" + TRIM + "' (which causes loss of historical info)." + System.lineSeparator();
-        }
-        
-        System.out.println(message);
-      }
-      
-        
+      update();
       break;
+      
     case STATUS:
       printStatus();
       break;
       
+    case LIST:
+      listRows();
+      break;
+      
     case TRIM:
-//      journal.dryRun();
-      if (!journal.getState().needsMending()) {
-        System.err.println("[ERROR] Journal does not need mending.");
-        return;
-      }
-      
-      int lastGoodRow = (int) journal.lastValidRow();
-      int lastGoodLine = journal.lastValidLedgeredLine();
-//      int linesToLose = journal.getLedgeredLines() - lastGoodLine;
-      int size = (int) journal.getLedgeredLines();
-      int rowsToLose = size - lastGoodRow;
-      int trailsToLose = numToLose(journal.getHashLedger().getTrailedRowNumbers(), lastGoodRow);
-      
-      message = "Confirm '" + TRIM + "' ledger to row %d%n" + // lastGoodRow
-                "  trails to lose: %d%n" +  // trailsToLose
-                "  ledgered lines to lose: %d%n%n" + // rowsToLose
-                "Current rows in ledger: %d%n" +  // size
-                "            after trim: %d%n" +  // lastGoodRow
-                "Proceed to trim? [Type 'yes']:%n";
-      
-      Console console = System.console();
-      if (console == null) {
-        System.err.println("[ERROR] No console. Aborting.");
-        StdExit.GENERAL_ERROR.exit();
-        break;  // never reached
-      }
-      console.printf(
-          message,
-          lastGoodRow, trailsToLose, rowsToLose, size, lastGoodRow);
-      String ack = console.readLine();
-      if ("yes".equals(ack)) {
-        journal.rollback();
-        System.out.println(rowsToLose + pluralize(" row", rowsToLose) + " trimmed.");
-        System.out.printf("Current number of rows in ledger: %d%n", journal.hashLedgerSize());
-      } else {
-        console.writer().println();
-        console.writer().println("Aborted.");
-      }
+      trim();
       break;
       
     case MAKE_MORSEL:
@@ -361,6 +248,122 @@ public class Jurno extends MainTemplate {
   }
   
   
+  private void update() {
+    String message;
+    final int alreadyLedgered = journal.getLedgeredLines();
+    switch (journal.getState()) {
+    case FORKED:
+      int textLineNo = journal.getForkedLineNumber();
+      long forkRn = journal.getFirstConflict();
+      message = textFile + " has forked from its ledger at line # " + textLineNo;
+      if (textLineNo != forkRn) {
+        message += " (which was the " + nTh(forkRn) + " row (ledgerable line)";
+      }
+      break;
+    case TRIMMED:
+      int ledgeredLines = journal.getLedgeredLines();
+      int actualLines = journal.getLedgerableLines();
+      message =
+          textFile + " has been trimmed to fewer rows (ledgerable lines):" +
+          ledgeredLines + " -> " + actualLines;
+      break;
+    case PENDING:
+      
+      journal.update();
+      
+    case COMPLETE:
+      
+      int newLines = journal.getLedgeredLines() - alreadyLedgered;
+      if (opening == Opening.CREATE) {
+        message =
+            "Created journal with " + newLines + pluralize(" new row", newLines) +
+            pluralize(" (ledgerable line", newLines) + ")";
+      } else {
+        message =
+            newLines + pluralize(" new row", newLines) +
+            pluralize(" (ledgerable line", newLines) + ") added";
+      }
+      try {
+        WitnessReport witReport = journal.witness();
+        if (witReport.nothingDone())
+          message += "." + System.lineSeparator() + "Up-to-date.";
+        else {
+          int crums = witReport.getRecords().size();
+          int crumtrails = witReport.getStored().size();
+          message += "." + System.lineSeparator() +
+              crums + pluralize(" crum", crums) + " submitted; " + crumtrails +
+              pluralize(" crumtrail", crumtrails) + pluralize(" (witness record", crumtrails) +
+              ") stored";
+          
+          if (crumtrails == 0)
+            message += System.lineSeparator() + "Run '" + UPDATE + "' in a few";
+        }
+      } catch (ClientException cx) {
+        message += "." + System.lineSeparator();
+        long lastWitRn = journal.lastWitnessedRowNumber();
+        int unwitnessed = (int) (journal.hashLedgerSize() - lastWitRn);
+        message += unwitnessed + pluralize(" row", unwitnessed);
+        message += singularVerb(" remain", unwitnessed) + " unwitnessed.";
+        message += System.lineSeparator() + "error message: " + cx.getMessage();
+        Throwable cause = cx.getRootCause();
+        if (cause != null)
+          message += System.lineSeparator() + "cause: " + cause;
+      }
+      break;
+    
+    default:
+      throw new RuntimeException("unaccounted state assertion: " + journal.getState());
+    }
+    
+    if (journal.getState().needsMending()) {
+      message += "." + System.lineSeparator() + "The only way to fix this is to ";
+      if (journal.getState().isForked())
+        message += "either restore the text at the forked line number, or ";
+      
+      message +=  "run '" + TRIM + "' (which causes loss of historical info)." + System.lineSeparator();
+    }
+    
+    System.out.println(message);
+  }
+  
+  private void trim() {
+    if (!journal.getState().needsMending()) {
+      System.err.println("[ERROR] Journal does not need mending.");
+      return;
+    }
+    
+    int lastGoodRow = (int) journal.lastValidRow();
+    int size = (int) journal.getLedgeredLines();
+    int rowsToLose = size - lastGoodRow;
+    int trailsToLose = numToLose(journal.getHashLedger().getTrailedRowNumbers(), lastGoodRow);
+    
+    String message =
+            "Confirm '" + TRIM + "' ledger to row %d%n" + // lastGoodRow
+            "  trails to lose: %d%n" +  // trailsToLose
+            "  ledgered lines to lose: %d%n%n" + // rowsToLose
+            "Current rows in ledger: %d%n" +  // size
+            "            after trim: %d%n" +  // lastGoodRow
+            "Proceed to trim? [Type 'yes']:%n";
+    
+    Console console = System.console();
+    if (console == null) {
+      System.err.println("[ERROR] No console. Aborting.");
+      StdExit.GENERAL_ERROR.exit();
+    }
+    console.printf(
+        message,
+        lastGoodRow, trailsToLose, rowsToLose, size, lastGoodRow);
+    String ack = console.readLine();
+    if ("yes".equals(ack)) {
+      journal.rollback();
+      System.out.println(rowsToLose + pluralize(" row", rowsToLose) + " trimmed.");
+      System.out.printf("Current number of rows in ledger: %d%n", journal.hashLedgerSize());
+    } else {
+      console.writer().println();
+      console.writer().println("Aborted.");
+    }
+  }
+  
   
   private void makeMorsel() throws IOException {
     if (journal.getState().needsMending())
@@ -373,8 +376,8 @@ public class Jurno extends MainTemplate {
     
     
     
-    File file = journal.writeMorselFile(makeMorsel.morselFile, makeMorsel.lineNums, null);
-    int entries = makeMorsel.lineNums.size();
+    File file = journal.writeMorselFile(makeMorsel.morselFile, makeMorsel.rowNums, null);
+    int entries = makeMorsel.rowNums.size();
     if (entries == 0)
       System.out.println("state path written to morsel: " + file);
     else
@@ -393,7 +396,7 @@ public class Jurno extends MainTemplate {
   private final static int RIGHT_STATUS_COL_WIDTH = 18;
   private final static int MID_STATUS_COL_WIDTH = RM - LEFT_STATUS_COL_WIDTH - RIGHT_STATUS_COL_WIDTH;
   
-  protected void printStatus() {
+  private void printStatus() {
     TablePrint table = new TablePrint(
         LEFT_STATUS_COL_WIDTH, MID_STATUS_COL_WIDTH, RIGHT_STATUS_COL_WIDTH);
     table.println();
@@ -416,7 +419,9 @@ public class Jurno extends MainTemplate {
       } else {
         table.println(
             "Ledger is up-to-date; " + unwitnessedRows + pluralize(" row", unwitnessedRows) +
-            " not witnessed. If you have a network connection, invoking '" + UPDATE + "' should fixe this.");
+            " not witnessed. ");
+        table.println("If you have a network connection, invoke '" + UPDATE + "' once,");
+        table.println("then a few minutes later to fix this");
       }
       break;
     case PENDING:
@@ -454,6 +459,29 @@ public class Jurno extends MainTemplate {
     }
     
     
+  }
+  
+  
+  
+  private void listRows() {
+    TablePrint table;
+    {
+      List<Long> rowNums = list.rowNums;
+      long last = rowNums.get(rowNums.size() - 1);
+      long lastLineNo = journal.getLineNumber(last);
+      int decimalWidth = Math.max(3, Long.toString(lastLineNo).length());
+      
+      table = new TablePrint(decimalWidth + 1, decimalWidth + 3, 76 - 2*decimalWidth);
+    }
+    
+    table.printRow("row", "[line]");
+    
+    for (long rn: list.rowNums) {
+      long lineNo = journal.getLineNumber(rn);
+      String line = journal.getRowText(rn);
+      line = line.substring(0, line.length() - 1);
+      table.printRow(rn, "[" + lineNo + "]", line);
+    }
   }
   
   
@@ -508,21 +536,18 @@ public class Jurno extends MainTemplate {
         "against a compact, opaque hash structure that captures the state of the text file.";
     printer.printParagraph(paragraph);
     printer.println();
-    printer.println("Line Numbers");
+    printer.println("Lines & Rows");
     printer.println();
     paragraph =
-        "The lines in a text file are numbered in one of two ways: actual and ledgerable. Actual " +
-        "line numbers are just the ordinary line numbers you see in a typical " +
-        "text editor that start from 1. However, not all lines in the text file figure in the " +
-        "journal's state: blank, empty, or comment lines do not count. Ledgerable " +
-        "line numbers exclude these ignored lines from the accounting.";
+        "The lines in a text file compose the rows in the ledger. However not all lines count " +
+        "as rows: blank, empty lines do not figure in the accounting and are skipped. Nor does " +
+        "the 1st line: editing it doesn't break the ledger.";
     printer.printParagraph(paragraph);
     printer.println();
-    printer.println("Row Numbers");
-    printer.println();
     paragraph =
-        "These denote a row in the backing skip ledger. Rows are numbered starting from 1. " +
-        "Each row in the backing ledger stores only the hash of the line.";
+        "Each row (ledgerable line) consists of a sequence of tokens (usually words) identified by surrounding " +
+        "whitespace. For this reason, neither indentation nor [the amount of] word-spacing matter on a" +
+        "ledgerable line.";
     printer.printParagraph(paragraph);
     printer.println();
     printer.println();
@@ -558,7 +583,7 @@ public class Jurno extends MainTemplate {
     TablePrint table = new TablePrint(out, LEFT_TBL_COL_WIDTH, RIGHT_TBAL_COL_WIDTH);
     table.setIndentation(INDENT);
     
-    table.printRow(CREATE, "creates a new journal for the given text file.");
+    table.printRow(CREATE, "creates a new journal for the given text file");
     table.println();
     table.printRow(STATUS, "prints the status of the journaled text file");
     table.println();
@@ -576,13 +601,25 @@ public class Jurno extends MainTemplate {
     table.printHorizontalTableEdge('-');
     out.println();
     
-    table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
-    table.printRow(null,   "given ledgered line number(s)");
+
+    table.printRow(LIST,   "lists the contents of the rows (ledgerable lines) in the journal");
+    table.printRow(null,   "with the given row number(s). The line-number is also shown.");
     table.printRow(null,   "Args:");
     table.println();
-    table.printRow(null,   "<line-numbers>  (required)");
+    table.printRow(null,   "<row-numbers>  (required)");
     table.println();
-    table.printRow(null,   "Strictly ascending line numbers separated by commas (no spaces)");
+    table.printRow(null,   "Strictly ascending row numbers separated by commas (no spaces)");
+    table.printRow(null,   "Ranges may be substituted for numbers. For example:");
+    table.printRow(null,   "250,692-717");
+    table.println();
+    
+    table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
+    table.printRow(null,   "row (ledgered line) numbers");
+    table.printRow(null,   "Args:");
+    table.println();
+    table.printRow(null,   "<row-numbers>  (required)");
+    table.println();
+    table.printRow(null,   "Strictly ascending row numbers separated by commas (no spaces)");
     table.printRow(null,   "Ranges may be substituted for numbers. For example:");
     table.printRow(null,   "308,466,592-598,717");
     table.println();
@@ -628,6 +665,8 @@ public class Jurno extends MainTemplate {
   private final static String STATUS = "status";
   private final static String UPDATE = "update";
   private final static String TRIM = "trim";
+  
+  private final static String LIST = "list";
   
   
   private final static String MAKE_MORSEL = "make-morsel";

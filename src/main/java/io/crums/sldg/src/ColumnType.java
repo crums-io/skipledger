@@ -5,21 +5,18 @@ package io.crums.sldg.src;
 
 
 /**
- * Data type for a column value in a row. The classification here concerns
- * how data is hashed, not the exact data type.
- * 
- * <h3>About the Salted Moniker</h3>
- * <p>
- * There are 2 principal ways to hash a column value: salted and unsalted. The
- * reason why a value may be salted prior to hashing is in order to guard against
- * a rainbow attacks--which if this library is successful, will be quite common.
- * Therefore, unsalted types are expected to tbe exception rather than the norm.
- * Unsalted types have a '0' (zero) appended to their symbol.
- * </p>
+ * Data type for a column value in a row. The classification is supposed to map a broad
+ * range of data types to a smaller subset. The goal here is to convey <em>some</em> semantic
+ * context ({@linkplain #DATE}, {@linkplain #DOUBLE}, {@linkplain #LONG}, {@linkplain #STRING},
+ * {@linkplain #HASH}, while also spelling out (elsewhere), how they're hashed.
  */
 public enum ColumnType {
   
   
+  /**
+   * Date/time.
+   */
+  DATE(7, "T"),
   /**
    * Signed floating point value. (A bit concerned about
    * equality tests, read consistency with <code>0 +/-</code> values, that sort of thing.)
@@ -36,7 +33,7 @@ public enum ColumnType {
    */
   STRING(4, "S"),
   /**
-   * Sequence of byte literals, like a blob but hopefully not too large.
+   * Sequence of bytes, like a blob but hopefully not too large.
    * In fact, the smaller the better.
    */
   BYTES(3, "B"),
@@ -60,6 +57,7 @@ public enum ColumnType {
     case 4:   return STRING;
     case 5:   return LONG;
     case 6:   return DOUBLE;
+    case 7:   return DATE;
     default:
       throw new IllegalArgumentException("unknown code " + code);
     }
@@ -101,8 +99,12 @@ public enum ColumnType {
   }
   
   
-  public boolean isNumber() {
+  public boolean isLong() {
     return this == LONG;
+  }
+  
+  public boolean isDate() {
+    return this == DATE;
   }
 
 }

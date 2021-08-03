@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -19,13 +20,22 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.io.Opening;
+import io.crums.io.channels.ChannelUtils;
+import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.MorselFile;
+import io.crums.sldg.PathInfo;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.BytesValue;
+import io.crums.sldg.src.ColumnValue;
+import io.crums.sldg.src.DateValue;
+import io.crums.sldg.src.DoubleValue;
+import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.src.StringValue;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -37,7 +47,16 @@ import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * 
+ * CLI for morsel files.
+ * <p>
+ * TODO:
+ * <ul>
+ * <li>List {@linkplain PathInfo}s and user-notes.</li>
+ * <li>Support adding specific rows instead of bulk merge.</li>
+ * <li>Support pruning rows.</li>
+ * <li>Support adding new {@linkplain PathInfo}s (and user-notes).</li>
+ * </ul>
+ * </p>
  */
 public class Mrsl extends MainTemplate {
   
@@ -46,7 +65,7 @@ public class Mrsl extends MainTemplate {
   
   private List<Long> rowNumbers;
   private File saveFile;
-  private String sep = "\n";
+  private String sep = " ";
   
   private List<File> morselFiles;
   
@@ -63,11 +82,12 @@ public class Mrsl extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, IOException {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(SUM, STATE, LIST, ENTRY, MERGE);
+    this.command = argList.removeCommand(SUM, STATE, LIST, HISTORY, ENTRY, MERGE);
     switch (command) {
     case SUM:
     case STATE:
     case LIST:
+    case HISTORY:
       this.morselFile = argList.removeExistingFile();
       break;
     case ENTRY:
@@ -88,18 +108,6 @@ public class Mrsl extends MainTemplate {
             morselFiles.isEmpty() ?
                 "missing morsel files for merge" : "missing 2nd morsel file for merge");
       
-//      var remainingArgs = argList.argsRemaining();
-//      if (argList.argsRemaining().size() > 1)
-//      
-//      switch (remainingArgs.size()) {
-//      case 0:
-//        throw new IllegalArgumentException("missing path to new morsel file (must not exist)");
-//      case 1:
-//        break;
-//      default:
-//        throw new IllegalArgumentException(
-//          "ambiguous file destination for new morsel: " + remainingArgs);
-//      }
 
       setSaveFile(argList);
       break;
@@ -173,6 +181,10 @@ public class Mrsl extends MainTemplate {
     case LIST:
       list(new MorselFile(morselFile));
       break;
+    case HISTORY:
+      history();
+      break;
+      
     case ENTRY:
       MorselFile morsel = new MorselFile(morselFile);
       if (saveFile == null)
@@ -188,6 +200,47 @@ public class Mrsl extends MainTemplate {
     }
   }
   
+
+
+  private void history() {
+//    MorselFile morsel = new MorselFile(morselFile);
+    MorselPack pack = new MorselFile(morselFile).getMorselPack();
+
+    PrintStream out = System.out;
+    out.println();
+    
+    String prettyName = "<" + morselFile.getName() + ">";
+    
+    List<Long> trailedRns = pack.trailedRows();
+    if (trailedRns.isEmpty()) {
+      out.println("No crumtrails in " + prettyName);
+      return;
+    }
+
+    out.println();
+    int count = trailedRns.size();
+    out.println(count + pluralize(" row", count) + " witnessed in " + prettyName + ":");
+    out.println();
+    
+    TablePrint table;
+    {
+      long maxRn = trailedRns.get(count - 1);
+      int maxRnWidth = Math.max(6, Long.toString(maxRn).length());
+      table = new TablePrint(maxRnWidth + 2, 78 - maxRnWidth);
+    }
+    
+    // heading
+    table.printRow("[row #]", "[date; ref hash; ref URL]");
+    table.printRow("-------", "-------------------------");
+    table.println();
+    for (long witRn : trailedRns) {
+      CrumTrail trail = pack.crumTrail(witRn);
+      table.printRow(witRn, new Date(trail.crum().utc()));
+      table.printRow(null, IntegralStrings.toHex(trail.rootHash()));
+      table.printRow(null, trail.getRefUrl());
+    }
+    table.println();
+  }
 
 
   private void merge() throws IOException {
@@ -249,12 +302,19 @@ public class Mrsl extends MainTemplate {
 
   private void saveSources(MorselFile morsel) throws IOException {
     checkSourceRowNums(morsel);
+    ByteBuffer eol;
+    {
+      byte[] lineFeed = { (byte) '\n' };
+      eol = ByteBuffer.wrap(lineFeed);
+    }
     try (var ch = Opening.CREATE.openChannel(this.saveFile)) {
 
       MorselPack pack = morsel.getMorselPack();
       byte[] sepBytes = (sep == null || sep.isEmpty()) ? null : Strings.utf8Bytes(sep);
-      for (long rn : this.rowNumbers)
-        pack.getSourceByRowNumber(rn).writeSource(ch, null, sepBytes);
+      for (long rn : this.rowNumbers) {
+        pack.getSourceByRowNumber(rn).writeSource(ch, sepBytes);
+        ChannelUtils.writeRemaining(ch, eol.clear());
+      }
     }
     
     int count = rowNumbers.size();
@@ -364,28 +424,54 @@ public class Mrsl extends MainTemplate {
 
 
   private final static char PRINT_SEP = '-';
+  
   private void printSourceRowAsText(long srcRn, MorselPack pack, TablePrint table) {
     
     SourceRow srcRow = pack.getSourceByRowNumber(srcRn);
+
     StringWriter string = new StringWriter();
-    try {
-      srcRow.writeSource(string, ", ", null);
-    } catch (IOException iox) {
-      throw new RuntimeException("should be impossible: " + iox, iox);
-    }
+    
+    List<ColumnValue> columns = srcRow.getColumns();
+    writeColumn(string, columns.get(0));
+    
+    for (int index = 1; index < columns.size(); ++index)
+      writeColumn(string.append(' '), columns.get(index));
+    
     table.printRow(srcRn, "source-row as text:");
     table.printHorizontalTableEdge(PRINT_SEP);
     table.println(string.toString());
     table.printHorizontalTableEdge(PRINT_SEP);
   }
+  
 
-
-//  private void printBeacon(Tuple<Long, Long> beacon, MorselPack pack, TablePrint table) {
-//    Beacon bcn = new Beacon(pack.inputHash(beacon.a), beacon.b);
-//    table.printRow(beacon.a, "created after " + new Date(bcn.utc()) + "  (beacon)");
-//    table.printRow(" beacon:",  bcn.hashHex() );
-//    table.printRow(" ref URL:",  bcn.getRefUrl() );
-//  }
+  private final static String RED_TOKEN = "[X]";
+  private final static String NULL_TOKEN = "null";
+  
+  private void writeColumn(StringWriter writer, ColumnValue col) {
+    switch (col.getType()) {
+    case NULL:
+      writer.append(NULL_TOKEN);
+      break;
+    case BYTES:
+      writer.append(IntegralStrings.toHex(((BytesValue) col).getBytes()));
+      break;
+    case HASH:
+      writer.append(RED_TOKEN);
+      break;
+    case LONG:
+      writer.append(String.valueOf(((LongValue) col).getNumber()));
+      break;
+    case STRING:
+      writer.append(((StringValue) col).getString());
+      break;
+    case DOUBLE:
+      writer.append(String.valueOf(((DoubleValue) col).getValue()));
+      break;
+    case DATE:
+      writer.append(new Date(((DateValue) col).getUtc()).toString());
+      break;
+    }
+  }
 
 
 
@@ -403,7 +489,8 @@ public class Mrsl extends MainTemplate {
     paragraph =
         "Command line tool for reading and manipulating morsel files ('" + MRSL_EXT + "' ext). " +
         "Morsel files are tamper-proof tear-outs of rows from an opaque skip ledger paired with the " +
-        "source of those rows (i.e. the content whose hash is the row's input-hash).";
+        "source of those rows (i.e. the content whose hash is the input-hash in its corresponding " +
+        " skip ledger row).";
     printer.printParagraph(paragraph);
     printer.println();
   }
@@ -422,8 +509,9 @@ public class Mrsl extends MainTemplate {
     printer.println();
     String paragraph =
         "Commands in the table below each take a morsel file as argument. The order in which " +
-        "arguments are entered doesn't matter. Reminder: if a required command name collides with a " +
-        "pathname, the pathname can be prefixed with '." + File.separatorChar + "'";
+        "arguments are entered doesn't matter. (Reminder: if a required command collides with a " +
+        "local filename, prefix the filename with '." + File.separatorChar + "' in order to " +
+        "disambiguate.)";
     printer.printParagraph(paragraph);
     printer.println();
 
@@ -436,13 +524,16 @@ public class Mrsl extends MainTemplate {
     table.printRow(STATE, "prints the highest row number and that row's hash");
     table.println();
     
-    table.printRow(LIST, "lists the morsel's rows and entries");
+    table.printRow(LIST, "lists the morsel's rows and entries (source-rows)");
     table.println();
     
-    table.printRow(ENTRY, "lists in detail the given entries or saves them to a file");
+    table.printRow(HISTORY, "lists the witnessed rows and their evidence");
+    table.println();
+    
+    table.printRow(ENTRY, "lists in detail the given source-rows or saves them to a file");
     table.printRow(null,  "Arguments:");
     table.println();
-    table.printRow(null,   "<line-numbers>      (required)");
+    table.printRow(null,   "<row-numbers>       (required)");
     table.println();
     table.printRow(null,   "Strictly ascending line numbers separated by commas or spaces");
     table.printRow(null,   "Ranges (incl.) may be substituted for numbers. For example:");
@@ -450,18 +541,15 @@ public class Mrsl extends MainTemplate {
     table.println();
     table.printRow(null, SAVE + "=<path/to/file> (optional)");
     table.println();
-    table.printRow(null,  "If provided, then entries are saved to the given file path in");
-    table.printRow(null,  "the order given; otherwise lists the entries as text.");
+    table.printRow(null,  "If provided, then source-rows are saved to the given file path");
+    table.printRow(null,  "in the order given; otherwise they are printed to the console.");
     table.println();
     table.printRow(null, SEP + "=<separator>     (optional)");
     table.println();
-    table.printRow(null,  "If provided with " + SAVE + "=<path/to/file>, then each entry is");
-    table.printRow(null,  "is trailed with the <seperator> string. To set with no separator,");
-    table.printRow(null,   "leave the value empty.");
-    table.printRow(null,  "DEFAULT: " + SEP + "=\\\\n     (new line)");
-    table.println();
-    table.printRow(null,  "Note most shells will eat a single '\\' (which is why it is shown");
-    table.printRow(null,  "in doubles for the default above).");
+    table.printRow(null,  "If provided with " + SAVE + "=<path/to/file>, then column values");
+    table.printRow(null,  "are separated with the given string. To set with no separator,");
+    table.printRow(null,  "leave its value empty.");
+    table.printRow(null,  "DEFAULT: " + SEP + "=' '     (single whitespace)");
     table.println();
 
     table.printRow(MERGE, "merges the given morsel files to a new morsel file. The morsels");
@@ -475,7 +563,7 @@ public class Mrsl extends MainTemplate {
     table.printRow(null,  "If path/to/file doesn't exist, then the merged morsel gets");
     table.printRow(null,  "created there; if the path is an existing directory, then a");
     table.printRow(null,  "file with a merge-generated name is created in that directory.");
-    table.printRow(null,  "DEFAULT: '.'  (current directory)");
+    table.printRow(null,  "DEFAULT: '.'                 (current directory)");
     table.println();
     
     
@@ -507,7 +595,7 @@ public class Mrsl extends MainTemplate {
     out.println("Rows:");
     table.printRow(" count:", rns.size());
     table.printRow(" # range:", "lo: " + pack.lo(), "hi: " + hi);
-    table.printRow(" with entries:", entries.size());
+    table.printRow(" with sources:", entries.size());
     out.println();
     
     // !beacons.isEmpty() || !trails.isEmpty() == !(beacons.isEmpty() && trails.isEmpty())
@@ -584,16 +672,7 @@ public class Mrsl extends MainTemplate {
 
         SourceRow srcRow = pack.getSourceByRowNumber(rn);
         
-        String srcDesc = srcRow.toString(", ");
-        
-//        int size = entry.contentSize();
-//        String sizeString; 
-//        if (size / 1024 < 9)
-//          sizeString = size + " B |";
-//        else
-//          sizeString = (size / 1024) + " kB |";
-
-        
+        String srcDesc = srcRow.toString(" ");
 
         if (date == null) {
 
@@ -634,6 +713,7 @@ public class Mrsl extends MainTemplate {
   private final static String SUM = "sum";
   private final static String STATE = "state";
   private final static String LIST = "list";
+  private final static String HISTORY = "history";
   private final static String ENTRY = "entry";
   private final static String MERGE = "merge";
   

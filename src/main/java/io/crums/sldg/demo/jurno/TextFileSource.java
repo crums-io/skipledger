@@ -214,6 +214,29 @@ public class TextFileSource implements SourceLedger {
    */
   @Override
   public synchronized SourceRow getSourceRow(long rn) {
+    
+    String line = rawRowText(rn);
+    ArrayList<ColumnValue> words = new ArrayList<>();
+    int col = 0;
+    for ( var tokenizer = new StringTokenizer(line);
+          tokenizer.hasMoreTokens(); )
+      words.add(new StringValue(tokenizer.nextToken(), shaker.salt(rn, ++col)));
+    
+    assert !words.isEmpty();
+    
+    return new SourceRow(rn, words);
+  }
+  
+  
+  
+  /**
+   * Returns the text on the line with the given row number.
+   * 
+   * @param rn row-number, not line-number.
+   * 
+   * @return non-null, non-empty line of text (as is, uncanonicalized)
+   */
+  public synchronized String rawRowText(long rn) {
     if (rn < 1 || rn > lineOffsets.size())
       throw new IllegalArgumentException("rn out-of-bounds: " + rn);
     
@@ -231,19 +254,10 @@ public class TextFileSource implements SourceLedger {
       raf.readFully(lineBytes);
       
     } catch (IOException iox) {
-      throw new UncheckedIOException("on getSourceByRowNumber(" + rn + ")", iox);
+      throw new UncheckedIOException("on rawRowText(" + rn + ")", iox);
     }
-
     
-    ArrayList<ColumnValue> words = new ArrayList<>();
-    int col = 0;
-    for ( var tokenizer = new StringTokenizer(new String(lineBytes, Strings.UTF_8));
-          tokenizer.hasMoreTokens(); )
-      words.add(new StringValue(tokenizer.nextToken(), shaker.salt(rn, ++col)));
-    
-    assert !words.isEmpty();
-    
-    return new SourceRow(rn, words);
+    return new String(lineBytes, Strings.UTF_8);
   }
 
 }

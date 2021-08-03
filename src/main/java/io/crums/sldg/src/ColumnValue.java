@@ -9,6 +9,7 @@ import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Objects;
 
 import io.crums.io.Serial;
@@ -85,6 +86,10 @@ public abstract class ColumnValue implements Serial {
         return new DoubleValue(num.doubleValue(), salt);
       else
         return new LongValue(num.longValue(), salt);
+      
+    } else if (obj instanceof Date) {
+        Date date = (Date) obj;
+        return new DateValue(date.getTime(), salt);
     
     } else if (obj instanceof ColumnValue) {
       return (ColumnValue) obj;
@@ -113,9 +118,10 @@ public abstract class ColumnValue implements Serial {
     case STRING:  return StringValue.loadString(in, salt);
     case LONG:    return LongValue.loadLong(in, salt);
     case DOUBLE:  return DoubleValue.loadDouble(in, salt);
-    default:
-      throw new RuntimeException("unaccounted type " + type);
+    case DATE:    return DateValue.loadDate(in, salt);
     }
+    
+    throw new RuntimeException("unaccounted type: " + ColumnType.forCode(type));
   }
   
   

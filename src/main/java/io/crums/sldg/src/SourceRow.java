@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 
 import io.crums.io.Serial;
@@ -186,7 +187,13 @@ public class SourceRow implements Serial {
   
   
   
-  public boolean isRedacted() {
+  /**
+   * Determines whether any of the column values is redacted. A column value is considered
+   * redacted if instead of its value, it is represented by its hash.
+   * 
+   * @return {@code true} iff one or more column values is of type {@linkplain ColumnType#HASH}
+   */
+  public final boolean hasRedactions() {
     int i = columns.size();
     while (i-- > 0 && columns.get(i).getType() != ColumnType.HASH);
     return i != -1;
@@ -255,7 +262,7 @@ public class SourceRow implements Serial {
   
   
   
-  public void writeSource(WritableByteChannel ch, byte[] colSeparator, byte[] rowSep) throws IOException {
+  public void writeSource(WritableByteChannel ch, byte[] colSeparator) throws IOException {
     
     final int colCount = columns.size();
     
@@ -271,10 +278,6 @@ public class SourceRow implements Serial {
         writeColumn(ch, columns.get(index));
       }
     }
-    
-    
-    if (rowSep != null && rowSep.length > 0)
-      ChannelUtils.writeRemaining(ch, ByteBuffer.wrap(rowSep));
   }
   
   
@@ -291,7 +294,9 @@ public class SourceRow implements Serial {
         byte[] utf8 = ((StringValue) col).getString().getBytes(Strings.UTF_8);
         ChannelUtils.writeRemaining(ch, ByteBuffer.wrap(utf8));
       }
-      break;    case LONG:
+      break;
+    case LONG:
+    case DATE:
       {
         ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putLong(0, ((LongValue) col).getNumber());
         ChannelUtils.writeRemaining(ch, buf);
@@ -309,7 +314,17 @@ public class SourceRow implements Serial {
   
   
   
-  public void writeSource(Writer writer, String colSeparator, String rowSep) throws IOException {
+
+  /**
+   * Writes this source row to the given writer.
+   * <p>
+   * Note this is totally inadequate. A user should be able to format this as they
+   * like. Keeping it simple for now.
+   * </p>
+   * 
+   * @param colSeparator Optional column separator. Eg comma, or tab delimited
+   */
+  public void writeSource(Writer writer, String colSeparator) throws IOException {
     
     final int colCount = columns.size();
     
@@ -324,11 +339,7 @@ public class SourceRow implements Serial {
         writeColumn(writer, columns.get(index));
       }
     }
-    
-    if (rowSep != null)
-      writer.write(rowSep);
   }
-  
   
   
   
@@ -346,8 +357,13 @@ public class SourceRow implements Serial {
     case STRING:
       writer.write(((StringValue) col).getString());
       break;
-    default:
-      throw new RuntimeException("unaccounted type: " + col.getType());
+    case DOUBLE:
+      writer.write(String.valueOf(((DoubleValue) col).getValue()));
+      break;
+    case DATE:
+      writer.write(new Date(((DateValue) col).getUtc()).toString());
+      break;
+    
     }
     
   }
@@ -356,14 +372,15 @@ public class SourceRow implements Serial {
   /**
    * 
    * Returns a string representation of the object. This can be quite big. (It doesn't
-   * trim the columns if they're big.) Use sparingly.
+   * trim the columns if they're big.) Inspect the individual {@linkplain ColumnValue}s, if
+   * not sure.
    * 
-   * @return {@code toString(", ")}
+   * @return {@code toString(" ")}
    * 
    * @see #safeDebugString()
    */
   public String toString() {
-    return toString(", ");
+    return toString(" ");
   }
   
   
@@ -378,7 +395,7 @@ public class SourceRow implements Serial {
       sep = "";
     try {
       StringWriter sw = new StringWriter(64);
-      writeSource(sw, sep, null);
+      writeSource(sw, sep);
       return sw.toString();
     } catch (IOException impossible) {
       throw new RuntimeException("assertion failed: " + impossible, impossible);
@@ -410,6 +427,9 @@ public class SourceRow implements Serial {
         break;
       case LONG:
         string.append('[').append(((LongValue) columnVal).getNumber()).append(']');
+        break;
+      case DATE:
+        string.append('[').append(new Date(((DateValue) columnVal).getUtc())).append(']');
         break;
       case DOUBLE:
         string.append(((DoubleValue) columnVal).getValue()).append(']');

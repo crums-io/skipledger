@@ -126,5 +126,10 @@ public class Journal extends Ledger {
     return textSource.getLinesInFile();
   }
   
+  
+  public String getRowText(long rowNumber) {
+    return textSource.rawRowText(rowNumber);
+  }
+  
 
 }
