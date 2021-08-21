@@ -20,6 +20,7 @@ import com.gnahraf.test.IoTestCase;
 
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.src.ColumnType;
+import io.crums.sldg.src.DateValue;
 import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
@@ -72,7 +73,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       
       con.createStatement().execute(createSql);
       
-      SqlSourceQuery srcLedger = new SqlSourceQuery.Builder(
+      SqlSourceQuery srcLedger = new SqlSourceQuery.DefaultBuilder(
           "inventory",
           "entry_no", "entry_type", "serial_no_1", "serial_no_2", "entry_date", "entry_name").build(con, shaker);
 
@@ -109,6 +110,7 @@ public class SqlSourceQueryTest extends IoTestCase {
   @Test
   public void testTwo() throws Exception {
     final Object label = new Object() { };
+    TableSalt shaker = randomShaker(1L);
     String createSql =
         "CREATE TABLE inventory (\n" +
         "  entry_no BIGINT NOT NULL AUTO_INCREMENT,\n" +
@@ -126,9 +128,9 @@ public class SqlSourceQueryTest extends IoTestCase {
       
       con.createStatement().execute(createSql);
       
-      SqlSourceQuery srcLedger = new SqlSourceQuery.Builder(
+      SqlSourceQuery srcLedger = new SqlSourceQuery.DefaultBuilder(
           "inventory",
-          "entry_no", "entry_type", "serial_no_1", "serial_no_2", "entry_date", "entry_name").build(con);
+          "entry_no", "entry_type", "serial_no_1", "serial_no_2", "entry_date", "entry_name").build(con, shaker);
 
       
       assertEquals(0, srcLedger.size());
@@ -175,7 +177,7 @@ public class SqlSourceQueryTest extends IoTestCase {
       assertNumberValue(srcRow, 2, 5317400);
       assertNullValue(srcRow, 3);
       
-      LongValue dateValue = (LongValue) srcRow.getColumns().get(4);
+      DateValue dateValue = (DateValue) srcRow.getColumns().get(4);
       // don't want to get bogged down in timezone issues, so just check the UTC time is in the
       // right range
       Calendar min = Calendar.getInstance();
@@ -186,8 +188,8 @@ public class SqlSourceQueryTest extends IoTestCase {
       max.clear();
       max.set(2021, 5, 11);
       
-      assertTrue(dateValue.getNumber() > min.getTimeInMillis());
-      assertTrue(dateValue.getNumber() < max.getTimeInMillis());
+      assertTrue(dateValue.getUtc() > min.getTimeInMillis());
+      assertTrue(dateValue.getUtc() < max.getTimeInMillis());
       
 
       assertStringValue(srcRow, 5, "K 6x Muha");

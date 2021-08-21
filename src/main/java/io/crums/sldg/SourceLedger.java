@@ -9,6 +9,9 @@ import io.crums.sldg.src.SourceRow;
  * A read-only view of the source-rows, each hash of which defines its input-hash in the skip
  * ledger. In many, if not most, use cases this is an append-only table
  * (or view) in a relational database.
+ * 
+ * @see #size()
+ * @see #getSourceRow(long)
  */
 public interface SourceLedger extends AutoCloseable {
   

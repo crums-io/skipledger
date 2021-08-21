@@ -23,11 +23,19 @@ import io.crums.util.Base64_32;
 import io.crums.util.mrkl.Proof;
 
 /**
- * 
+ * A {@linkplain HashLedger} that lives in an SQL database.
  */
 public class SqlHashLedger implements HashLedger {
   
   
+  /**
+   * Declares a new instance (doesn't yet exist in the database) using the given
+   * <em>proto-name</em>. This becomes the prefix of the name of various tables
+   * created to back the hash-ledger.
+   * 
+   * @param con db connection
+   * @param protoName proto-name. Designed to be the same as the source-table
+   */
   public static SqlHashLedger declareNewInstance(Connection con, String protoName) {
     return declareNewInstance(con, new HashLedgerSchema(protoName));
   }
@@ -96,7 +104,23 @@ public class SqlHashLedger implements HashLedger {
   
 
   /**
+   * Creates a new instance from an already existing schema on the backing database
    * 
+   * @param protoName the proto (prefix) name from which other table names are inferred
+   * @param con       the database the tables live in
+   */
+  public SqlHashLedger(String protoName, Connection con) {
+    this(new HashLedgerSchema(protoName), con);
+  }
+  
+  
+  
+
+  /**
+   * Creates a new instance from an already existing schema on the backing database
+   * 
+   * @param schema    describes the existing backing hash-ledger tables
+   * @param con       the database the tables live in
    */
   public SqlHashLedger(HashLedgerSchema schema, Connection con) {
     this.schema = Objects.requireNonNull(schema, "null schema");

@@ -176,7 +176,8 @@ public class Ledger implements AutoCloseable {
   
   
   /**
-   * Creates an instance that <em>owns</em> both arguments. There's no progress ticker.
+   * Creates an instance that <em>owns</em> both arguments. The hash-ledger is
+   * trusted. There's no progress ticker.
    * 
    * @param srcLedger the source
    * @param hashLedger the hash ledger matching the source
@@ -185,7 +186,7 @@ public class Ledger implements AutoCloseable {
    * @see #close()
    */
   public Ledger(SourceLedger srcLedger, HashLedger hashLedger) {
-    this(srcLedger, hashLedger, null, false);
+    this(srcLedger, hashLedger, null, true);
   }
 
   /**
