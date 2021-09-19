@@ -19,6 +19,9 @@ public class SqlTestHarness {
   public final static String LEDGER_TABLENAME = "sldg";
   
   
+  /**
+   * @return an H2 db connection
+   */
   public static Connection newDatabase(File dir) throws ClassNotFoundException, SQLException {
     dir.mkdirs();
     String dbPath = new File(dir, MOCK_DB_NAME).getPath();
@@ -34,7 +37,14 @@ public class SqlTestHarness {
   }
   
   
-  
+  /**
+   * @return schema appropriate for H2 db
+   */
+  public static HashLedgerSchema newSchema(String protoname) {
+    var schema = new HashLedgerSchema(protoname);
+    schema.setAutoIncrementKeyword("AUTO_INCREMENT");
+    return schema;
+  }
   
 
 }

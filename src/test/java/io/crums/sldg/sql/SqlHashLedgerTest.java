@@ -22,6 +22,8 @@ public class SqlHashLedgerTest extends AbstractHashLedgerTest {
   @Override
   protected HashLedger declareNewInstance(File testDir) throws Exception {
     Connection con = SqlTestHarness.newDatabase(testDir);
-    return SqlHashLedger.declareNewInstance(con, MOCK_SRC_NAME);
+    
+    var schema = SqlTestHarness.newSchema(MOCK_SRC_NAME);
+    return SqlHashLedger.declareNewInstance(con, schema);
   }
 }

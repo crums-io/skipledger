@@ -795,7 +795,7 @@ public class Ledger implements AutoCloseable {
    * @return the number of rows appended to the hash-ledger
    */
   public long update() {
-    return update(0);
+    return update(Long.MAX_VALUE);
   }
   
   
@@ -804,24 +804,22 @@ public class Ledger implements AutoCloseable {
   /**
    * Updates the hash-ledger with new inputs from the source-ledger.
    * 
-   * @param commitSlack
+   * @param maxNewRows the maximum number of rows to record from the source-ledger
    * 
    * @return the number of rows appended to the hash-ledger
    */
-  public long update(int commitSlack) {
+  public long update(long maxNewRows) {
     if (state.needsMending())
       throw new IllegalStateException("Ledger needs mending. State: " + state);
-    if (commitSlack < 0)
-      throw new IllegalArgumentException("commitSlack " + commitSlack);
     
-    long lastCommit = hashLedger.size();
-    long lastSrcRow = srcLedger.size();
+    if (maxNewRows <= 0)
+      return 0L;
+    
+    final long lastCommit = hashLedger.size();
+    final long lastSrcRow = srcLedger.size();
     checkPending(lastSrcRow - lastCommit);
-    long lastTargetCommit = lastSrcRow - commitSlack;
     
-    final long count = lastTargetCommit - lastCommit;
-    if (count <= 0)
-      return 0;
+    final long lastTargetCommit = Math.min(lastSrcRow, lastCommit + maxNewRows);
     
     SkipLedger skipLedger = hashLedger.getSkipLedger();
     for (long nextRow = lastCommit + 1; nextRow <= lastTargetCommit; ++nextRow) {
@@ -830,7 +828,7 @@ public class Ledger implements AutoCloseable {
       ticker.tick();
     }
     
-    return count;
+    return lastTargetCommit - lastCommit;
   }
   
   

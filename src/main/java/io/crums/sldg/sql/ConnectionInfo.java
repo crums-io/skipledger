@@ -25,6 +25,7 @@ public class ConnectionInfo {
   private final String driverClassname;
   private final String driverClasspath;
   
+  // FIXME: use DriverManager to implement nesting. Buggy as implemented.
   private final ConnectionInfo parent;
 
   

@@ -286,7 +286,7 @@ public class Jurno extends MainTemplate {
       try {
         WitnessReport witReport = journal.witness();
         if (witReport.nothingDone())
-          message += "." + System.lineSeparator() + "Up-to-date.";
+          message += "." + System.lineSeparator() + "Up to date.";
         else {
           int crums = witReport.getRecords().size();
           int crumtrails = witReport.getStored().size();
@@ -520,6 +520,18 @@ public class Jurno extends MainTemplate {
 
 
   private final static int INDENT = 1;
+  
+  private final static String MRSL_PROGNAME = Mrsl.class.getSimpleName().toLowerCase();
+  
+  
+  @Override
+  protected void printLegend(PrintStream out) {
+    out.println();
+    out.println("For additional info on morsels try");
+    out.println("  " + MRSL_PROGNAME + " -help");
+    out.println("from the console.");
+    out.println();
+  }
 
   @Override
   protected void printDescription() {
@@ -546,7 +558,7 @@ public class Jurno extends MainTemplate {
     printer.println();
     paragraph =
         "Each row (ledgerable line) consists of a sequence of tokens (usually words) identified by surrounding " +
-        "whitespace. For this reason, neither indentation nor [the amount of] word-spacing matter on a" +
+        "whitespace. For this reason, neither indentation nor [the amount of] word-spacing matter on a " +
         "ledgerable line.";
     printer.printParagraph(paragraph);
     printer.println();

@@ -24,8 +24,8 @@ import io.crums.util.TidyProperties;
 public class ConfigFileBuilder {
   
   private final static String PREAMBLE =
-      " Namespace Summary:\n " +
-      "=================\n\n " +
+      " Namespace Summary:\n" +
+      " =================\n\n " +
       SOURCE_JDBC_URL + ":\n " +
       " Connection URL (jdbc:) to source table (required; read-only OK)\n\n " +
       SOURCE_INFO_PREFIX + "xyz:\n " +
@@ -40,7 +40,7 @@ public class ConfigFileBuilder {
       " \"SELECT\" by row-number prepared-statement query (required)\n " +
       " Note however you design this, your row-nums must range [1, size] (no gaps)\n\n " +
       SOURCE_SALT_SEED + ":\n " +
-      " 64-char hex value seed for generating table-cell salts by row/col coordinates\n " +
+      " Secret 64-char hex value seed for generating table-cell salts by row/col coordinates\n " +
       " Note this value should not be changed or lost. It protects individual table-cell\n " +
       " values from rainbow attacks (reverse-engineering a value from its hash).\n\n " +
       HASH_JDBC_URL + ":\n " +
@@ -55,6 +55,17 @@ public class ConfigFileBuilder {
       HASH_TABLE_PREFIX + ":\n " +
       " Hash-ledger tables (3) use this prefix in their table names. Usually set to\n " +
       " the source table's name.\n\n " +
+
+      "The following 3 specify the SQL schemas for the hash tables. They can be\n " +
+      "DB vendor specific. For eg, the AUTO_INCREMENT keyword.\n\n" +
+      
+      HASH_SCHEMA_SKIP + ":\n " +
+      " SQL schema (CREATE TABLE statement) for the skipledger table (defaulted)\n\n " +
+      HASH_SCHEMA_CHAIN + ":\n " +
+      " SQL schema (CREATE TABLE statement) for the chain table (defaulted)\n\n " +
+      HASH_SCHEMA_TRAIL + ":\n " +
+      " SQL schema (CREATE TABLE statement) for the trail table (defaulted)\n\n " +
+      
       "Note, driver classpaths above may either be set absolutely, or relative to\n " +
       "the location of this file.\n\n";
   
@@ -78,6 +89,9 @@ public class ConfigFileBuilder {
   private String hashDriverCp;
   
   private String hashTablePrefix;
+  private String hashSkipSchema;
+  private String hashChainSchema;
+  private String hashTrailSchema;
   
   /**
    * The source seed salt in hex.
@@ -113,6 +127,11 @@ public class ConfigFileBuilder {
   
   public void setSourceConProperty(String name, String value) {
     setConProperty(name, value, SOURCE_INFO_PREFIX);
+  }
+  
+  
+  public Properties getSourceConProperties() {
+    return TidyProperties.subProperties(aux, SOURCE_INFO_PREFIX);
   }
   
   
@@ -152,6 +171,9 @@ public class ConfigFileBuilder {
     set(props, SOURCE_JDBC_DRIVER, srcDriverClass);
     set(props, HASH_JDBC_DRIVER_CLASSPATH, hashDriverCp);
     set(props, HASH_TABLE_PREFIX, hashTablePrefix);
+    set(props, HASH_SCHEMA_SKIP, hashSkipSchema);
+    set(props, HASH_SCHEMA_TRAIL, hashTrailSchema);
+    set(props, HASH_SCHEMA_CHAIN, hashChainSchema);
     set(props, SOURCE_SALT_SEED, srcSalt);
     set(props, SOURCE_QUERY_SIZE, srcSizeQuery);
     set(props, SOURCE_QUERY_ROW, srcRowQuery);
@@ -262,6 +284,11 @@ public class ConfigFileBuilder {
   }
   
   
+  public Properties getHashConProperties() {
+    return TidyProperties.subProperties(aux, HASH_INFO_PREFIX);
+  }
+  
+  
   
   private void setConProperty(String name, String value, String prefix) {
     name = name.trim();
@@ -368,7 +395,80 @@ public class ConfigFileBuilder {
   public void setSourceRowQuery(String srcRowQuery) {
     this.srcRowQuery = srcRowQuery;
   }
+
+
+
+  public String getHashSkipSchema() {
+    return hashSkipSchema;
+  }
+
+
+
+  public void setHashSkipSchema(String hashSkipSchema) {
+    this.hashSkipSchema = hashSkipSchema;
+  }
+
+
+
+  public String getHashChainSchema() {
+    return hashChainSchema;
+  }
+
+
+
+  public void setHashChainSchema(String hashChainSchema) {
+    this.hashChainSchema = hashChainSchema;
+  }
   
   
+  
+  public void setDefaultSkipSchema() {
+    checkTablePrefix();
+    this.hashSkipSchema =
+        HashLedgerSchema.protoSkipTableSchema(hashTablePrefix);
+  }
+  
+  
+  private void checkTablePrefix() {
+    if (hashTablePrefix == null || hashTablePrefix.isBlank())
+      throw new IllegalStateException("hash table prefix not set");
+  }
+  
+  
+  public void setDefaultChainSchema() {
+    checkTablePrefix();
+    this.hashChainSchema = HashLedgerSchema.protoChainTableSchema(hashTablePrefix);
+  }
+
+
+
+  public String getHashTrailSchema() {
+    return hashTrailSchema;
+  }
+
+
+
+  public void setHashTrailSchema(String hashTrailSchema) {
+    this.hashTrailSchema = hashTrailSchema;
+  }
+  
+  
+  public void setDefaultTrailSchema() {
+    checkTablePrefix();
+    this.hashTrailSchema = HashLedgerSchema.protoTrailTableSchema(hashTablePrefix);
+  }
+  
+  
+  
+  public void setDefaultHashSchemas() {
+    setDefaultSkipSchema();
+    setDefaultTrailSchema();
+    setDefaultChainSchema();
+  }
+  
+  public void setDefaultHashSchemas(String hashTablePrefix) {
+    setHashTablePrefix(hashTablePrefix);
+    setDefaultHashSchemas();
+  }
 
 }

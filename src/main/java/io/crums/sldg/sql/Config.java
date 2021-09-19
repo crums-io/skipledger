@@ -99,6 +99,23 @@ public class Config {
    */
   public final static String HASH_TABLE_PREFIX = ROOT + "hash.table.prefix";
   
+//  /**
+//   * The name of the value for the "AUTO INCREMENT" keyword for the SQL dialect.
+//   * Typical values are {@code AUTO INCREMENT}, {@code AUTO_INCREMENT}, etc.<br/>
+//   * Optional.
+//   */
+//  public final static String HASH_KEYWORD_AUTOINC = ROOT + "hash.keyword.autoinc";
+  
+  
+  /**
+   * The
+   */
+  public final static String HASH_SCHEMA_SKIP = ROOT + "hash.schema.skip";
+
+  public final static String HASH_SCHEMA_CHAIN = ROOT + "hash.schema.chain";
+
+  public final static String HASH_SCHEMA_TRAIL = ROOT + "hash.schema.trail";
+  
   
   public final static String SOURCE_INFO_PREFIX = ROOT + "source.info.";
   public final static String HASH_INFO_PREFIX = ROOT + "hash.info.";
@@ -123,6 +140,9 @@ public class Config {
         HASH_JDBC_DRIVER,
         HASH_JDBC_DRIVER_CLASSPATH,
         HASH_TABLE_PREFIX,
+        HASH_SCHEMA_SKIP,
+        HASH_SCHEMA_TRAIL,
+        HASH_SCHEMA_CHAIN,
     });
   
   
@@ -166,6 +186,10 @@ public class Config {
   
   
   private final String hashTablePrefix;
+//  private final String hashAutoInc;
+  private final String hashSkipSchema;
+  private final String hashChainSchema;
+  private final String hashTrailSchema;
   
   /**
    * The source seed salt in hex.
@@ -205,6 +229,10 @@ public class Config {
     
     enforceRequired(HASH_TABLE_PREFIX, hashTablePrefix);
     
+    this.hashSkipSchema = props.getProperty(HASH_SCHEMA_SKIP);
+    this.hashChainSchema = props.getProperty(HASH_SCHEMA_CHAIN);
+    this.hashTrailSchema = props.getProperty(HASH_SCHEMA_TRAIL);
+    
     this.srcSalt = getSrcSalt(props);
     
     this.srcSizeQuery = props.getProperty(SOURCE_QUERY_SIZE);
@@ -226,24 +254,17 @@ public class Config {
   
   
   private Properties getSrcInfo() {
-    return getInfo(SOURCE_INFO_PREFIX);
+    return getSubProperties(SOURCE_INFO_PREFIX);
   }
   
   
   private Properties getHashInfo() {
-    return getInfo(HASH_INFO_PREFIX);
+    return getSubProperties(HASH_INFO_PREFIX);
   }
   
   
-  private Properties getInfo(String prefix) {
-    final int plen = prefix.length();
-    Properties props = new Properties();
-    for (var entry : this.aux.entrySet()) {
-      String key = entry.getKey().toString();
-      if (key.startsWith(prefix))
-        props.put(key.substring(plen), entry.getValue());
-    }
-    return props;
+  private Properties getSubProperties(String prefix) {
+    return TidyProperties.subProperties(aux, prefix);
   }
   
   
@@ -302,6 +323,9 @@ public class Config {
     set(props, SOURCE_JDBC_DRIVER, srcDriverClass);
     set(props, HASH_JDBC_DRIVER_CLASSPATH, hashDriverCp);
     props.put(HASH_TABLE_PREFIX, hashTablePrefix);
+    props.put(HASH_SCHEMA_SKIP, hashSkipSchema);
+    props.put(HASH_SCHEMA_CHAIN, hashChainSchema);
+    props.put(HASH_SCHEMA_TRAIL, hashTrailSchema);
     props.put(SOURCE_SALT_SEED, srcSalt);
     props.put(SOURCE_QUERY_SIZE, srcSizeQuery);
     props.put(SOURCE_QUERY_ROW, srcRowQuery);
@@ -322,6 +346,15 @@ public class Config {
   
   public String getHashTablePrefix() {
     return hashTablePrefix;
+  }
+  
+  
+//  public String getHashAutoIncKeyword() {
+//    return hashAutoInc;
+//  }
+  
+  public HashLedgerSchema getHashLedgerSchema() {
+    return new HashLedgerSchema(this);
   }
   
   
@@ -358,6 +391,19 @@ public class Config {
   
   
   
+  public String getSkipTableSchema() {
+    return hashSkipSchema;
+  }
+  
+  
+  public String getChainTableSchema() {
+    return hashChainSchema;
+  }
+  
+  
+  public String getTrailTableSchema() {
+    return hashTrailSchema;
+  }
   
 }
 

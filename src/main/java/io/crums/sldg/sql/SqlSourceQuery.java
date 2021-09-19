@@ -389,6 +389,7 @@ public class SqlSourceQuery implements SourceLedger {
         }
       }
     
+    // the various char types (not worth enumerating) are cast as strings below
     default:
       // per the jdbc tutorial this always works
       // see https://docs.oracle.com/javase/tutorial/jdbc/basics/retrieving.html#retrieve_rs

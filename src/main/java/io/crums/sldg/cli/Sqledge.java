@@ -9,13 +9,21 @@ import java.io.Console;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.StringTokenizer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
+import io.crums.client.ClientException;
+import io.crums.sldg.Ledger.State;
+import io.crums.sldg.sql.Config;
 import io.crums.sldg.sql.ConfigFileBuilder;
+import io.crums.sldg.sql.ConnectionInfo;
+import io.crums.sldg.sql.SqlLedger;
 import io.crums.sldg.sql.SqlSourceQuery;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.util.IntegralStrings;
 import io.crums.util.Strings;
 import io.crums.util.cc.ThreadUtils;
 import io.crums.util.main.ArgList;
@@ -30,6 +38,12 @@ import io.crums.util.main.TablePrint;
 public class Sqledge extends MainTemplate {
   
   private String command;
+  
+  private Config config;
+  
+  private SqlLedger ledger;
+  
+  private long updateCount;
 
   /**
    * @param args
@@ -39,16 +53,39 @@ public class Sqledge extends MainTemplate {
   }
   
   
-  
+  @Override
+  protected void close() {
+    ledger.close();
+  }
 
   @Override
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = newArgList(args);
-    this.command = argList.removeCommand(SETUP);
+    this.command = argList.removeCommand(SETUP, CREATE, STATUS, UPDATE);
     switch (command) {
     case SETUP:
       break;
+    case UPDATE:
+      {
+        var nums = argList.removeNumbers();
+        if (nums.size() > 1)
+          throw new IllegalArgumentException(
+              "too many number arguments with '" + UPDATE + "' command: " + nums);
+        
+        this.updateCount = nums.isEmpty() ? Long.MAX_VALUE : nums.get(0);
+      }
+    case CREATE:
+    case STATUS:
+      loadConfig(argList);
+      break;
     }
+  }
+  
+  private void loadConfig(ArgList argList) {
+    File configFile = argList.removeExistingFile();
+    if (configFile == null)
+      throw new IllegalArgumentException("no config file found in arguments");
+    this.config = new Config(configFile);
   }
 
   @Override
@@ -57,6 +94,15 @@ public class Sqledge extends MainTemplate {
     case SETUP:
       setup();
       break;
+    case STATUS:
+      status();
+      break;
+    case CREATE:
+      create();
+      break;
+    case UPDATE:
+      update();
+      break;
     }
   }
   
@@ -65,16 +111,172 @@ public class Sqledge extends MainTemplate {
   
   
   
+  
+  
+  
+  
+  void create() {
+    printf("creating backing hash ledger tables (3)%n");
+    this.ledger = SqlLedger.declareNewInstance(config);
+    printf("%nDone.%n");
+    status();
+  }
+  
+  
+  void update() {
+    this.ledger = SqlLedger.loadInstance(config);
+    var state = ledger.getState();
+    switch (state) {
+    case FORKED:
+    case TRIMMED:
+      status();
+      break;
+    case PENDING:
+      long rowsAdded = ledger.update(updateCount);
+      printf("%n%d %s added%n%n", rowsAdded, pluralize("source row", rowsAdded));
+    case COMPLETE:
+      
+      try {
+        var witReport = ledger.witness();
+        if (witReport.nothingDone()) {
+          if (state.isComplete())
+            printf("%nUp to date.%n");
+          else {
+            printf("All rows recorded in hash ledger already witnessed.%n");
+          }
+        } else {
+          int crums = witReport.getRecords().size();
+          int crumtrails = witReport.getStored().size();
+          printf(
+              "%n%d %s submitted; %d %s (%s) stored%n%n",
+              crums, pluralize("crum", crums),
+              crumtrails, pluralize("crumtrail", crumtrails),
+              pluralize("witness record", crumtrails));
+          if (crumtrails == 0)
+            printf("Run '%s' in a few minutes", UPDATE);
+        }
+      } catch (ClientException cx) {
+        System.out.printf(
+            "%nEncountered a netword error while attempting to have the ledger witnessed%n" +
+            "[%d] is the last witnessed row%n%n", ledger.lastWitnessedRowNumber());
+        throw cx;
+      }
+      printf("%n");
+    }
+  }
+
+
+
+  private final static int RM = 80;
+  private final static int LEFT_STATUS_COL_WIDTH = 16;
+  private final static int RIGHT_STATUS_COL_WIDTH = 18;
+  private final static int MID_STATUS_COL_WIDTH = RM - LEFT_STATUS_COL_WIDTH - RIGHT_STATUS_COL_WIDTH;
+  
+
+  void status() {
+    initLedger();
+    
+    final long rowsRecorded = ledger.hashLedgerSize();
+    final int trails = ledger.getHashLedger().getTrailCount();
+    printf("%n%d %s recorded in hash ledger%n", rowsRecorded, pluralize("row", rowsRecorded));
+    
+    printf("%d %s%n", trails, pluralize("crumtrail", trails));
+    
+    State state = ledger.getState();
+    if (state.needsMending()) {
+      
+      if (state.isForked()) {
+        long fc = ledger.getFirstConflict();
+        printf("%nrow [%d] has been modified%n", fc);
+        printf("%nTo fix, either%n");
+        printf("  a) restore row [%d] to its previous state, or%n", fc);
+        printf("  b) rollback (trim) the hash ledger to row [%d]%n", fc - 1);
+        
+      } else {
+        // assert state.isTrimmed();
+        long trimmed = ledger.sourceLedgerSize();
+        long missing = rowsRecorded - trimmed;
+        printf("%nsource ledger has been trimmed to %d %s%n", trimmed, pluralize("row", trimmed));
+        printf("%nTo fix, either%n");
+        printf("  a) restore the last %d missing %s, or%n", missing, pluralize("row", missing));
+        printf("  b) rollback (trim) the hash ledger to row [%d]%n", trimmed);
+        
+      }
+    } else {
+      final long unwitnessRows = ledger.getHashLedger().unwitnessedRowCount();
+      if (state.isPending()) {
+        long pending = ledger.rowsPending();
+        printf("%n%d %s in source ledger not yet recorded%n", pending, pluralize("row", pending));
+        
+      } else {
+        // assert state.isComplete();
+        printf("%nhash ledger is up to date with source ledger%n");
+        if (unwitnessRows == 0) {
+          printf("all row hashes witnessed%n");
+        } else {
+          printf("%d remaining row %s to witness%n", unwitnessRows, pluralize("hash", unwitnessRows));
+        }
+      }
+      if (trails != 0) {
+        TablePrint table = new TablePrint(
+            LEFT_STATUS_COL_WIDTH,
+            MID_STATUS_COL_WIDTH,
+            RIGHT_STATUS_COL_WIDTH);
+        table.println();
+        String heading = "First ";
+        boolean single = trails == 1;
+        if (single)
+          heading += " (and only) ";
+        heading += " crumtrail";
+        table.printRow(null, heading);
+        printTrailDetail(0, table);
+        
+        if (!single) {
+          table.println();
+          table.printRow(null, "Last crumtrail");
+          printTrailDetail(trails - 1, table);
+        }
+        table.println();
+      }
+      
+      printf(
+          "%nstate (row [%d] hash): %s%n",
+          rowsRecorded,
+          IntegralStrings.toHex(ledger.getHashLedger().getSkipLedger().stateHash()));
+    }
+    printf("%n");
+  }
+  
+  
+  private void printTrailDetail(int index, TablePrint table) {
+    TrailedRow trailedRow = ledger.getHashLedger().getTrailByIndex(index);
+    long utc = trailedRow.utc();
+    table.printRow("row #: ", ledger.getHashLedger().getTrailedRowNumbers().get(index));
+    table.printRow("created before:", new Date(utc), "UTC: " + utc);
+    table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
+    table.printRow("ref URL:", trailedRow.trail().getRefUrl());
+  }
+  
+
+
+
+  private void initLedger() {
+    if (ledger == null)
+      this.ledger = SqlLedger.loadInstance(config);
+  }
+
+
   private ConfigFileBuilder builder;
   private Console console;
 
-  private void setup() {
+  void setup() {
     this.console = System.console();
     if (console == null) {
       System.err.println("[ERROR] No console. Aborting.");
       StdExit.GENERAL_ERROR.exit();
     }
-    console.printf("%nEntering interactive mode..%nEnter <CTRL-c> to abort at any time.%n%n");
+    console.printf("%nEntering interactive mode..%n");
+    printf("Enter <CTRL-c> to abort at any time.%n%n");
     PrintSupport printer = new PrintSupport();
     var paragraph =
         "The steps to create a valid (or at least well-formed) configuration file for this program consist " +
@@ -84,7 +286,7 @@ public class Sqledge extends MainTemplate {
     printer.printParagraph(paragraph);
     printer.println();
     paragraph =
-        "2 connections URLs is recommended, instead of just the one, because that way " +
+        "2 connection URLs are recommended, instead of just the one, because that way " +
         "it's possible to configure a read-only connection for the source-table while allowing a " +
         "read/write connection dedicated to the hash-ledger tables that track it.";
     printer.printParagraph(paragraph);
@@ -105,7 +307,8 @@ public class Sqledge extends MainTemplate {
     printer.println("  3.b Source table PRIMARY_KEY column");
     printer.println("  3.c Other source table columns");
     printer.println();
-    printer.println("4. Save the file");
+    printer.println("4. Save the file. Default schema definitions for the hash tables are saved");
+    printer.println("   Depending on the SQL flavor of your DB vendor, you may need to modify these.");
     printer.println();
     
     File targetConfigFile = getTargetConfigFile();
@@ -120,14 +323,27 @@ public class Sqledge extends MainTemplate {
       if (setHashDriverClass())
         setHashDriverClasspath();
     }
+//    setAutoIncrementKeyword(); 
     setSourceTablename();
     setSourceColumns();
     printf("%n");
     printf("Generating random salt%n");
     printf("%n");
     builder.seedSourceSalt();
+    printf("%n");
+    paragraph =
+        "Generating default schema definitions (CREATE TABLE statements) for the hash-ledger. " +
+        "Depending on the DB's SQL flavor, you may need to adjust these. For eg, the AUTO_INCREMENT " +
+        "keyword is expressed differently across DB vendors.";
+    printer.setIndentation(0);
+    printer.printParagraph(paragraph);
+    builder.setDefaultHashSchemas();
     saveConfigFile();
   }
+
+
+
+
 
 
 
@@ -140,7 +356,7 @@ public class Sqledge extends MainTemplate {
   private void saveConfigFile() {
     
     var path = builder.getConfigFile().getPath();
-    printf("Saving configuration to <%s>", path);
+    printf("Saving configuration to%n  <%s>", path);
     try {
       builder.save();
       
@@ -148,7 +364,15 @@ public class Sqledge extends MainTemplate {
       printf("%nERROR: on attempt to save <%s>%n%s%n", path, x);
     }
     printf("%n");
-    printf("%nDone.");
+    printf("%nDone.%n");
+    printf("%n");
+    String note =
+        "Review the contents of the config file (adjust per SQL dialect) and then invoke the '" + CREATE + "' command. " +
+        "You can modify the rows and columns pulled in on the SELECT \"by row number\" statement there. For example, " +
+        "you may denormalize the data (pull in other column values related to FOREIGN KEYs). " +
+        "Note you can redact any column when outputing a morsel, and that the storage overhead in the hash ledger is small and fixed per row, regardless how " +
+        "many columns are returned in the SELECT statement.";
+    new PrintSupport().printParagraph(note);
     printf("%n");
   }
 
@@ -214,7 +438,10 @@ public class Sqledge extends MainTemplate {
     } catch (InterruptedException ix) {
       Thread.currentThread().interrupt();
     }
-    console.printf(format, args);
+    if (console == null)
+      System.out.printf(format, args);
+    else
+      console.printf(format, args);
   }
 
 
@@ -431,7 +658,7 @@ public class Sqledge extends MainTemplate {
 
   private boolean setDriverClass(String url, Consumer<String> func) {
     printf(
-        "%nDo you need to set the JDBC Driver class associated with the connection URL%n '%s' ?%n%n",
+        "%nDo you need to set the JDBC Driver class associated with the connection URL%n <%s> ?%n%n",
         url);
     printf(
         "You can specify the Driver class (and then its classpath) here, if it's not%n" +
@@ -489,7 +716,7 @@ public class Sqledge extends MainTemplate {
     return supIndex == line.length() ? -1 : supIndex;
   }
   
-  int supIndexOf(String line, char c) {
+  private int supIndexOf(String line, char c) {
     int index = line.indexOf(c);
     return index == -1 ? line.length() : index;
   }
@@ -509,24 +736,6 @@ public class Sqledge extends MainTemplate {
     return setDriverClass(
         builder.getSourceUrl(),
         s -> builder.setSourceDriverClass(s));
-//    console.printf(
-//        "%nDo you need to set the JDBC Driver class associated with the connection URL%n '%s' ?%n%n" +
-//        "You can specify the Driver class (and then its classpath) here, if it's not%n" +
-//        "pre-registered with the Runtime's DriverManager.%n%n" +
-//        "Enter the driver class name (enter blank to skip):%n", builder.getSourceUrl());
-//    
-//    while (true) {
-//      String line = readLine();
-//      if (line.isEmpty()) {
-//        console.printf("%nNot setting any driver class / classpath.%n%n");
-//        return false;
-//      }
-//      if (Strings.isPermissableJavaName(line)) {
-//        builder.setSourceDriverClass(line);
-//        return true;
-//      }
-//      console.printf("%nNot a valid Java class name. Try again:%n");
-//    }
   }
 
 
@@ -539,7 +748,7 @@ public class Sqledge extends MainTemplate {
   
   private void setDriverClasspath(String driverClass, Consumer<String> func) {
     console.printf(
-        "%nGreat. Do you need to set the .jar file from which%n     %s%nwill be loaded?%n%n" +
+        "%nGreat. Do you need to set the .jar file from which%n     <%s>%nwill be loaded?%n%n" +
         "You can set the path to its .jar file either absolutely, or relative to the%n" +
         "(parent directory of the) configuration file.%n%n" +
         
@@ -565,7 +774,6 @@ public class Sqledge extends MainTemplate {
         if (resolvedPath.isFile()) {
           console.printf("%nGot it.%n%n");
           func.accept(path);
-//          builder.setSourceDriverClasspath(path);
           break;
         } else {
           String msg = "Error. " + path;
@@ -583,7 +791,33 @@ public class Sqledge extends MainTemplate {
   }
   
   private void testSrcCon() {
-    // TODO
+    printf("%nWould you like to test this DB connection? [y]:");
+    if ("y".equalsIgnoreCase(readLine())) {
+      printf("%n%nAttempting connnection.. ");
+      if (srcConWorks())
+        printf(" Works!%n%n");
+      else {
+        printf(" Woops, that didn't work.");
+        printf("%nYou can edit these configuration properties later.%n%n");
+      }
+    } else {
+      printf("%n%nOK, skipping DB connnection test%n");
+    }
+  }
+  
+  
+  private boolean srcConWorks() {
+    ConnectionInfo conInfo =
+        new ConnectionInfo(
+            builder.getSourceUrl(),
+            builder.getSourceDriverClass(),
+            builder.getSourceDriverClasspath());
+    try {
+      conInfo.open(builder.getBaseDir(), builder.getSourceConProperties()).close();
+      return true;
+    } catch (Exception x) {
+      return false;
+    }
   }
   
   
@@ -620,7 +854,6 @@ public class Sqledge extends MainTemplate {
   }
   
   private final static int INDENT = 1;
-  private final static int RM = 80;
 
   @Override
   protected void printDescription() {
@@ -647,7 +880,7 @@ public class Sqledge extends MainTemplate {
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Commands are listed in the table below.";
+        "Commands are listed in the table below. Command and argument order do not matter.";
     printer.printParagraph(paragraph);
     printer.println();
 
@@ -656,9 +889,29 @@ public class Sqledge extends MainTemplate {
     
     table.printRow(SETUP, "interactive config file setup");
     table.println();
+    
+    table.printRow(CREATE, "creates the hash ledger schema using the given config");
+    table.printRow(null,   "file. (See " + SETUP + ")");
+    table.println();
+    
+    table.printRow(STATUS, "prints the status of the ledger specified in the given");
+    table.printRow(null,   "config file");
+    table.println();
+    
+    table.printRow(UPDATE, "appends the hashes of new source rows in the hash-ledger;");
+    table.printRow(null,   "unwitnessed rows are timestamped with crumtrails.");
+    table.printRow(null,   "Args:");
+    table.printRow(null,   " <ledger config file>");
+    table.printRow(null,   " <max number of rows to append>   (defaults to all)");
+    table.println();
+    
+    
   }
   
   
   private final static String SETUP = "setup";
+  private final static String CREATE = "create";
+  private final static String STATUS = "status";
+  private final static String UPDATE = "update";
 
 }

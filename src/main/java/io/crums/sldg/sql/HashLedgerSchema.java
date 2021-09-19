@@ -3,10 +3,10 @@
  */
 package io.crums.sldg.sql;
 
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.HashSet;
 import java.util.Objects;
 
 import io.crums.sldg.HashLedger;
@@ -107,107 +107,78 @@ public class HashLedgerSchema {
   
   
   
+  public final static String PROTO_AUTOINCREMENT = "AUTO_INCREMENT";
   
-  private final static String SOFT_TAB = "\n  ";
+  
+  
+  
+  private final static String SOFT_TAB = "  ";
   
   /**
-   * Creates and returns the create-table SQL statement for a skip ledger table
-   * with the given name.
    * 
-   * @param skipTable
-   * 
-   * @see HashLedgerSchema schema
    */
-  public static String createSkipLedgerTableSql(String skipTable) {
+  public static String defaultSkipTableSchema(String skipTable) {
     return
-        "CREATE TABLE " + skipTable + " (\n" +
+        "CREATE TABLE " + skipTable + " ( " +
         SOFT_TAB +    ROW_NUM  + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    SRC_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    ROW_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
-        SOFT_TAB +    "PRIMARY KEY (" + ROW_NUM + ")\n)";
+        SOFT_TAB +    "PRIMARY KEY (" + ROW_NUM + ") )";
   }
 
+
+  
+  public static String protoSkipTableSchema(String tablePrefix) {
+    return defaultSkipTableSchema(getSkipTable(tablePrefix));
+  }
   
   
+  public static String protoTrailTableSchema(String tablePrefix) {
+    return protoTrailTableSchema(tablePrefix, PROTO_AUTOINCREMENT);
+  }
   
   
-  public static String createTrailTableSql(String trailTable, String skipTable) {
+  public static String protoTrailTableSchema(String tablePrefix, String autoInc) {
+    checkAutoInc(autoInc);
+    String trailTable = getTrailTable(tablePrefix);
+    String skipTable = getSkipTable(tablePrefix);
     return
-        "CREATE TABLE " + trailTable + " (\n" +
-        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL AUTO_INCREMENT," +
+        "CREATE TABLE " + trailTable + " (" +
+        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL " + autoInc + "," +
         SOFT_TAB +    ROW_NUM   + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    UTC       + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_IDX  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_CNT  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    CHAIN_LEN + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + TRL_ID + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + skipTable + "(" + ROW_NUM + ")\n)";
+        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + skipTable + "(" + ROW_NUM + ") )";
   }
-  
-  
-  
-  /**
-   * Returns a 5-parameter prepared insert statement. The parameter values are (in order)
-   * <ol>
-   * <li>row_num</li>
-   * <li>utc</li>
-   * <li>mrkl_idx</li>
-   * <li>mrkl_cnt></li>
-   * <li>chain_len</li>
-   * </ol>
-   */
-  public static PreparedStatement insertTrailPrepStmt(Connection con, String trailTable) throws SQLException {
-    Objects.requireNonNull(con, "null con");
-    checkForm(trailTable, "trailTable");
-    
-    String sql =
-        "INSERT INTO " + trailTable +
-        " (" + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
-        ") VALUES ( ?, ?, ?, ?, ?)";
-    
-    return con.prepareStatement(sql);
-  }
-  
-  
 
-  
-  /**
-   * Returns a single-parameter prepared select statement. The look-up key (parameter)
-   * is the {@code row_num}.
-   */
-  public static PreparedStatement selectTrailIdPrepStmt(Connection con, String trailTable) throws SQLException {
-    Objects.requireNonNull(con, "null con");
-    checkForm(trailTable, "trailTable");
-    
-    String sql =
-        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
-    
-    return con.prepareStatement(sql);
+  public static String protoChainTableSchema(String tablePrefix) {
+    return protoChainTableSchema(tablePrefix, PROTO_AUTOINCREMENT);
   }
   
   
-  public static String createChainTableSql(String chainTable, String trailTable) {
-    checkForm(chainTable, "chainTable");
-    checkForm(trailTable, "trailTable");
+  public static String protoChainTableSchema(String tablePrefix, String autoInc) {
+    checkAutoInc(autoInc);
+    String chainTable = getChainTable(tablePrefix);
+    String trailTable = getTrailTable(tablePrefix);
     return
         "CREATE TABLE " + chainTable + " (" +
-        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL AUTO_INCREMENT," +
+        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL " + autoInc + "," +
         SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + TRL_ID + ") REFERENCES " + trailTable + "(" + TRL_ID + ")\n)";
+        SOFT_TAB +    "FOREIGN KEY (" + TRL_ID + ") REFERENCES " + trailTable + "(" + TRL_ID + ") )";
+
   }
   
   
-  
-
-
-  private static void checkForm(String table, String descName) {
-    Objects.requireNonNull(table, "null " + descName);
-    if (table.length() < 2)
-      throw new SqlLedgerException("table name for " + descName + " too short: '" + table + "'");
+  private static void checkAutoInc(String autoInc) {
+    Objects.requireNonNull(autoInc, "null autoInc keyword");
+    if (autoInc.isBlank())
+      throw new IllegalArgumentException("blank autoInc: <" + ">");
   }
-  
   
   
   /**
@@ -215,23 +186,43 @@ public class HashLedgerSchema {
    */
   public final static String SKIP_TBL_EXT = "_sldg";
 
+  /**
+   * Default extension for trail[s] table.
+   */
+  public final static String TRAIL_TBL_EXT = SKIP_TBL_EXT + "_tr";
 
   /**
    * Default extension for [trail] chain[s] table.
    */
-  public final static String CHAIN_TBL_EXT = SKIP_TBL_EXT + "_chain";
-  /**
-   * Default extension for trail[s] table.
-   */
-  public final static String TRAIL_TBL_EXT = SKIP_TBL_EXT + "_trail";
+  public final static String CHAIN_TBL_EXT = SKIP_TBL_EXT + "_ch";
   
   
   
+  public static String getSkipTable(String tablePrefix) {
+    checkPrefix(tablePrefix);
+    return tablePrefix + SKIP_TBL_EXT;
+  }
+  
+  public static String getChainTable(String tablePrefix) {
+    checkPrefix(tablePrefix);
+    return tablePrefix + CHAIN_TBL_EXT;
+  }
+  
+  public static String getTrailTable(String tablePrefix) {
+    checkPrefix(tablePrefix);
+    return tablePrefix + TRAIL_TBL_EXT;
+  }
+  
+  private static void checkPrefix(String tablePrefix) {
+    if (tablePrefix == null || tablePrefix.isBlank())
+      throw new IllegalArgumentException("tablePrefix: " + tablePrefix);
+  }
   
   
+//  private final String sourceTable;
+  private final Config config;
   
-  
-  private final String sourceTable;
+  private final String tablePrefix;
   private final String skipTable;
   private final String chainTable;
   private final String trailTable;
@@ -241,78 +232,34 @@ public class HashLedgerSchema {
    * Creates a new instance using the default naming scheme to derive ledger table names
    * from the source table's name.
    * 
-   * @param sourceTable   the name of the source table (for which we're building a ledger)
+   * @param tablePrefix   the name of the source table (for which we're building a ledger)
    * 
    * @see #SKIP_TBL_EXT
-   * @see #BEACON_TBL_EXT
    * @see #CHAIN_TBL_EXT
    * @see #TRAIL_TBL_EXT
    */
-  public HashLedgerSchema(String sourceTable) {
-    this(
-        sourceTable,
-        sourceTable + SKIP_TBL_EXT,
-        sourceTable + CHAIN_TBL_EXT,
-        sourceTable + TRAIL_TBL_EXT);
+  public HashLedgerSchema(String tablePrefix) {
+    this.config = null;
+    this.tablePrefix = tablePrefix;
+    this.skipTable = getSkipTable(tablePrefix);
+    this.chainTable = getChainTable(tablePrefix);
+    this.trailTable = getTrailTable(tablePrefix);
   }
-
-  /**
-   * Creates a new instance with the given table names. <em>Not recommended</em> for ordinary
-   * use, since it's easy to get the arguments mixed up.
-   * 
-   * @param sourceTable   the name of the source table (for which we're building a ledger)
-   * @param skipTable   the name of the skip ledger table
-   * @param trailTable   the name of the trails table (crumtrails)
-   * @param chainTable   the name of the chains table (merkle proof chains)
-   */
-  protected HashLedgerSchema(String sourceTable, String skipTable, String trailTable, String chainTable) {
-    this.sourceTable = Objects.requireNonNull(sourceTable, "null sourceTable").trim();
-    this.skipTable = Objects.requireNonNull(skipTable, "null skipTable").trim();
-    this.chainTable = Objects.requireNonNull(chainTable, "null chainTable").trim();
-    this.trailTable = Objects.requireNonNull(trailTable, "null trailTable").trim();
+  
+  
+  public HashLedgerSchema(Config config) {
+    this.config = Objects.requireNonNull(config, "null config");
     
-    checkForm(this.sourceTable, "sourceTable");
-    checkForm(this.skipTable, "skipTable");
-    checkForm(this.chainTable, "chainsTable");
-    checkForm(this.trailTable, "trailsTable");
+    this.tablePrefix = config.getHashTablePrefix();
+    this.skipTable = getSkipTable(tablePrefix);
+    this.chainTable = getChainTable(tablePrefix);
+    this.trailTable = getTrailTable(tablePrefix);
     
-    checkNoDupNames();
   }
-
-
-  
-  
-  
-  private void checkNoDupNames() {
-    HashSet<String> names = new HashSet<>();
-    names.add(sourceTable);
-    if (!names.add(skipTable))
-      throw dupTableX(skipTable, "skipTable");
-    if (!names.add(chainTable))
-      throw dupTableX(chainTable, "chainsTable");
-    if (!names.add(trailTable))
-      throw dupTableX(trailTable, "trailsTable");
-    names.clear();
-  }
-  
-  
-  private SqlLedgerException dupTableX(String dupName, String tableCategory) {
-    return new SqlLedgerException("table name '" + dupName + "' for " + tableCategory + " is already used");
-  }
-  
 
   
   
 
-  
-  
-  
-  /**
-   * Returns the table name.
-   */
-  public final String getSourceTable() {
-    return sourceTable;
-  }
 
   /**
    * Returns the table name.
@@ -338,18 +285,40 @@ public class HashLedgerSchema {
   
   
   
-  public String createSkipLedgerTableSql() {
-    return createSkipLedgerTableSql(skipTable);
+  public String getSkipTableSchema() {
+    String sql = config == null ? null : config.getSkipTableSchema();
+    if (sql == null)
+      sql = defaultSkipTableSchema(skipTable);
+    return sql;
   }
   
   
-  public String createChainTableSql() {
-    return createChainTableSql(chainTable, trailTable);
+  public void setAutoIncrementKeyword(String autoInc) {
+    if (Objects.requireNonNull(autoInc, "null autoInc").isBlank())
+      throw new IllegalArgumentException("blank autoInc");
+    this.autoInc = autoInc;
   }
   
   
-  public String createTrailTableSql() {
-    return createTrailTableSql(trailTable, skipTable);
+  public String getAutoIncrementKeyword() {
+    return autoInc;
+  }
+
+  private String autoInc = PROTO_AUTOINCREMENT;
+  
+  public String getTrailTableSchema() {
+    String sql = config == null ? null : config.getTrailTableSchema();
+    if (sql == null)
+      sql = protoTrailTableSchema(tablePrefix, autoInc);
+    return sql;
+  }
+  
+  
+  public String getChainTableSchema() {
+    String sql = config == null ? null : config.getChainTableSchema();
+    if (sql == null)
+      sql = protoChainTableSchema(tablePrefix, autoInc);
+    return sql;
   }
   
   
@@ -365,7 +334,14 @@ public class HashLedgerSchema {
    * </ol>
    */
   public PreparedStatement insertTrailPrepStmt(Connection con) throws SQLException {
-    return insertTrailPrepStmt(con, trailTable);
+    Objects.requireNonNull(con, "null con");
+    
+    String sql =
+        "INSERT INTO " + trailTable +
+        " (" + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
+        ") VALUES ( ?, ?, ?, ?, ?)";
+    
+    return con.prepareStatement(sql);
   }
   
   /**
@@ -373,7 +349,12 @@ public class HashLedgerSchema {
    * is the {@code row_num}.
    */
   public PreparedStatement selectTrailIdPrepStmt(Connection con) throws SQLException {
-    return selectTrailIdPrepStmt(con, trailTable);
+    Objects.requireNonNull(con, "null con");
+    
+    String sql =
+        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
+    
+    return con.prepareStatement(sql);
   }
 
 }

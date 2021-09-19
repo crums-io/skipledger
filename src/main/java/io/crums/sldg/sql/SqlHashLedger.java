@@ -48,9 +48,9 @@ public class SqlHashLedger implements HashLedger {
       
       Statement stmt = con.createStatement();
       
-      stmt.execute(schema.createSkipLedgerTableSql());
-      stmt.execute(schema.createTrailTableSql());
-      stmt.execute(schema.createChainTableSql());
+      stmt.execute(schema.getSkipTableSchema());
+      stmt.execute(schema.getTrailTableSchema());
+      stmt.execute(schema.getChainTableSchema());
       
       con.commit();
       

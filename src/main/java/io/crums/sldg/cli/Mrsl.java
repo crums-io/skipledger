@@ -487,10 +487,27 @@ public class Mrsl extends MainTemplate {
     System.out.println("DESCRIPTION:");
     printer.println();
     paragraph =
-        "Command line tool for reading and manipulating morsel files ('" + MRSL_EXT + "' ext). " +
-        "Morsel files are tamper-proof tear-outs of rows from an opaque skip ledger paired with the " +
+        "Command line tool for reading and combining (merging) morsel files (" + MRSL_EXT + " ext). " +
+        "Morsel files are tamper-proof tear-outs of rows from an opaque hash ledger optionally paired with the " +
         "source of those rows (i.e. the content whose hash is the input-hash in its corresponding " +
         " skip ledger row).";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println("State morsels:");
+    printer.println();
+    paragraph =
+        "Morsel files that contain no source rows are called \"state-morsels\". These represent the state of " +
+        "the ledger (how many rows and maybe some history). Because they're small (measured in kilo bytes) they're " +
+        "used as a richer fingerprint of state than just a single SHA-256 hash: their internal structure allows " +
+        "an evolving ledger's fingerprint to be verified for consistency with its previous version.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println("Merge operations:");
+    printer.println();
+    paragraph =
+        "There are typically 2 reasons to \"" + MERGE + "\" morsel files into one. The first, is to just " +
+        "gather source-row information from morsels from the same ledger into one morsel. The second, is to create an updated version " +
+        "of a morsel that aligns with the ledger's current state hash using a state-morsel.";
     printer.printParagraph(paragraph);
     printer.println();
   }
@@ -549,7 +566,7 @@ public class Mrsl extends MainTemplate {
     table.printRow(null,  "If provided with " + SAVE + "=<path/to/file>, then column values");
     table.printRow(null,  "are separated with the given string. To set with no separator,");
     table.printRow(null,  "leave its value empty.");
-    table.printRow(null,  "DEFAULT: " + SEP + "=' '     (single whitespace)");
+    table.printRow(null,  "DEFAULT: ' '        (single whitespace)");
     table.println();
 
     table.printRow(MERGE, "merges the given morsel files to a new morsel file. The morsels");
@@ -563,7 +580,7 @@ public class Mrsl extends MainTemplate {
     table.printRow(null,  "If path/to/file doesn't exist, then the merged morsel gets");
     table.printRow(null,  "created there; if the path is an existing directory, then a");
     table.printRow(null,  "file with a merge-generated name is created in that directory.");
-    table.printRow(null,  "DEFAULT: '.'                 (current directory)");
+    table.printRow(null,  "DEFAULT: '.'        (current directory)");
     table.println();
     
     

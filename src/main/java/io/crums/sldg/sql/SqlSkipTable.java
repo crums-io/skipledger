@@ -35,11 +35,11 @@ public class SqlSkipTable implements SkipTable {
    * @param con       the db connection
    * @param tableName the table name (no table by this name should exist in the database)
    * 
-   * @see HashLedgerSchema#createSkipLedgerTableSql(String)
+   * @see HashLedgerSchema#defaultSkipTableSchema(String)
    */
   public static SqlSkipTable declareNewTable(Connection con, String tableName) throws SQLException {
     // create the table
-    String sql = HashLedgerSchema.createSkipLedgerTableSql(tableName);
+    String sql = HashLedgerSchema.defaultSkipTableSchema(tableName);
     Statement stmt = Objects.requireNonNull(con, "null con").createStatement();
     stmt.execute(sql);
     con.commit();

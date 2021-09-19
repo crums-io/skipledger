@@ -9,6 +9,7 @@ import java.sql.Connection;
 import io.crums.sldg.HashLedger;
 import io.crums.sldg.Ledger;
 import io.crums.sldg.SourceLedger;
+import io.crums.sldg.src.TableSalt;
 import io.crums.util.TaskStack;
 import io.crums.util.ticker.Ticker;
 
@@ -21,24 +22,32 @@ import io.crums.util.ticker.Ticker;
 public class SqlLedger extends Ledger {
   
   
+  public static SqlLedger declareNewInstance(Config config) {
+    try (TaskStack closeOnFail = new TaskStack()) {
+      // first get the source ledger
+      Connection con = config.getSourceConnection();
+      closeOnFail.pushClose(con);
+      TableSalt shaker = config.getSourceSalt();
+      var srcLedger = config.getSourceBuilder().build(con, shaker);
+      
+      // ok, now create the hash ledger tables
+      
+      if (config.dedicatedSourceCon()) {
+        con = config.getHashConnection();
+        closeOnFail.pushClose(con);
+      }
+      
+      var hashLedger =
+          SqlHashLedger.declareNewInstance(con, config.getHashLedgerSchema());
+      
+      SqlLedger ledger = new SqlLedger(srcLedger, hashLedger, null, true);
+      
+      closeOnFail.clear();
+      return ledger;
+    }
+  }
   
   
-//  public static SqlLedger declareNewInstance(
-//      Connection hashCon,
-//      Connection srcCon, byte[] saltSeed, 
-//      String table, String primaryKeyColumn, String... columnNames) {
-//    
-//    TableSalt shaker = new TableSalt(saltSeed);
-//    
-//    var sourceLedger =
-//        new SqlSourceQuery.DefaultBuilder(table, primaryKeyColumn, columnNames)
-//        .build(srcCon, shaker);
-//    
-//    var hashLedger =
-//        SqlHashLedger.declareNewInstance(hashCon, table);
-//    
-//    return null;
-//  }
   
   
   /**
