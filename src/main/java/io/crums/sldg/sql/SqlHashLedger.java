@@ -11,7 +11,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Date;
 import java.util.Objects;
+import java.util.logging.Logger;
 
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
@@ -49,8 +51,8 @@ public class SqlHashLedger implements HashLedger {
       Statement stmt = con.createStatement();
       
       stmt.execute(schema.getSkipTableSchema());
-      stmt.execute(schema.getTrailTableSchema());
       stmt.execute(schema.getChainTableSchema());
+      stmt.execute(schema.getTrailTableSchema());
       
       con.commit();
       
@@ -64,6 +66,12 @@ public class SqlHashLedger implements HashLedger {
   
   
   
+  
+  
+  
+  //   I N S T A N C E    M E M B E R S
+  
+  
   private final Object lock = new Object();
   
   private final HashLedgerSchema schema;
@@ -71,31 +79,50 @@ public class SqlHashLedger implements HashLedger {
   
   private final SqlSkipLedger skipLedger;
   
-  private final PreparedStatement selectTrailIdStmt;
-  
   private final PreparedStatement trailCountStmt;
   
   private final PreparedStatement selectTrailByIndexStmt;
   
-  private final PreparedStatement selectChainByTrailId;
+  private final PreparedStatement selectChainByChainId;
   
   private final PreparedStatement selectNearestTrailStmt;
   
   private final PreparedStatement selectLastTrailedRnStmt;
+
+  private final PreparedStatement chainTableCountStmt;
   
   private PreparedStatement insertTrailStmt;
   
-  
+
   /**
-   * On demand initialization. Implemented this way, so that you can pass in a
+   * On demand initialization returns a 7-parameter prepared insert statement.
+   * The parameter values are (in order)
+   * <ol>
+   * <li>trl_id</li>
+   * <li>row_num</li>
+   * <li>utc</li>
+   * <li>mrkl_idx</li>
+   * <li>mrkl_cnt></li>
+   * <li>chain_len</li>
+   * <li>chn_id</li>
+   * </ol>
+   * <p>
+   * Implemented this way, so that you can pass in a
    * read-only database connection at construction. There's no analagous prepared
    * statement for the chain-table insert, since the number of rows inserted is not
    * fixed.
+   * </p>
    */
   private PreparedStatement getInsertTrailStmt() throws SQLException {
     synchronized (lock) {
-      if (insertTrailStmt == null)
-        insertTrailStmt = schema.insertTrailPrepStmt(con);
+      if (insertTrailStmt == null) {
+        String sql =
+            "INSERT INTO " + schema.getTrailTable() +
+            " (" + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN + ", " + CHN_ID +
+            ") VALUES ( ?, ?, ?, ?, ?, ?, ?)";
+        
+        insertTrailStmt = con.prepareStatement(sql);
+      }
       return insertTrailStmt;
     }
   }
@@ -133,28 +160,41 @@ public class SqlHashLedger implements HashLedger {
         con.setAutoCommit(false);
       
       this.skipLedger = new SqlSkipLedger(con, schema.getSkipTable());
-      this.selectTrailIdStmt = schema.selectTrailIdPrepStmt(con);
+//      this.selectTrailIdStmt = schema.selectTrailIdPrepStmt(con);
       this.trailCountStmt = con.prepareStatement(
-          "SELECT count(*) FROM " + schema.getTrailTable() + " AS count");
+          "SELECT count(*) FROM " + schema.getTrailTable() + " AS rcount");
       
       this.selectTrailByIndexStmt = con.prepareStatement(
-          "SELECT * FROM (\n" +
-          "  SELECT ROW_NUMBER() OVER (ORDER BY " + TRL_ID + " ASC) AS row_index, " +
-          TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
-          " FROM " + schema.getTrailTable() + ") AS snap WHERE row_index = ?");
+          "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " +
+          CHAIN_LEN + ", " + CHN_ID +
+          " FROM " + schema.getTrailTable() +
+          " WHERE " + TRL_ID + " = ?");
+//          "SELECT * FROM (\n" +
+//          "  SELECT ROW_NUMBER() OVER (ORDER BY " + TRL_ID + " ASC) AS row_index, " +
+//          TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
+//          " FROM " + schema.getTrailTable() + ") AS snap WHERE row_index = ?");
       
-      this.selectChainByTrailId = con.prepareStatement(
+      this.selectChainByChainId = con.prepareStatement(
           "SELECT " + CHN_ID + ", " + N_HASH + " FROM " + schema.getChainTable() +
-          " WHERE " + TRL_ID + " = ? ORDER BY " + CHN_ID);
+          " WHERE " + CHN_ID + " >= ? ORDER BY " + CHN_ID + " LIMIT ?");
+//          "SELECT " + CHN_ID + ", " + N_HASH + " FROM " + schema.getChainTable() +
+//          " WHERE " + TRL_ID + " = ? ORDER BY " + CHN_ID);
       
       this.selectNearestTrailStmt = con.prepareStatement(
-          "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
+          "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " +
+          CHAIN_LEN + ", " + CHN_ID +
           " FROM " + schema.getTrailTable() +
           " WHERE " + ROW_NUM + " >= ? ORDER BY " + ROW_NUM + " LIMIT 1");
+//          "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
+//          " FROM " + schema.getTrailTable() +
+//          " WHERE " + ROW_NUM + " >= ? ORDER BY " + ROW_NUM + " LIMIT 1");
       
       this.selectLastTrailedRnStmt = con.prepareStatement(
           "SELECT " + TRL_ID + ", " + ROW_NUM + " FROM " + schema.getTrailTable() +
           " ORDER BY " + TRL_ID + " DESC LIMIT 1");
+      
+      this.chainTableCountStmt = con.prepareStatement(
+          "SELECT count(*) FROM " + schema.getChainTable() + " AS rcount");
       
     } catch (SQLException sqx) {
       throw new SqlLedgerException("on <init>: " + sqx, sqx);
@@ -185,38 +225,55 @@ public class SqlHashLedger implements HashLedger {
     final long rowNum = trailedRecord.rowNum();
     CrumTrail trail = trailedRecord.record().trail();
     
+
+    final int size = this.getTrailCount();
+    if (size > 0) {
+      var lastTrailedRow = getTrailByIndex(size - 1);
+      // if the new trail is for a row number less than the last row witnessed,
+      // discard it
+      if (rowNum <= lastTrailedRow.rowNumber())
+        return false;
+      
+      // if this higher row number was witnessed before the last
+      // recorded row witnessed, balk. (Otherwise, the invariant
+      // that the witness times be non-decreasing would be broken.)
+      
+      // this is unfortunate: it shouldn't happen along normal usage
+      // however. The solution is to manually remove the trails from
+      // the tables.
+      if (trail.crum().utc() < lastTrailedRow.utc()) {
+        var logger = Logger.getLogger(SqlHashLedger.class.getSimpleName());
+        logger.warning(
+            "row [" + lastTrailedRow.rowNumber() +
+            "] is already recorded as being witnessed after (!) row [" + rowNum +
+            "]: " + new Date(lastTrailedRow.utc()) + " v. " + new Date(trail.crum().utc()) +
+            ". Not adding crumtrail for row [" + rowNum + "] as this would violate model invariants.");
+        return false;
+      }
+    }
+    
     synchronized (lock) {
       try {
-        PreparedStatement trailInsert = getInsertTrailStmt();
-        trailInsert.setLong(1, rowNum);
-        trailInsert.setLong(2, trailedRecord.utc());
-        trailInsert.setInt(3, trail.leafIndex());
-        trailInsert.setInt(4, trail.leafCount());
-        trailInsert.setInt(5, trail.hashChain().size());
         
-        trailInsert.executeUpdate();
+        var rs = this.chainTableCountStmt.executeQuery();
+        if (!rs.next())
+          throw new SqlLedgerException("failed to execute COUNT query on chain table");
         
-        PreparedStatement selectTrailId = selectTrailIdStmt;
-        selectTrailId.setLong(1, rowNum);
-        ResultSet rs = selectTrailId.executeQuery();
-        if (!rs.next()) {
-          con.rollback();
-          throw new SqlLedgerException("expected INSERT was ineffective: " + trailedRecord);
-        }
+        final int nextChainId = rs.getInt(1) + 1;
         
-        final long trailId = rs.getLong(1);
+        if (nextChainId < 1)
+          throw new SqlLedgerException(
+              "nonsensical COUNT query on chain table " + (nextChainId - 1));
         
-        if (rs.next()) {
-          con.rollback();
-          return false;
-        }
-        
+
         StringBuilder sql =
             new StringBuilder("INSERT INTO " ).append(schema.getChainTable())
-              .append(" (").append(TRL_ID).append(", ").append(N_HASH).append(") VALUES");
+              .append(" (").append(CHN_ID).append(", ").append(N_HASH).append(") VALUES");
         
-        for (byte[] cHash : trail.hashChain())
-          sql.append("\n(").append(trailId).append(", '").append(Base64_32.encode(cHash)).append("'),");
+        var hashChain = trail.hashChain();
+        int chainId = nextChainId;
+        for (byte[] cHash : hashChain)
+          sql.append("\n(").append(chainId++).append(", '").append(Base64_32.encode(cHash)).append("'),");
         
         // remove the last comma
         sql.setLength(sql.length() - 1);
@@ -226,12 +283,63 @@ public class SqlHashLedger implements HashLedger {
         
         int updateCount = stmt.getUpdateCount();
         
-        if (updateCount != trail.hashChain().size()) {
+        if (updateCount != hashChain.size()) {
           con.rollback();
           throw new SqlLedgerException(
               "INSERT did not yield expected updateCount " + trail.hashChain().size() +
               "; actual was " + updateCount + "; SQL:\n" + sql);
         }
+        
+        
+        final int trailId = size + 1;
+        PreparedStatement trailInsert = getInsertTrailStmt();
+
+        trailInsert.setInt(1, trailId);
+        trailInsert.setLong(2, rowNum);
+        trailInsert.setLong(3, trailedRecord.utc());
+        trailInsert.setInt(4, trail.leafIndex());
+        trailInsert.setInt(5, trail.leafCount());
+        trailInsert.setInt(6, hashChain.size());
+        trailInsert.setInt(7, nextChainId);
+        
+        trailInsert.executeUpdate();
+        
+//        PreparedStatement selectTrailId = selectTrailIdStmt;
+//        selectTrailId.setLong(1, rowNum);
+//        rs = selectTrailId.executeQuery();
+//        if (!rs.next()) {
+//          con.rollback();
+//          throw new SqlLedgerException("expected INSERT was ineffective: " + trailedRecord);
+//        }
+//        
+//        final long trailId = rs.getLong(1);
+//        
+//        if (rs.next()) {
+//          con.rollback();
+//          return false;
+//        }
+//        
+//        StringBuilder sql =
+//            new StringBuilder("INSERT INTO " ).append(schema.getChainTable())
+//              .append(" (").append(TRL_ID).append(", ").append(N_HASH).append(") VALUES");
+        
+//        for (byte[] cHash : trail.hashChain())
+//          sql.append("\n(").append(trailId).append(", '").append(Base64_32.encode(cHash)).append("'),");
+//        
+//        // remove the last comma
+//        sql.setLength(sql.length() - 1);
+//        
+//        Statement stmt = con.createStatement();
+//        stmt.execute(sql.toString());
+//        
+//        int updateCount = stmt.getUpdateCount();
+//        
+//        if (updateCount != trail.hashChain().size()) {
+//          con.rollback();
+//          throw new SqlLedgerException(
+//              "INSERT did not yield expected updateCount " + trail.hashChain().size() +
+//              "; actual was " + updateCount + "; SQL:\n" + sql);
+//        }
         
         con.commit();
         return true;
@@ -288,7 +396,7 @@ public class SqlHashLedger implements HashLedger {
             throw new SqlLedgerException("empty result set on getTrailByIndex(" + index + "): " + rs);
         }
         
-        return getTrailedRow(rs, 1);
+        return getTrailedRow(rs);
         
       } catch (SQLException sqx) {
         throw new SqlLedgerException("on getTrailByIndex(" + index + "): " + sqx, sqx);
@@ -298,14 +406,15 @@ public class SqlHashLedger implements HashLedger {
   
   
   
-  private TrailedRow getTrailedRow(ResultSet rs, int colOffset) throws SQLException {
+  private TrailedRow getTrailedRow(ResultSet rs) throws SQLException {
     
-    final int tid = rs.getInt(colOffset + 1);
-    final long rowNumber = rs.getLong(colOffset + 2);
-    final long utc = rs.getLong(colOffset + 3);
-    final int leafIndex = rs.getInt(colOffset + 4);
-    final int leafCount = rs.getInt(colOffset + 5);
-    final int chainLen = rs.getInt(colOffset + 6);
+    final int tid = rs.getInt(1);
+    final long rowNumber = rs.getLong(2);
+    final long utc = rs.getLong(3);
+    final int leafIndex = rs.getInt(4);
+    final int leafCount = rs.getInt(5);
+    final int chainLen = rs.getInt(6);
+    final int chainId = rs.getInt(7);
     
     if (chainLen != Proof.chainLength(leafCount, leafIndex))
       throw new SqlLedgerException(
@@ -316,8 +425,10 @@ public class SqlHashLedger implements HashLedger {
       throw new SqlLedgerException(
           "multiple rows in result set: tid=" + tid + ", rowNumber=" + rowNumber);
     
-    selectChainByTrailId.setInt(1, tid);
-    rs = selectChainByTrailId.executeQuery();
+    selectChainByChainId.setInt(1, chainId);
+    selectChainByChainId.setInt(2, chainLen);
+    
+    rs = selectChainByChainId.executeQuery();
     
     byte[][] chain = new byte[chainLen][];
     
@@ -335,9 +446,18 @@ public class SqlHashLedger implements HashLedger {
             "assertion failed: lastLinkId=" + lastLinkId + "; linkId=" + linkId +
             "; tid=" + tid);
       
+      lastLinkId = linkId;
+      
       String encoded = rs.getString(2);
       chain[ci] = Base64_32.decode(encoded);
     }
+    
+    // sanity check
+    if (lastLinkId != chainId + chainLen - 1)
+      throw new SqlLedgerException(
+            "assertion failed: lastLinkId=" + lastLinkId + "; chain_id=" + chainId +
+            "; chain_len=" + chainLen +
+            "; tid=" + tid);
     
     Crum crum = new Crum(skipLedger.rowHash(rowNumber), utc);
     
@@ -358,7 +478,7 @@ public class SqlHashLedger implements HashLedger {
         selectNearestTrailStmt.setLong(1, rowNumber);
         ResultSet rs = selectNearestTrailStmt.executeQuery();
         
-        return rs.next() ? getTrailedRow(rs, 0) : null;
+        return rs.next() ? getTrailedRow(rs) : null;
         
       } catch (SQLException sqx) {
         throw new SqlLedgerException("on nearestTrail(" + rowNumber + "): " + sqx, sqx);

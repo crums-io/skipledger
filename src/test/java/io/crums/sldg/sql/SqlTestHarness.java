@@ -42,7 +42,6 @@ public class SqlTestHarness {
    */
   public static HashLedgerSchema newSchema(String protoname) {
     var schema = new HashLedgerSchema(protoname);
-    schema.setAutoIncrementKeyword("AUTO_INCREMENT");
     return schema;
   }
   

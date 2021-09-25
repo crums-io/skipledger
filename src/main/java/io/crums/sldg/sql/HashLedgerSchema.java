@@ -4,9 +4,6 @@
 package io.crums.sldg.sql;
 
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.Objects;
 
 import io.crums.sldg.HashLedger;
@@ -17,7 +14,7 @@ import io.crums.util.Base64_32;
  * 
  * <h1>Schema</h1>
  * 
- * <h2>Ledger table</h2>
+ * <h2>Skip table</h2>
  * <pre>
  * {@code CREATE TABLE} <em>ledgerTable</em>
  *  {@code (row_num BIGINT NOT NULL,
@@ -39,7 +36,7 @@ import io.crums.util.Base64_32;
  * </ol>
  * </p>
  * 
- * <h2>Trail chain table</h2>
+ * <h2>Trail Chain table</h2>
  * <p>
  * The Merkle proof in a crumtrail (witness record) contains a proof-chain. This proof chain
  * contains a variable number of SHA-256 hash-nodes. Each hash-node in a proof takes one row
@@ -47,7 +44,7 @@ import io.crums.util.Base64_32;
  * </p>
  * <pre>
  * {@code CREATE TABLE} <em>chainTable</em>
- *  {@code (chn_id INT NOT NULL AUTO_INCREMENT,
+ *  {@code (chn_id INT NOT NULL,
  *   n_hash CHAR(43) NOT NULL,
  *   PRIMARY KEY (chn_id)
  *  )}</pre>
@@ -55,7 +52,7 @@ import io.crums.util.Base64_32;
  * <h2>Trail table</h2>
  * <pre>
  * {@code CREATE TABLE} <em>trailTable</em>
- *  {@code (trl_id INT NOT NULL AUTO_INCREMENT,
+ *  {@code (trl_id INT NOT NULL,
  *   row_num BIGINT NOT NULL,
  *   utc BIGINT NOT NULL,
  *   mrkl_idx  INT NOT NULL,
@@ -73,6 +70,17 @@ import io.crums.util.Base64_32;
  * length never nears anything close to 128.
  * </p>
  * 
+ * <h2>Primary Keys</h2>
+ * <p>
+ * The primary key column values in each of the above tables range from 1 thru {@code count(*)}.
+ * In other words, they're a stand-in for the SQL {@code ROW_NUMBER()} function. This constraint
+ * is managed here at the application level, not by the DB.
+ * </p>
+ * 
+ * <h2>Indexes</h2>
+ * <p>
+ * 
+ * </p>
  */
 public class HashLedgerSchema {
   
@@ -134,50 +142,32 @@ public class HashLedgerSchema {
   
   
   public static String protoTrailTableSchema(String tablePrefix) {
-    return protoTrailTableSchema(tablePrefix, PROTO_AUTOINCREMENT);
-  }
-  
-  
-  public static String protoTrailTableSchema(String tablePrefix, String autoInc) {
-    checkAutoInc(autoInc);
     String trailTable = getTrailTable(tablePrefix);
     String skipTable = getSkipTable(tablePrefix);
+    String chainTable = getChainTable(tablePrefix);
     return
         "CREATE TABLE " + trailTable + " (" +
-        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL " + autoInc + "," +
+        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    ROW_NUM   + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    UTC       + ' ' + BIGINT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_IDX  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    MRKL_CNT  + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    CHAIN_LEN + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    CHN_ID    + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    "PRIMARY KEY (" + TRL_ID + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + skipTable + "(" + ROW_NUM + ") )";
+        SOFT_TAB +    "FOREIGN KEY (" + ROW_NUM + ") REFERENCES " + skipTable + "(" + ROW_NUM + ")," +
+        SOFT_TAB +    "FOREIGN KEY (" + CHN_ID + ") REFERENCES " + chainTable + "(" + CHN_ID + ") )";
   }
-
+  
+  
   public static String protoChainTableSchema(String tablePrefix) {
-    return protoChainTableSchema(tablePrefix, PROTO_AUTOINCREMENT);
-  }
-  
-  
-  public static String protoChainTableSchema(String tablePrefix, String autoInc) {
-    checkAutoInc(autoInc);
     String chainTable = getChainTable(tablePrefix);
-    String trailTable = getTrailTable(tablePrefix);
     return
         "CREATE TABLE " + chainTable + " (" +
-        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL " + autoInc + "," +
-        SOFT_TAB +    TRL_ID    + ' ' + INT_TYPE + " NOT NULL," +
+        SOFT_TAB +    CHN_ID + ' ' + INT_TYPE + " NOT NULL," +
         SOFT_TAB +    N_HASH + ' ' + BASE64_TYPE + " NOT NULL," +
-        SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")," +
-        SOFT_TAB +    "FOREIGN KEY (" + TRL_ID + ") REFERENCES " + trailTable + "(" + TRL_ID + ") )";
+        SOFT_TAB +    "PRIMARY KEY (" + CHN_ID + ")  )";
 
-  }
-  
-  
-  private static void checkAutoInc(String autoInc) {
-    Objects.requireNonNull(autoInc, "null autoInc keyword");
-    if (autoInc.isBlank())
-      throw new IllegalArgumentException("blank autoInc: <" + ">");
   }
   
   
@@ -292,24 +282,10 @@ public class HashLedgerSchema {
     return sql;
   }
   
-  
-  public void setAutoIncrementKeyword(String autoInc) {
-    if (Objects.requireNonNull(autoInc, "null autoInc").isBlank())
-      throw new IllegalArgumentException("blank autoInc");
-    this.autoInc = autoInc;
-  }
-  
-  
-  public String getAutoIncrementKeyword() {
-    return autoInc;
-  }
-
-  private String autoInc = PROTO_AUTOINCREMENT;
-  
   public String getTrailTableSchema() {
     String sql = config == null ? null : config.getTrailTableSchema();
     if (sql == null)
-      sql = protoTrailTableSchema(tablePrefix, autoInc);
+      sql = protoTrailTableSchema(tablePrefix);
     return sql;
   }
   
@@ -317,45 +293,47 @@ public class HashLedgerSchema {
   public String getChainTableSchema() {
     String sql = config == null ? null : config.getChainTableSchema();
     if (sql == null)
-      sql = protoChainTableSchema(tablePrefix, autoInc);
+      sql = protoChainTableSchema(tablePrefix);
     return sql;
   }
   
   
 
-  /**
-   * Returns a 5-parameter prepared insert statement. The parameter values are (in order)
-   * <ol>
-   * <li>row_num</li>
-   * <li>utc</li>
-   * <li>mrkl_idx</li>
-   * <li>mrkl_cnt></li>
-   * <li>chain_len</li>
-   * </ol>
-   */
-  public PreparedStatement insertTrailPrepStmt(Connection con) throws SQLException {
-    Objects.requireNonNull(con, "null con");
-    
-    String sql =
-        "INSERT INTO " + trailTable +
-        " (" + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
-        ") VALUES ( ?, ?, ?, ?, ?)";
-    
-    return con.prepareStatement(sql);
-  }
+//  /**
+//   * Returns a 7-parameter prepared insert statement. The parameter values are (in order)
+//   * <ol>
+//   * <li>trl_id</li>
+//   * <li>row_num</li>
+//   * <li>utc</li>
+//   * <li>mrkl_idx</li>
+//   * <li>mrkl_cnt></li>
+//   * <li>chain_len</li>
+//   * <li>chn_id</li>
+//   * </ol>
+//   */
+//  public PreparedStatement insertTrailPrepStmt(Connection con) throws SQLException {
+//    Objects.requireNonNull(con, "null con");
+//    
+//    String sql =
+//        "INSERT INTO " + trailTable +
+//        " (" + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN + ", " + CHN_ID +
+//        ") VALUES ( ?, ?, ?, ?, ?, ?, ?)";
+//    
+//    return con.prepareStatement(sql);
+//  }
   
-  /**
-   * Returns a single-parameter prepared select statement. The look-up key (parameter)
-   * is the {@code row_num}.
-   */
-  public PreparedStatement selectTrailIdPrepStmt(Connection con) throws SQLException {
-    Objects.requireNonNull(con, "null con");
-    
-    String sql =
-        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
-    
-    return con.prepareStatement(sql);
-  }
+//  /**
+//   * Returns a single-parameter prepared select statement. The look-up key (parameter)
+//   * is the {@code row_num}.
+//   */
+//  public PreparedStatement selectTrailIdPrepStmt(Connection con) throws SQLException {
+//    Objects.requireNonNull(con, "null con");
+//    
+//    String sql =
+//        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
+//    
+//    return con.prepareStatement(sql);
+//  }
 
 }
   
