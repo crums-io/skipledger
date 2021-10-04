@@ -72,6 +72,6 @@ public final class NullValue extends ColumnValue {
   }
 
   @Override
-  protected void appendValue(StringBuilder s) {  }
+  public void appendValue(StringBuilder s) {  }
 
 }

@@ -9,8 +9,10 @@ import io.crums.model.CrumRecord;
 import io.crums.sldg.Row;
 
 
-
-public final class WitnessRecord implements Comparable<WitnessRecord> {
+/**
+ * A {@linkplain #row() row} and its witness {@linkplain #record() record}.
+ */
+public final class WitnessRecord {
   
   private final Row row;
   private final CrumRecord record;
@@ -22,11 +24,7 @@ public final class WitnessRecord implements Comparable<WitnessRecord> {
       throw new ClientException("hash mismatch from remote: " + record + " / " + row);
   }
   
-  @Override
-  public int compareTo(WitnessRecord o) {
-    int comp = Long.compare(utc(), o.utc());
-    return comp == 0 ? - Long.compare(rowNum(), o.rowNum()) : comp;
-  }
+  
   
   public long utc() {
     return record.crum().utc();

@@ -1,133 +1,49 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2021 Babak Farhang
  */
 package io.crums.sldg.cli;
 
-
-import static io.crums.util.main.Args.*;
 import static io.crums.util.Strings.*;
 
-import java.io.BufferedReader;
+import java.io.Console;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.io.Reader;
-import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.StringTokenizer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
-import org.json.simple.JSONObject;
-
-import io.crums.io.Opening;
-import io.crums.sldg.Path;
-import io.crums.sldg.Row;
-import io.crums.sldg.SldgConstants;
-import io.crums.sldg.SldgException;
-import io.crums.sldg.fs.Filenaming;
-import io.crums.sldg.fs.Format;
-import io.crums.sldg.fs.HashLedgerDir;
-import io.crums.sldg.json.PathParser;
+import io.crums.client.ClientException;
+import io.crums.sldg.Ledger.State;
+import io.crums.sldg.SourceLedger;
+import io.crums.sldg.sql.Config;
+import io.crums.sldg.sql.ConfigFileBuilder;
+import io.crums.sldg.sql.ConnectionInfo;
+import io.crums.sldg.sql.SqlLedger;
+import io.crums.sldg.sql.SqlSourceQuery;
+import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.time.TrailedRow;
-import io.crums.sldg.time.WitnessReport;
-import io.crums.sldg.util.Finder;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
-import io.crums.util.TaskStack;
+import io.crums.util.cc.ThreadUtils;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
+import io.crums.util.main.NumbersArg;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
- * Manages a {@linkplain HashLedgerDir} from the command line.
+ * Manages a ledger formed from a relational database table or view that is
+ * operationally append-only.
  */
 public class Sldg extends MainTemplate {
-
-
-  // to minimize/organize class members
-  private static class IngestCommand {
-    private int start = 1;
-    private File file;
-  }
-  
-  private static class WriteCommand {
-    private boolean add;
-    
-    private List<ByteBuffer> entryHashes;
-    
-    private boolean witness;
-    private int toothExponent;
-    private boolean witnessLast;
-    
-    private IngestCommand ingest;
-  }
-  
-  private final static int DEFAULT_LIMIT = 8;
-  
-  private static class FindCommand {
-    private ByteBuffer prefix;
-    private long startRn;
-    private int limit = DEFAULT_LIMIT;
-  }
-  
-
-  private static class ReadCommand {
-    private boolean state;
-    private boolean path;
-    
-    private boolean list;
-    private List<Long> rowNumbers;
-    
-    private FindCommand find;
-    
-    private boolean status;
-    
-    private File file;
-    private boolean enforceExt = true;
-    
-    boolean takesRowNumbers() {
-      return path || list;
-    }
-    
-    boolean supportsFileOutput() {
-      return state || path;
-    }
-    
-    boolean toFile() {
-      return file != null;
-    }
-  }
-  
-  
-  
-  private File dir;
-  private Opening mode;
-  
-  private WriteCommand writeCommand;
-  
-  private ReadCommand readCommand;
-  
-  
-  private boolean info;
-
-  private HashLedgerDir db;
-  
-  
-  /**
-   * Invoked by main.
-   */
-  private Sldg() {  }
-  
-  
 
   /**
    * @param args
@@ -135,856 +51,1102 @@ public class Sldg extends MainTemplate {
   public static void main(String[] args) {
     new Sldg().doMain(args);
   }
+  
+  
+
+  private static class RowArg {
+
+    List<Long> rowNums = Collections.emptyList();
+    
+    
+    
+    void setRowNums(ArgList args) {
+      String match = args.removeSingle(NumbersArg.MATCHER);
+      if (match == null)
+        throw new IllegalArgumentException("missing row-numbers arg");
+      
+      rowNums = NumbersArg.parse(match);
+      if (rowNums.get(0) < 1 || !Lists.isSortedNoDups(rowNums))
+        throw new IllegalArgumentException(
+            "row numbers must be > 0 and strictly ascending. Numbers parsed: " + rowNums);
+    }
+    
+  }
+  
+  
+  
+  private static class MorselArg extends RowArg {
+    
+    File morselFile = new File(".");
+    
+    void setArgs(ArgList args, boolean state) {
+      if (!state)
+        setRowNums(args);
+      
+      switch (args.argsRemaining().size()) {
+      case 0: return;
+      case 1: break;
+      default:
+        throw new IllegalArgumentException("too many arguments: " + args.getArgString());
+      }
+      
+      this.morselFile = new File(args.removeFirst());
+      File parent = morselFile.getParentFile();
+      if (parent != null && !parent.exists())
+        throw new IllegalArgumentException(
+            "expected parent directory for morsel file does not exist: " + this.morselFile);
+      
+      if (morselFile.isFile())
+        throw new IllegalArgumentException("morsel file already exists: " + morselFile);
+      
+    }
+    
+    
+    
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  private String command;
+  
+  private RowArg listArgs;
+  
+  private MorselArg morselArgs;
+  
+  private Config config;
+  
+  private SqlLedger ledger;
+  
+  private long updateCount;
+  
+  
+  @Override
+  protected void close() {
+    if (ledger != null)
+      ledger.close();
+  }
 
   @Override
   protected void init(String[] args) throws IllegalArgumentException, Exception {
-    if (args.length == 0)
-      throw new IllegalArgumentException("No arguments specified");
-    
     ArgList argList = newArgList(args);
     
-    this.dir = new File(argList.removeRequiredValue(DIR));
-    this.mode = getMode(argList);
-
-    configureCommon(argList);
+    this.command = argList.removeCommand(
+        SETUP, CREATE, STATUS, LIST, HISTORY, UPDATE, MAKE_MORSEL, STATE_MORSEL);
     
-    boolean noCommand =
-        !configureWriteCommands(argList) &&
-        !configureReadCommands(argList);
+    if (SETUP.equals(command))
+      return;
     
-    if (noCommand && mode != Opening.CREATE)
-      throw new IllegalArgumentException("missing command");
+    // all other commands require the config file
+    loadConfig(argList);
     
-    this.db = new HashLedgerDir(dir, mode, true);  // (lazy=true)
-    
-    
-    
-    if (mode == Opening.CREATE)
-      System.out.println("ledger created at " + db.getDir());
-    
-    // check the maximum row number is not out-of-bounds
-    else if (readCommand != null && readCommand.takesRowNumbers()) {
-      
-      long maxRowNumber = readCommand.rowNumbers.stream().max(Comparator.naturalOrder()).get();
-      long max = db.size();
-      if (maxRowNumber > max) {
-        db.close();
-        throw new IllegalArgumentException(
-            "row number " + maxRowNumber + " > max row number in ledger (" + max + ")"); 
+    switch (command) {
+    case UPDATE:
+      {
+        var nums = argList.removeNumbers();
+        if (nums.size() > 1)
+          throw new IllegalArgumentException(
+              "too many number arguments with '" + UPDATE + "' command: " + nums);
+        
+        this.updateCount = nums.isEmpty() ? Long.MAX_VALUE : nums.get(0);
       }
+      break;
+    case CREATE:
+    case STATUS:
+    case HISTORY:
+      break;
+    
+    case LIST:
+      listArgs = new RowArg();
+      listArgs.setRowNums(argList);
+      break;
+      
+    case STATE_MORSEL:
+    case MAKE_MORSEL:
+      this.morselArgs = new MorselArg();
+      morselArgs.setArgs(argList, STATE_MORSEL.equals(command));
+      break;
+      
     }
+
+    argList.enforceNoRemaining();
+  }
+  
+  private void loadConfig(ArgList argList) {
+    File configFile = argList.removeExistingFile();
+    if (configFile == null)
+      throw new IllegalArgumentException("no config file found in arguments");
+    this.config = new Config(configFile);
   }
 
-  
-  
   @Override
   protected void start() throws InterruptedException, Exception {
-    
-    try (HashLedgerDir db = this.db) {
+    switch (command) {
+    case SETUP:
+      setup();
+      break;
+    case STATUS:
+      status();
+      break;
+    case CREATE:
+      create();
+      break;
+    case LIST:
+      list();
+      break;
+    case HISTORY:
+      history();
+      break;
+    case UPDATE:
+      update();
+      break;
+    case STATE_MORSEL:
+    case MAKE_MORSEL:
+      morsel();
+      break;
       
-      // write command
-      if (writeCommand != null) {
-        if (writeCommand.add) {
-          writeCommand.entryHashes.forEach(h -> db.getSkipLedger().appendRows(h));
-          if (info) {
-            int count = writeCommand.entryHashes.size();
-            System.out.println(count + pluralize(" row", count) + " added");
-          }
-        }
-        
-        if (writeCommand.ingest != null)
-          doIngest();
-        
-        if (writeCommand.witness) {
-          WitnessReport report =
-              writeCommand.toothExponent == -1 ?
-                  db.witness(writeCommand.witnessLast) :
-                    db.witness(writeCommand.toothExponent, writeCommand.witnessLast);
-          
-          int count = report.getStored().size();
-          String msg;
-          if (info) {
-            int witCount = report.getRecords().size();
-            msg = witCount + pluralize(" row", witCount) + " witnessed; " + count + pluralize(" crumtrail", count) + " stored";
-            
-          } else
-            msg = String.valueOf(count);
-          System.out.println(msg);
-        }
-        
-
-      // read command
-      } else if (readCommand != null) {
-        
-        if (readCommand.state) {
-          Path statePath = db.getSkipLedger().statePath();
-          if (readCommand.toFile())
-            outputState(statePath);
-          else
-            printPath(statePath);
-        
-//        } else if (readCommand.nug) {
-//          long rowNumber = readCommand.rowNumbers.get(0);
-//          Optional<Nugget> nuggetOpt = db.getNugget(rowNumber);
-//          
-//          if (readCommand.toFile())
-//            outputNug(nuggetOpt);
-//          else
-//            printNugget(nuggetOpt);
-//        
-        } else if (readCommand.path) {
-          
-          long lo, hi;
-          {
-            long one = readCommand.rowNumbers.get(0);
-            long another = readCommand.rowNumbers.get(1);
-            if (one < another) {
-              lo = one;
-              hi = another;
-            } else {
-              lo = another;
-              hi = one;
-            }
-          }
-          Path path = db.getSkipLedger().skipPath(lo, hi);
-          
-          if (readCommand.toFile())
-            outputPath(path);
-          else
-            printPath(path);
-          
-        } else if (readCommand.list) {
-          List<Row> rows = new ArrayList<>(readCommand.rowNumbers.size());
-          for (long rowNumber : readCommand.rowNumbers)
-            rows.add(db.getSkipLedger().getRow(rowNumber));
-          listRows(rows);
-          int count = rows.size();
-          System.out.println(count + pluralize(" row", count) + ".");
-        
-        } else if (readCommand.status) {
-          printStatus();
-          
-        } else if (readCommand.find != null) {
-          Finder finder = new Finder(db.getSkipLedger());
-          List<Row> rows =finder.byInputPrefix(
-              readCommand.find.prefix,
-              readCommand.find.startRn,
-              readCommand.find.limit);
-          listRows(rows);
-          int count = rows.size();
-          System.out.print(count + pluralize(" row", count) + " found.");
-          if (count == readCommand.find.limit)
-            System.out.println(" (limit=" + count + ")");
-          else
-            System.out.println();
-        }
-      }
     }
   }
   
   
-  private void doIngest() throws IOException {
+  
+  
+  
+  void morsel() throws IOException {
+    initLedger();
+    if (this.ledger.getState().needsMending())
+      throw new IllegalStateException(
+          "source ledger conflicts with hash ledger: " + ledger.getState());
     
-    try (TaskStack closer = new TaskStack(this)) {
-      Reader reader;
-      File file = writeCommand.ingest.file;
-      if (file == null)
-        reader = new BufferedReader(new InputStreamReader(System.in));
-      else
-        reader = new BufferedReader(new FileReader(writeCommand.ingest.file));
-      closer.pushClose(reader);
+    File file = ledger.writeMorselFile(morselArgs.morselFile, morselArgs.rowNums, null);
+    int entries = morselArgs.rowNums.size();
+    if (entries == 0)
+      System.out.println("state path written to morsel: " + file);
+    else
+      System.out.println(entries + pluralize(" row", entries) + " written to morsel: " + file);
+  }
+  
+  
+  private final static String NULL_SYMBOL = "<NULL>";
+  private final static String COLUMN_DIVISOR = " | ";
+  
+  void list() {
+    initLedger();
+    TablePrint table;
+    {
+      long lastRn = listArgs.rowNums.get(listArgs.rowNums.size() - 1);
+      int decimalWidth = Math.max(3,  Long.toString(lastRn).length());
+      table = new TablePrint(decimalWidth + 3, 77 - decimalWidth);
+    }
+    
+    SourceLedger src = this.ledger.getSourceLedger();
+    
+    final long max = src.size();
+    
+    StringBuilder s = new StringBuilder(256);
+    
+    int count = 0;
+    for (long rn : listArgs.rowNums) {
+      ++count;
+      if (rn > max) 
+        break;
+      var srcRow = src.getSourceRow(rn);
+      List<ColumnValue> columns = srcRow.getColumns();
+      s.setLength(0);
+      for (var col : columns) {
+        if (col.getType().isNull())
+          s.append(NULL_SYMBOL);
+        else {
+          col.appendValue(s);
+        }
+        s.append(COLUMN_DIVISOR);
+      }
+      // remove the last divisor
+      s.setLength(s.length() - COLUMN_DIVISOR.length());
+      table.printRow("[" + rn + "]", s);
+    }
+    table.println();
+    table.println(count + pluralize(" row", count) + " listed");
+    if (count < listArgs.rowNums.size()) {
+      int skipped = listArgs.rowNums.size() - count;
+      table.println("(" + skipped + pluralize(" row argument", skipped) + " beyond last row)");
+    }
+    table.println();
+  }
+
+  void create() {
+    printf("creating backing hash ledger tables (3)%n");
+    this.ledger = SqlLedger.declareNewInstance(config);
+    printf("%nDone.%n");
+    status();
+  }
+  
+  
+  void update() {
+    this.ledger = SqlLedger.loadInstance(config);
+    var state = ledger.getState();
+    switch (state) {
+    case FORKED:
+    case TRIMMED:
+      status();
+      break;
+    case PENDING:
+      long rowsAdded = ledger.update(updateCount);
+      printf("%n%d %s added%n%n", rowsAdded, pluralize("source row", rowsAdded));
+    case COMPLETE:
       
-      StringBuilder buffer = new StringBuilder(128);
-      int count = 0;
-      final int start = writeCommand.ingest.start;
-      while (true) {
-        
-        int b = reader.read();
-        if (b == -1)
-          break;
-        
-        char c = (char) b;
-        if (isWhitespace(c)) {
-          int len = buffer.length();
-          if (len == 0)
-            continue;
-          if (len != SldgConstants.HASH_WIDTH * 2)
-            throw new IllegalArgumentException(
-                "on parsing " + nTh(count + 1) + " hex entry");
-          byte[] entry = IntegralStrings.hexToBytes(buffer);
-          buffer.setLength(0);
-          ++count;
-          if (count >= start)
-            db.getSkipLedger().appendRows(ByteBuffer.wrap(entry));
-          
+      try {
+        var witReport = ledger.witness();
+        if (witReport.nothingDone()) {
+          if (state.isComplete())
+            printf("%nUp to date.%n");
+          else {
+            printf("All rows recorded in hash ledger already witnessed.%n");
+          }
         } else {
-          buffer.append(c);
+          int crums = witReport.getRecords().size();
+          int crumtrails = witReport.getStored().size();
+          printf(
+              "%n%d %s submitted; %d %s (%s) stored%n%n",
+              crums, pluralize("crum", crums),
+              crumtrails, pluralize("crumtrail", crumtrails),
+              pluralize("witness record", crumtrails));
+          if (crumtrails == 0)
+            printf("Run '%s' in a few minutes", UPDATE);
+        }
+      } catch (ClientException cx) {
+        System.out.printf(
+            "%nEncountered a netword error while attempting to have the ledger witnessed%n" +
+            "[%d] is the last witnessed row%n%n", ledger.lastWitnessedRowNumber());
+        throw cx;
+      }
+      printf("%n");
+    }
+  }
+  
+  
+  void history() {
+    initLedger();
+    
+    var table = trailTablePrint();
+    
+    int witnessedRows = this.ledger.getHashLedger().getTrailCount();
+    
+    for (int index = 0; index < witnessedRows; ++index) {
+      table.println();
+      printTrailDetail(index, table);
+    }
+    table.println();
+    long ledgeredRows = ledger.hashLedgerSize();
+    table.println(ledgeredRows + pluralize(" ledgered row", ledgeredRows));
+    table.println(
+        "state witnessed and recorded at " +  witnessedRows + pluralize(" row", witnessedRows));
+    table.println();
+  }
+
+
+
+  private final static int RM = 80;
+  private final static int LEFT_STATUS_COL_WIDTH = 16;
+  private final static int RIGHT_STATUS_COL_WIDTH = 18;
+  private final static int MID_STATUS_COL_WIDTH = RM - LEFT_STATUS_COL_WIDTH - RIGHT_STATUS_COL_WIDTH;
+  
+  
+  private TablePrint trailTablePrint() {
+    return new TablePrint(
+        LEFT_STATUS_COL_WIDTH,
+        MID_STATUS_COL_WIDTH,
+        RIGHT_STATUS_COL_WIDTH);
+  }
+  
+
+  void status() {
+    initLedger();
+    
+    var out = System.out;
+    
+    final long rowsRecorded = ledger.hashLedgerSize();
+    final int trails = ledger.getHashLedger().getTrailCount();
+    out.printf("%n%d %s recorded in hash ledger%n", rowsRecorded, pluralize("row", rowsRecorded));
+    
+    out.printf("%d %s%n", trails, pluralize("crumtrail", trails));
+    
+    State state = ledger.getState();
+    if (state.needsMending()) {
+      
+      if (state.isForked()) {
+        long fc = ledger.getFirstConflict();
+        printf("%nrow [%d] has been modified%n", fc);
+        printf("%nTo fix, either%n");
+        printf("  a) restore row [%d] to its previous state, or%n", fc);
+        printf("  b) rollback (trim) the hash ledger to row [%d]%n", fc - 1);
+        
+      } else {
+        // assert state.isTrimmed();
+        long trimmed = ledger.sourceLedgerSize();
+        long missing = rowsRecorded - trimmed;
+        printf("%nsource ledger has been trimmed to %d %s%n", trimmed, pluralize("row", trimmed));
+        printf("%nTo fix, either%n");
+        printf("  a) restore the last %d missing %s, or%n", missing, pluralize("row", missing));
+        printf("  b) rollback (trim) the hash ledger to row [%d]%n", trimmed);
+        
+      }
+    } else {
+      final long unwitnessRows = ledger.getHashLedger().unwitnessedRowCount();
+      if (state.isPending()) {
+        long pending = ledger.rowsPending();
+        out.printf("%n%d %s in source ledger not yet recorded%n", pending, pluralize("row", pending));
+        
+      } else {
+        // assert state.isComplete();
+        out.printf("%nhash ledger is up to date with source ledger%n");
+        if (unwitnessRows == 0) {
+          out.printf("all row hashes witnessed%n");
+        } else {
+          out.printf("%d remaining row %s to witness%n", unwitnessRows, pluralize("hash", unwitnessRows));
         }
       }
-      int skipped = Math.min(count, start - 1);
-      int added = count - skipped;
-      System.out.println(
-          added + pluralize(" entry", added) + " added; " + skipped + pluralize(" entry", skipped) + " skipped");
-      long size = db.size();
-      System.out.println("Final ledger size: " + size + pluralize(" row", size));
+      if (trails != 0) {
+        TablePrint table = trailTablePrint();
+        table.println();
+        String heading = "First";
+        boolean single = trails == 1;
+        if (single)
+          heading += " (and only)";
+        heading += " crumtrail";
+        table.printRow(null, heading);
+        printTrailDetail(0, table);
+        
+        if (!single) {
+          table.println();
+          table.printRow(null, "Last crumtrail");
+          printTrailDetail(trails - 1, table);
+        }
+        table.println();
+      }
+      
+      System.out.printf(
+          "%nledger state hash (row [%d]):%n%s%n",
+          rowsRecorded,
+          IntegralStrings.toHex(ledger.getHashLedger().getSkipLedger().stateHash()));
     }
   }
   
   
-  private boolean isWhitespace(char c) {
-    switch (c) {
-    case '\t':
-    case '\n':
-    case '\f':
-    case '\r':
-    case ' ':
-      return true;
-    default:
-      return false;
+  private void printTrailDetail(int index, TablePrint table) {
+    TrailedRow trailedRow = ledger.getHashLedger().getTrailByIndex(index);
+    long utc = trailedRow.utc();
+    table.printRow("row #: ", ledger.getHashLedger().getTrailedRowNumbers().get(index));
+    table.printRow("witnessed:", new Date(utc), "UTC: " + utc);
+    table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
+    table.printRow("ref URL:", trailedRow.trail().getRefUrl());
+  }
+  
+
+
+
+  private void initLedger() {
+    if (ledger == null)
+      this.ledger = SqlLedger.loadInstance(config);
+  }
+
+
+  private ConfigFileBuilder builder;
+  private Console console;
+
+  void setup() {
+    this.console = System.console();
+    if (console == null) {
+      System.err.println("[ERROR] No console. Aborting.");
+      StdExit.GENERAL_ERROR.exit();
     }
+    console.printf("%nEntering interactive mode..%n");
+    printf("Enter <CTRL-c> to abort at any time.%n%n");
+    PrintSupport printer = new PrintSupport();
+    var paragraph =
+        "The steps to create a valid (or at least well-formed) configuration file for this program consist " +
+        "of configuring a connection to the source ledger (the append-only table), optionally " +
+        "(recommended) a separate database connection for the hash-ledger, and then declaring which " +
+        "columns (and in what order) define a source-row's data to be tracked.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    paragraph =
+        "2 connection URLs are recommended, instead of just the one, because that way " +
+        "it's possible to configure a read-only connection for the source-table while allowing a " +
+        "read/write connection dedicated to the hash-ledger tables that track it.";
+    printer.printParagraph(paragraph);
+    printer.println();
+    printer.println("Here's an outline of what we'll be doing..");
+    printer.println();
+    printer.setIndentation(2);
+    printer.println("1. Configure DB connection to source table (the ledger source)");
+    printer.println("  1.a JDBC URL configuration (Required)");
+    printer.println("  1.b Connection name/value paramaters (Optional if already in URL)");
+    printer.println("  1.c JDBC Driver class (Optional if already registered at boot time)");
+    printer.println("  1.d JDBC Driver classpath (Optional if already defined at boot time)");
+    printer.println();
+    printer.println("2. Configure DB connection for hash ledger tables as above (Optional)");
+    printer.println();
+    printer.println("3. Configure source- and hash-ledger schemas");
+    printer.println("  3.a Source table (or view) name");
+    printer.println("  3.b Source table PRIMARY_KEY column");
+    printer.println("  3.c Other source table columns");
+    printer.println();
+    printer.println("4. Save the file. Default schema definitions for the hash tables are saved");
+    printer.println("   Depending on the SQL flavor of your DB vendor, you may need to modify these.");
+    printer.println();
+    
+    File targetConfigFile = getTargetConfigFile();
+    this.builder = new ConfigFileBuilder(targetConfigFile);
+    setSrcConUrl();
+    setSrcConInfo();
+    if (setSrcDriverClass())
+      setSrcDriverClasspath();
+    testSrcCon();
+    if (setHashConUrl()) {
+      setHashConInfo();
+      if (setHashDriverClass())
+        setHashDriverClasspath();
+    } 
+    setSourceTablename();
+    setSourceColumns();
+    printf("%n");
+    printf("Generating random salt%n");
+    printf("%n");
+    builder.seedSourceSalt();
+    printf("%n");
+    paragraph =
+        "Generating default schema definitions (CREATE TABLE statements) for the hash-ledger. " +
+        "These are simple enough to work on most any database engine. Still, if you need to define " +
+        "these schemas some other way you can edit the configuration file (or create the " +
+        "tables on the database yourself).";
+    printer.setIndentation(0);
+    printer.printParagraph(paragraph);
+    builder.setDefaultHashSchemas();
+    saveConfigFile();
   }
 
 
 
-  private void outputPath(Path path) {
+
+
+  private void saveConfigFile() {
     
-    File out;
-    if (readCommand.file.isDirectory()) {
-      String file = Filenaming.INSTANCE.pathFilename(path, Format.JSON);
-      out = new File(readCommand.file, file);
-      exitIfExists(out);
-    } else
-      out = readCommand.file;
-    
-    writePath(out, path);
-    System.out.println("path written to " + out);
-  }
-  
-  
-  private void writePath(File out, Path path) {
-    
-    String json = PathParser.INSTANCE.toJsonObject(path).toJSONString();
-    
-    try (FileWriter writer = new FileWriter(out, Strings.UTF_8)) {
-      writer.append(json);
-    } catch (IOException iox) {
-      throw new UncheckedIOException("on writing " + path, iox);
+    var path = builder.getConfigFile().getPath();
+    printf("Saving configuration to%n  <%s>", path);
+    try {
+      builder.save();
+      
+    } catch (Exception x) {
+      printf("%nERROR: on attempt to save <%s>%n%s%n", path, x);
     }
-    
+    printf("%n");
+    printf("%nDone.%n");
+    printf("%n");
+    String note =
+        "Review the contents of the config file (adjust per SQL dialect) and then invoke the '" + CREATE + "' command. " +
+        "You can modify the rows and columns pulled in on the SELECT \"by row number\" statement there. For example, " +
+        "you may denormalize the data (pull in other column values related to FOREIGN KEYs). " +
+        "Note you can redact any column when outputing a morsel, and that the storage overhead in the hash ledger is small and fixed per row, regardless how " +
+        "many columns are returned in the SELECT statement.";
+    new PrintSupport().printParagraph(note);
+    printf("%n");
   }
-  
-  
-  
-  private void exitIfExists(File out) {
-    if (!out.exists())
+
+
+
+
+  private void setSourceColumns() {
+    printf("%nGood.");
+    printf(" Now name the column names in table%n   <%s>%n", builder.getHashTablePrefix());
+    
+    var paragraph =
+        "that are to be tracked. " +
+        "The first of these should be the table's PRIMARY KEY column " +
+        "(or the equivalent of). The values in this column must be monotonically " +
+        "increasing, whenever new rows are appended to the table. There are no restrictions " +
+        "on the other columns (most any SQL data type, or NULL value should work).";
+    
+    PrintSupport printer = new PrintSupport();
+    printer.printParagraph(paragraph);
+    printer.println();
+    
+    for (int count = MAX_TRIALS; count-- > 0; ) {
+      printf("Enter the column names (separate with spaces):%n");
+      String line = readLine();
+      if (line.isEmpty())
+        continue;
+      var tokenizer = new StringTokenizer(line);
+      final int cc = tokenizer.countTokens();
+      if (cc < 2) {
+        printf("Need at least 2 column names.. Try Again.%n");
+        continue;
+      }
+      
+      ArrayList<String> columnNames = new ArrayList<>(cc);
+      while (tokenizer.hasMoreTokens()) {
+        String colName = tokenizer.nextToken();
+        if (malformedColumnname(colName)) {
+          printf("Woops, with '%s' (quoted column-name).. Try Again.%n", colName);
+          break;
+        }
+        columnNames.add(colName);
+      }
+      if (columnNames.size() != cc)
+        continue; // (user input error already notified)
+      
+      var queryBuilder = new SqlSourceQuery.DefaultBuilder(
+          builder.getHashTablePrefix(),
+          columnNames);
+      
+      builder.setSourceSizeQuery(queryBuilder.getPreparedSizeQuery());
+      builder.setSourceRowQuery(queryBuilder.getPreparedRowByNumberQuery());
+      printf("%nExcellent.");
       return;
+    }
     
-    System.err.println("[ERROR] file already exists: " + out);
+    giveupAbort();
+  }
+
+  
+  /**
+   * {@code printf} with delay to draw attention.
+   */
+  private void printf(String format, Object... args) {
+    try {
+      ThreadUtils.ensureSleepMillis(100);
+    } catch (InterruptedException ix) {
+      Thread.currentThread().interrupt();
+    }
+    if (console == null)
+      System.out.printf(format, args);
+    else
+      console.printf(format, args);
+  }
+
+
+  private void setSourceTablename() {
+    for (int count = MAX_TRIALS; count-- > 0; ) {
+      printf("%nEnter the name of the table that is to be tracked:%n");
+      String table = readLine();
+      if (table.isEmpty())
+        continue;
+      if (malformedTablename(table)) {
+        printf("%nThat can't be right. Try Again.");
+        continue;
+      }
+      builder.setHashTablePrefix(table);
+      return;
+    }
+    giveupAbort();
+  }
+
+
+
+  private boolean malformedTablename(String table) {
+    // stub
+    return table.length() < 2 || malformedSqlThing(table);
+  }
+  
+  
+  private boolean malformedColumnname(String column) {
+    // stub
+    return malformedSqlThing(column);
+  }
+  
+  private boolean malformedSqlThing(String thing) {
+    if (!Strings.isAlphabet(thing.charAt(0)))
+      return true;
+    for (int index = 1; index < thing.length(); ++index) {
+      char c = thing.charAt(index);
+      boolean ok = Strings.isAlphabet(c) || Strings.isDigit(c) || c == '_';
+      if (!ok)
+        return true;
+    }
+    return false;
+  }
+
+
+
+  private final static int MAX_TRIALS = 3;
+
+
+  private File getTargetConfigFile() {
+    File target = null;
+    int count = MAX_TRIALS;
+    int blanks = 0;
+    while (target == null && count-- > 0) {
+      printf("Enter the destination path:%n");
+      String path = readLine();
+      
+      if (path.isEmpty()) {
+        if (++blanks < 2)
+          ++count;
+        continue;
+      } else
+        blanks = 0;
+      
+      try {
+        target = new File(path);
+        if (target.exists()) {
+          target = null;
+          if (count > 0)
+            printf("%nWoops.. that file path already exists. Try again.%n");
+        }
+      } catch (Exception x) {
+        if (count > 0)
+          printf(
+              "%nThat doesn't seem to work. (Error msg: %s)%n" +
+              "Try again.%n", x.getMessage());
+      }
+      if (target == null)
+        giveupAbort();
+    }
+    return target;
+  }
+  
+  
+  private String readLine() {
+    String line = console.readLine();
+    if (line == null)
+      giveupAbort();
+    return line.trim();
+  }
+  
+  
+  private void giveupAbort() {
+    System.err.println();
+    System.err.println("OK, giving up. Aborting.");
+    System.err.println();
     StdExit.ILLEGAL_ARG.exit();
   }
-
-
-
-  private void outputState(Path statePath) {
-    
-    if (statePath == null) {
-      System.err.println("[ERROR] empty ledger has no state");
-      StdExit.ILLEGAL_ARG.exit();
-    }
-    
-    File out;
-    if (readCommand.file.isDirectory()) {
-      String file = Filenaming.INSTANCE.stateFilename(statePath, Format.JSON);
-      out = new File(readCommand.file, file);
-      exitIfExists(out);
-    } else
-      out = readCommand.file;
-    
-    writePath(out, statePath);
-    System.out.println("state-path written to " + out);
-  }
   
   
-  
-
-
-
-  
-  private void printStatus() {
-    long size = db.size();
-    int witCount = db.getTrailCount();
-    DecimalFormat format = new DecimalFormat("#,###.###");
-    System.out.println(
-        format.format(size) + pluralize(" row", size) + ", " +
-        format.format(witCount) + pluralize(" crumtrail", witCount) + " attached");
-
-    
-    if (witCount == 1) {
-      TrailedRow trail = db.getTrailByIndex(0);
-      System.out.println(
-          "first (and last) row witnessed: [" + format.format(trail.rowNumber()) + "] " +
-          new Date(trail.trail().crum().utc()));
-    } else if (witCount > 1) {
-      
-      TrailedRow firstTrail = db.getTrailByIndex(0);
-      TrailedRow lastTrail = db.getTrailByIndex(witCount - 1);
-      
-      long firstRow = firstTrail.rowNumber();
-      long firstUtc = firstTrail.trail().crum().utc();
-      long lastRow = lastTrail.rowNumber();
-      long lastUtc = lastTrail.trail().crum().utc();
-      
-      if (firstUtc > lastUtc)
-        throw new SldgException("corrupt repo: " + db.getDir());
-      
-      System.out.println(
-          "first row witnessed: [" + format.format(firstRow) + "] " + new Date(firstUtc));
-      System.out.println(
-          "last row witnessed: [" + format.format(lastRow) + "] " + new Date(lastUtc));
-    }
-    System.out.println("Ledger (last row's) Hash:");
-    System.out.println(IntegralStrings.toHex(db.getSkipLedger().rowHash(size)));
-    System.out.println("OK");
-  }
-
-
-
-  private void listRows(List<Row> rows) {
-//  System.out.println(RowParser.INSTANCE.toJsonArray(rows));
-    if (!rows.isEmpty()) {
-      
-      // make it pretty: align hex column
-      final int hexStartPos;
-      {
-        long maxRowNum =
-            rows.stream().max((a, b) -> Long.compare(a.rowNumber(), b.rowNumber()))
-            .get().rowNumber();
-        String proto = String.valueOf(maxRowNum);
-        // >[proto] <
-        hexStartPos = proto.length() + 3;
+  private void setSrcConUrl() {
+    printf("%nGood.");
+    printf(
+        " We need a connection URL to the database the source table lives in.%n" +
+        "For e.g. jdbc:postgres.. (We'll add parameters and credentials after.)%n%n");
+    int blanks = 0;
+    for (int count = MAX_TRIALS; count-- > 0; ) {
+      printf("Enter the connection URL for the source table:%n");
+      String url = readLine();
+      if (url.isEmpty()) {
+        if (++blanks < 2)
+          ++count;
+        continue;
+      } else
+        blanks = 0;
+      if (malformedUrl(url)) {
+        console.printf("Not a valid URL. Try Again.%n");
+        continue;
       }
-
-      for (Row row : rows) {
-        System.out.print('[');
-        String value = String.valueOf(row.rowNumber());
-        System.out.print(value);
-        System.out.print(']');
-        for (int index = value.length() + 2; index < hexStartPos; ++index)
-          System.out.print(' ');
-        System.out.println(IntegralStrings.toHex(row.hash()));
-      }
+      
+      builder.setSourceUrl(url);
+      
+      printf("%nNice. ");
+      break;
     }
   }
-
-
-
-  private void printPath(Path path) {
-    if (path == null)
-      System.out.println("{}");
-    else
-      System.out.println(injectVersion(PathParser.INSTANCE.toJsonObject(path)));
+  
+  
+  private boolean malformedUrl(String url) {
+    return url.length() < 10 || ! url.toLowerCase().startsWith("jdbc:");
   }
   
   
-  @SuppressWarnings("unchecked")
-  private JSONObject injectVersion(JSONObject obj) {
-    obj.put(SldgConstants.VERSION_TAG, SldgConstants.VERSION);
-    return obj;
-  }
-  
-  
-  
-  
-  
-  private void configureCommon(ArgList argList) {
-    this.info = argList.removeBoolean(INFO, true);
-  }
-
-
-
-  private boolean configureReadCommands(ArgList argList) {
+  private void setSrcConInfo() {
+    printf("How about credentials and other parameters for this database?%n");
+    printf(
+        "These are passed in as name/value pairs. For example%n" +
+        " user=admin%n pwd=123%n" +
+        "If your driver supports it, you can set this connection to read-only (e.g.%n" +
+        "readonly=true).%n%n");
+    printf("Enter as many name/value pairs as needed followed by an empty line:%n");
     
-    List<String> readCommands = argList.removeContained(STATE, PATH, LIST, FIND, STATUS);
-    switch (readCommands.size()) {
-    case 0:   return false;
-    case 1:   break;
-    default:
-      throw new IllegalArgumentException(
-          "duplicate commands in '" + argList.getArgString() + "'");
-    }
+    doAddConInfoLoop(
+        (name,value) -> { builder.setSourceConProperty(name, value); return Boolean.TRUE;},
+        "source");
     
-    this.readCommand = new ReadCommand();
-    String command = readCommands.get(0);
-    readCommand.state = STATE.equals(command);
-    readCommand.path = PATH.equals(command);
-    readCommand.list = LIST.equals(command);
-    readCommand.status = STATUS.equals(command);
-    
-    if (FIND.equals(command)) {
-      readCommand.find = new FindCommand();
-      
-      readCommand.find.prefix = getHashPrefix(argList);
-      
-      readCommand.find.limit = (int) argList.removeLong(LIMIT, DEFAULT_LIMIT);
-      if (readCommand.find.limit < 1)
-        throw new IllegalArgumentException(LIMIT + "=" + readCommand.find.limit + " < 1");
-      
-      readCommand.find.startRn = argList.removeLong(START, 1);
-    }
-    
-    if (readCommand.takesRowNumbers()) {
-      readCommand.rowNumbers = argList.removeNumbers();
-      if (readCommand.rowNumbers.isEmpty())
-        throw new IllegalArgumentException(
-            "missing row number[s] in arguments: " + argList.getArgString());
-      if (readCommand.path && readCommand.rowNumbers.size() != 2)
-        throw new IllegalArgumentException(
-            (readCommand.rowNumbers.size() > 2 ? "too many row numbers" : "missing row number") +
-            " in arguments: " + argList.getArgString());
-      
-      long minRowNum = readCommand.rowNumbers.stream().min(Comparator.naturalOrder()).get();
-      if (minRowNum < 1)
-        throw new IllegalArgumentException("one or more row numbers < 1: " + argList.getArgString());
-      
-//      if (readCommand.nug && readCommand.rowNumbers.size() != 1)
-//        throw new IllegalArgumentException(
-//            NUG + " command takes a single row number. Too many given: " + argList.getArgString());
-    }
-    
-
-    configureOutput(argList);
-    
-    argList.enforceNoRemaining();
-    
-    return true;
   }
   
   
   
-  private void configureOutput(ArgList argList) {
+  private void doAddConInfoLoop(BiFunction<String,String,?> func, String conName) {
 
-    String outpath = argList.removeValue(FILE);
-    if (outpath == null)
-      return;
-
-    if (!readCommand.supportsFileOutput())
-      throw new IllegalArgumentException(
-          FILE + "=" + outpath + " does not apply: " + argList.getArgString());
-    
-    readCommand.file = new File(outpath);
-    
-    
-    readCommand.enforceExt = argList.removeBoolean(EXT, true);
-    
-    // if file is a directory (auto-naming), check other settings aren't wonkie
-    if (readCommand.file.isDirectory()) {
-      
-      if (!readCommand.enforceExt)
-        throw new IllegalArgumentException(
-            "illegal setting " + EXT + "=false while file=" + outpath + " is a directory");
-    
-    // check we don't overwrite
-    } else if (readCommand.file.exists()) {
-      throw new IllegalArgumentException("file already exist: " + outpath);
-    
-    } else {
-      // not a directory; and doesn't exist
-      
-      // check the parent directory exists
-      File parent = readCommand.file.getParentFile();
-      if (parent != null && !parent.exists())
-        throw new IllegalArgumentException(
-            "'" + FILE + "=" + outpath + "': first create parent dir " + parent);
-      
-      // normalize the filename, if it requires an extension
-      if (readCommand.enforceExt) {
-        String name = readCommand.file.getName();
-        String normalizedName = Filenaming.INSTANCE.normalizePathFilename(name, Format.JSON);
-        
-        if (!normalizedName.equals(name)) {
-          readCommand.file = new File(parent, normalizedName);
-          if (readCommand.file.exists())
-            throw new IllegalArgumentException(
-                "normalized file path " + readCommand.file + " already exists");
+    int count = MAX_TRIALS;
+    var tally = new HashMap<>();
+    while (true) {
+      String line = readLine();
+      if (line.isEmpty()) {
+        int props = tally.size();
+        if (props < 2) {
+          // confirm
+          String msg = props == 0 ? "Confirm no parameters" : "Confirm just 1 paramater";
+          msg += " for " + conName + " connection [y]:%n";
+          printf(msg);
+          String ack = readLine();
+          boolean yes = "y".equalsIgnoreCase(ack) || "yes".equalsIgnoreCase(ack);
+          
+          if (!yes) {
+            printf("%nOK, continue adding name/value pairs, followed by an empty line:%n");
+            continue;
+          }
         }
+        break;
       }
+      int delimiterIndex = delimiterIndex(line);
+      if (delimiterIndex == -1) {
+        warnInvalidProp(--count);
+        continue;
+      }
+      String name = line.substring(0, delimiterIndex).trim();
+      String value = line.substring(delimiterIndex + 1, line.length()).trim();
+      if (name.isEmpty() || value.isEmpty()) {
+        warnInvalidProp(--count);
+        continue;
+      }
+      func.apply(name, value);
+//      builder.setSourceConProperty(name, value);
+      Object oldValue = tally.put(name, value);
+      if (oldValue != null)
+        console.printf("(Overwrote old value '%s')%n", oldValue);
+      count = MAX_TRIALS;
     }
+    int props = tally.size();
+    String msg = props < 2 ? "%nOK, " : "%nGreat. ";
+    msg += props + pluralize(" name/value pair", props) + " added.%n%n";
+    printf(msg);
   }
   
-  
-  
-  private boolean configureWriteCommands(ArgList argList) {
 
-    List<String> writeCommands = argList.removeContained(ADD, WIT, INGEST);
-    switch (writeCommands.size()) {
-    case 0:
-      return false;
-    case 1:
-    case 2:
-      break;
-    default:
-      throw new IllegalArgumentException(
-          "duplicate commands in '" + argList.getArgString() + "'");
-    }
+
+
+
+  private void setHashConInfo() {
+    printf(
+        "Enter credentials and other parameters for this DB connection as you did for the%n" +
+        "connection to the source-table's DB.%n%n");
     
-    this.writeCommand = new WriteCommand();
-    writeCommand.add = writeCommands.contains(ADD);
-    writeCommand.witness = writeCommands.contains(WIT);
+    printf("Enter as many name/value pairs as needed followed by an empty line:%n");
     
-    if (writeCommands.contains(INGEST)) {
-      if (writeCommands.size() > 1)
-        throw new IllegalArgumentException(INGEST + " cannot be combined with other commands: " + writeCommands);
-      
-      this.writeCommand.ingest = new IngestCommand();
-      List<File> file = argList.removeExistingFiles();
-      switch (file.size()) {
-      case 0:
-        break;
-//        throw new IllegalArgumentException(
-//            "missing or non-existent file in arguments: " + argList.getArgString());
-      case 1:
-        writeCommand.ingest.file = file.get(0);
-        break;
-      default:
-        throw new IllegalArgumentException(INGEST + " command takes only a single file: " + file);
+    doAddConInfoLoop(
+        (name,value) -> { builder.setHashConProperty(name, value); return Boolean.TRUE;},
+        "hash-ledger");
+  }
+
+
+  private boolean setDriverClass(String url, Consumer<String> func) {
+    printf(
+        "%nDo you need to set the JDBC Driver class associated with the connection URL%n <%s> ?%n%n",
+        url);
+    printf(
+        "You can specify the Driver class (and then its classpath) here, if it's not%n" +
+        "pre-registered with the Runtime's DriverManager.%n%n");
+    
+    while (true) {
+      printf("Enter the driver class name (enter blank to skip):%n");
+      String line = readLine();
+      if (line.isEmpty()) {
+        console.printf("%nNot setting any driver class / classpath.%n%n");
+        return false;
       }
-      
-      writeCommand.ingest.start = (int) argList.removeLong(START, 1);
-      if (writeCommand.ingest.start < 1)
-        throw new IllegalArgumentException(START + "=" + writeCommand.ingest.start + " < 1");
-    }
-    
-    if (writeCommand.add) {
-      writeCommand.entryHashes = getHashes(argList);
-      if (writeCommand.entryHashes.isEmpty())
-        throw new IllegalArgumentException(
-            "missing entry hashes for '" + ADD + "' command: " + argList.getArgString());
-    }
-    
-    
-    if (writeCommand.witness) {
-      long e = argList.removeLong(TEX, Long.MIN_VALUE);
-      if (e == Long.MIN_VALUE) {
-        writeCommand.toothExponent = -1;
-      } else {
-        if (e < 0 || e > SldgConstants.MAX_WITNESS_EXPONENT)
-          throw new IllegalArgumentException("out of bounds " + TEX + "=" + e);
-        writeCommand.toothExponent = (int) e;
+      if (Strings.isPermissableJavaName(line)) {
+        func.accept(line);
+//        builder.setSourceDriverClass(line);
+        return true;
       }
-      writeCommand.witnessLast = argList.removeBoolean(WSTATE, true);
+      console.printf("%nNot a valid Java class name. Try again:%n");
     }
-    
-    argList.enforceNoRemaining();
-    
-    return true;
   }
-  
-  
-  
-  
-  
-  private ByteBuffer getHashPrefix(ArgList args) {
-    
-    List<String> prefix = args.removeMatched(s -> isHashPrefix(s));
-    
-    switch (prefix.size()) {
-    case 0:
-      throw new IllegalArgumentException("'" + FIND + "' command requires a search key (in hex)");
-    case 1:
-      break;
-    default:
-      throw new IllegalArgumentException("only one search key may be provided; parsed these: " + prefix);
-    }
-    
-    return ByteBuffer.wrap(IntegralStrings.hexToBytes(prefix.get(0)));
+
+
+  private boolean setHashDriverClass() {
+    return setDriverClass(
+        builder.getHashUrl(),
+        s -> builder.setHashDriverClass(s));
   }
-  
-  
-  private List<ByteBuffer> getHashes(ArgList args) {
-    List<String> hexes = args.removeMatched(s -> isHash(s));
-    return Lists.map(hexes, s -> ByteBuffer.wrap(IntegralStrings.hexToBytes(s)));
-  }
-  
-  
-  private boolean isHash(String arg) {
-    return IntegralStrings.isHex(arg) && arg.length() == 2 * SldgConstants.HASH_WIDTH;
-  }
-  
-  private boolean isHashPrefix(String arg) {
-    int len = arg.length();
-    return len > 1 && (len & 1) == 0 && len <= 2 * SldgConstants.HASH_WIDTH && IntegralStrings.isHex(arg);
-  }
-  
   
   
   
 
-  // NOTE: this code may belong in Opening
-  private Opening getMode(ArgList args) {
-    String mi = args.removeValue(MODE, MODE_RW);
-    String m = orderCharOptions(mi, MODE_CRW);
-    if (MODE_R.equals(m))
-      return Opening.READ_ONLY;
-    else if (MODE_RW.equals(m))
-      return Opening.READ_WRITE_IF_EXISTS;
-    else if (MODE_CRW.equals(m))
-      return Opening.CREATE_ON_DEMAND;
-    else if (MODE_C.equals(m))
-      return Opening.CREATE;
+
+  private void setHashDriverClasspath() {
+    setDriverClasspath(
+        builder.getHashDriverClass(),
+        s -> builder.setHashDriverClasspath(s));
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  private int delimiterIndex(String line) {
+    int equalIndex = supIndexOf(line, '=');
+    int colonIndex = supIndexOf(line, ':');
+    int supIndex = Math.min(equalIndex, colonIndex);
+    return supIndex == line.length() ? -1 : supIndex;
+  }
+  
+  private int supIndexOf(String line, char c) {
+    int index = line.indexOf(c);
+    return index == -1 ? line.length() : index;
+  }
+  
+  private void warnInvalidProp(int countdown) {
+    warn("That's not a valid name/value pair. Try again:%n", countdown);
+  }
+
+  private void warn(String message, int countdown) {
+    if (countdown > 0)
+      console.printf(message);
     else
-      throw new IllegalArgumentException("illegal " + MODE + " parameter: " + mi);
+      giveupAbort();
+  }
+
+  private boolean setSrcDriverClass() {
+    return setDriverClass(
+        builder.getSourceUrl(),
+        s -> builder.setSourceDriverClass(s));
+  }
+
+
+  private void setSrcDriverClasspath() {
+    setDriverClasspath(
+        builder.getSourceDriverClass(),
+        s -> builder.setSourceDriverClasspath(s));
   }
   
   
+  private void setDriverClasspath(String driverClass, Consumer<String> func) {
+    console.printf(
+        "%nGreat. Do you need to set the .jar file from which%n     <%s>%nwill be loaded?%n%n" +
+        "You can set the path to its .jar file either absolutely, or relative to the%n" +
+        "(parent directory of the) configuration file.%n%n" +
+        
+        "Enter the location of the .jar file (enter blank to skip):%n",
+        driverClass);
+    
+    
+    while (true) {
+      String path = readLine();
+      if (path.isEmpty())
+        break;
+      if (!path.endsWith(".jar")) {
+        console.printf("Error. Must be a .jar file. Try again:%n");
+        continue;
+      }
+      
+      try {
+        File resolvedPath = new File(path);
+        boolean relative = !resolvedPath.isAbsolute();
+        if (relative)
+          resolvedPath = new File(builder.getBaseDir(), path);
+        
+        if (resolvedPath.isFile()) {
+          console.printf("%nGot it.%n%n");
+          func.accept(path);
+          break;
+        } else {
+          String msg = "Error. " + path;
+          if (relative)
+            msg += " which resolves to " + resolvedPath;
+          msg += " does not exist. Try again:%n";
+          console.printf(msg);
+          continue;
+        }
+      } catch (Exception x) {
+        console.printf("Woops. That didn't work (" + x.getMessage() + "). Try again:%n");
+      }
+    }
+    
+  }
   
-  private final static int RM = 80;
+  private void testSrcCon() {
+    printf("%nWould you like to test this DB connection? [y]:");
+    if ("y".equalsIgnoreCase(readLine())) {
+      printf("%n%nAttempting connnection.. ");
+      if (srcConWorks())
+        printf(" Works!%n%n");
+      else {
+        printf(" Woops, that didn't work.");
+        printf("%nYou can edit these configuration properties later.%n%n");
+      }
+    } else {
+      printf("%n%nOK, skipping DB connnection test%n");
+    }
+  }
+  
+  
+  private boolean srcConWorks() {
+    ConnectionInfo conInfo =
+        new ConnectionInfo(
+            builder.getSourceUrl(),
+            builder.getSourceDriverClass(),
+            builder.getSourceDriverClasspath());
+    try {
+      conInfo.open(builder.getBaseDir(), builder.getSourceConProperties()).close();
+      return true;
+    } catch (Exception x) {
+      return false;
+    }
+  }
+  
+  
+  private boolean setHashConUrl() {
+    PrintSupport printer = new PrintSupport();
+    var paragraph =
+        "The hash-ledger (the data structure that tracks the source-table) reads and " +
+        "writes to its own tables. The information in this ledger is almost entirely " +
+        "opaque and consists of undecipherable hashes: it does reveal the number of " +
+        "rows in the source-table and their history (when the hashes were witnessed), " +
+        "however.";
+    printer.printParagraph(paragraph);
+    printf("%n");
+    paragraph =
+        "So the hash-ledger needs a (read/write) DB connection--which can either be one " +
+        "dedicated to itself, or the same one used to access the source-table.";
+    printer.printParagraph(paragraph);
+    printf("%n");
+    while (true) {
+      printf(
+          "Enter the connection URL for the hash ledger (enter blank to skip):%n");
+      String url = readLine();
+      if (url.isEmpty())
+        return false;
+      if (malformedUrl(url)) {
+        console.printf("%nNot a valid URL. Try Again.%n");
+        continue;
+      }
+      
+      builder.setHashUrl(url);
+      printf("%nGot it.");
+      return true;
+    }
+  }
+  
   private final static int INDENT = 1;
-
 
   @Override
   protected void printDescription() {
+    String paragraph;
     PrintSupport printer = new PrintSupport();
-    printer.setIndentation(INDENT);
+    printer.setMargins(INDENT, RM);
     printer.println();
     System.out.println("DESCRIPTION:");
-    printer.println(); // 105
-    printer.printParagraph(
-        "Command line tool for accessing and maintaining a skip ledger stored on the file system.", RM);
     printer.println();
-    String paragraph =
-        "A skip ledger is a tamper-proof, append-only list of SHA-256 hashes that are added by its " +
-        "user[s]. Since hashes are opaque, a skip ledger itself conveys little information. " +
-        "If paired with the actual object whose hash matches the entry (e) in a given row " +
-        "however, then it is evidence the object belongs in the ledger at the advertised " +
-        "row number. Ledgers also support maintaining the times they are modified by " +
-        "calling out the SHA-256 hash of their latest row to the crums.io hash/witness " +
-        "time service. (See https://crums.io/docs/rest.html )";
-    printer.printParagraph(paragraph, RM);
-    printer.println();
-    System.out.println("Representations:");
-    printer.println();
+
     paragraph =
-        "Beside thru sharing it in its entirety, the state of a ledger can optionally be " +
-        "advertised compactly. The most compact of all is to just advertise the hash of " +
-        "the last row in the ledger. A more detailed, but still compact representation is " +
-        "achieved by enumerating a list of rows whose SHA-256 hashpointers connect the " +
-        "last (latest) row to the first. The number of rows in this list grows by the log " +
-        "of the size of the ledger, so it's always compact. (See '" + STATE + "' command)";
-    printer.printParagraph(paragraph, RM);
+        "Command line tool for managing a tamper proof historical ledger formed from a relational database " +
+        "table or view that is operationally append-only.";
+    printer.printParagraph(paragraph);
     printer.println();
-    System.out.println("Row Age & Witness Evidence:");
-    printer.println();
-    paragraph =
-        "A row's minimum age is established by storing a crumtrail of the row's hash. (The row's hash is not " +
-        "exactly the user-input hash: it's the hash of that plus the row's hash pointers.) A crumtrail is a tamper-proof hash structure that leads to a unitary root hash that is published every minute or so " +
-        "by crums.io and is also maintained at multiple 3rd party sites: it is evidence of witnessing a hash in a small window of time. " +
-        "Since the hash of every row in a skip ledger is dependent on the hash of every row before it, " +
-        "witnessing a given row number also means effectively witnessing all its predecessors.";
-    printer.printParagraph(paragraph, RM);
-    printer.println();
-    paragraph =
-        "The witnessing algorithm then only witnesses [the hashes of] monotonically increasing row numbers. " +
-        "The default behavior when there are unwitnessed rows is to always witness the next few subsequent rows that can't be matched with an " +
-        "already stored crumtrail as well as the last row. This is because crumtrails are not generated right away: they're typically generated " +
-        "a few minutes after the service first witnesses a hash. By default, up to 9 unwitnessed rows are submitted: 8 " +
-        "'evenly' spaced at row numbers that are multiples of a power of 2, and the last unwitnessed row. The " +
-        "exponent of this power of 2 for witnessing is called tooth-exponent. (See '" + WIT + "' command)";
-    printer.printParagraph(paragraph, RM);
-    printer.println();
-    
   }
+
+  private final static int LEFT_TBL_COL_WIDTH = 15;
+  private final static int RIGHT_TBAL_COL_WIDTH = RM - INDENT - LEFT_TBL_COL_WIDTH;
 
   @Override
   protected void printUsage(PrintStream out) {
     PrintSupport printer = new PrintSupport(out);
-    printer.setIndentation(INDENT);
+    printer.setMargins(INDENT, RM);
     printer.println();
     out.println("USAGE:");
     printer.println();
     String paragraph =
-        "Arguments that are specified as name/value pairs are designated in the form " +
-        "'name=*' below, with '*' standing for user input. A required argument is marked '" + REQ + "' in the rightmost column; " +
-        "one-of-many, required arguments are marked '" + REQ_CH + "'; '" + REQ_PLUS + "' satisfies either as a " +
-        "required one-of-many, or may be grouped with adjacently documented " + REQ_PLUS + " commands.";
-    printer.printParagraph(paragraph, RM);
+        "Excepting '" + SETUP + "', each command takes the path to a " +
+        "configuration file (specifying DB connections, the table or view etc.) as well as " +
+        "any other arguments indicated below. Command and argument order do not matter.";
+    printer.printParagraph(paragraph);
     printer.println();
-    
 
-    TablePrint table, subTable, subWideKeyTable;
-    { 
-      int fcw = 8;
-      int lcw = 2;
-      int mcw = RM - fcw - lcw - INDENT;
-      
-      int subFcw = 7;
-      int subLcw = RM - fcw - subFcw;
-      
-      int subWkFcw = 13;
-      int subWkLcw = RM - fcw - subWkFcw;
-      
-      
-      table = new TablePrint(out, fcw, mcw, lcw);
-      subTable = new TablePrint(out, subFcw, subLcw);
-      subWideKeyTable = new TablePrint(out, subWkFcw, subWkLcw);
-      
-      table.setIndentation(INDENT);
-      subTable.setIndentation(fcw + INDENT);
-      subWideKeyTable.setIndentation(fcw + INDENT);
-    }
-
-    table.printHorizontalTableEdge('=');
-    out.println();
+    TablePrint table = new TablePrint(out, LEFT_TBL_COL_WIDTH, RIGHT_TBAL_COL_WIDTH);
+    table.setIndentation(INDENT);
     
-    table.printRow(DIR + "=*", "path to skip ledger directory", REQ);
-    out.println();
-    
-    table.printRow(MODE + "=*", "mode with which DB is opened. Options are one of the following", OPT);
-    table.printRow(null,        "(char order doesn't matter):", OPT);
-    out.println();
-    subTable.printRow(           MODE_R,   "read only");
-    subTable.printRow(           MODE_RW,  "read/write existing (DEFAULT)");
-    subTable.printRow(           MODE_CRW, "read/write, create if doesn't exist");
-    subTable.printRow(           MODE_C,   "create a new DB (must not exist)");
-    subTable.printRow(           null,     "(To create an empty DB provide no additional arguments.)");
-
-    out.println();
-    table.printHorizontalTableEdge('-');
-    table.printlnCenteredSpread("ADD / WITNESS", 2);
-    table.printHorizontalTableEdge('-');
-    out.println();
-    
-    table.printRow(ADD ,  "adds one or more hexidecimal SHA-256 hash entries in the order", REQ_PLUS);
-    table.printRow(null,  "entered", null);
-    out.println();
-    
-    table.printRow(WIT ,  "witnesses the last row and/or previous unwitnessed rows whose", REQ_PLUS);
-    table.printRow(null,  "numbers match the tooth-exponent", null);
-    table.printRow(null,  "Establishes how old the latest rows in the ledger are.", null);
-    table.printRow(null,  "If combined with other commands, then this command executes", null);
-    table.printRow(null,  "last.", null);
-    table.printRow(null,  "Options (inclusive):", null);
-    out.println();
-    subWideKeyTable.printRow(TEX + "=*", "witness numbered rows that are multiples of");
-    subWideKeyTable.printRow(null,       "2 raised to the power of this number.");
-    subWideKeyTable.printRow(null,       "Valid range: [0,62]");
-    subWideKeyTable.printRow(null,       "DEFAULT: dynamically computed value that generates");
-    subWideKeyTable.printRow(null,       "up to 8 tooth-included rows to witness");
-    out.println();
-    subWideKeyTable.printRow(WSTATE + "=true",  "witness last row, even if its number is not toothed");
-    subWideKeyTable.printRow(null,              "Valid values: 'true' or 'false'");
-    subWideKeyTable.printRow(null,              "DEFAULT: true");
-    out.println();
-    
-    table.printRow(INGEST, "adds hexidecimal SHA-256 hash entries from stdin or the given file", REQ_CH);
-    table.printRow(null,   "Entries must be whitespace-delimited. The recommended practice", null);
-    table.printRow(null,   "is one per line. Note this is a streaming operation: if a bad", null);
-    table.printRow(null,   "argument is encountered midway in the file previous rows may", null);
-    table.printRow(null,   "already have been added.", null);
-    table.printRow(null,   "Option:", null);
-    out.println();
-    subWideKeyTable.printRow(START + "=*", "starting from this entry number in the file");
-    subWideKeyTable.printRow(null,         "I.e. if " + START + "=N, then the first N-1 entries in the file");
-    subWideKeyTable.printRow(null,         "are skipped. (Use for incremental updates and tooling.)");
-    subWideKeyTable.printRow(null,         "DEFAULT: 1");
-    out.println();
-
-
-    out.println();
-    table.printHorizontalTableEdge('-');
-    table.printlnCenteredSpread("OUTPUT / PRINT", 2);
-    table.printHorizontalTableEdge('-');
-    out.println();
-
-    table.printRow(STATE ,      "prints or outputs abbreviated evidence of the state the ledger by", REQ_CH);
-    table.printRow(null,        "outputing the shortest path of rows that connnect to the first row", null);
-    table.printRow(null,        "from the last thru the rows' hashpointers", null);
-    out.println();
-    table.printRow(LIST ,       "prints the given numbered rows", REQ_CH);
-    out.println();
-    table.printRow(FIND,        "finds and prints rows whose entry hash (e) match the given", REQ_CH);
-    table.printRow(null,        "hexadecimal prefix (must have an even number of hex digits)", null);
-    table.printRow(null,        "Options (inclusive):", null);
-    out.println();
-    subWideKeyTable.printRow(START + "=*", "starting row number to begin the search");
-    subWideKeyTable.printRow(null,         "DEFAULT: 1");
-    out.println();
-    subWideKeyTable.printRow(LIMIT + "=*", "maximum number of rows returned");
-    subWideKeyTable.printRow(null,         "DEFAULT: " + DEFAULT_LIMIT);
-    out.println();
-    table.printRow(PATH ,       "prints or outputs the shortest path connecting the given pair of", REQ_CH);
-    table.printRow(null,        "numbered rows", null);
-    out.println();
-    table.printRow(STATUS,      "prints the status of the ledger", REQ_CH);
+    table.printRow(SETUP, "interactive config file setup");
     table.println();
-    table.printHorizontalTableEdge('-');
-    table.printlnCenteredSpread("Output Options:", 1);
-    table.printHorizontalTableEdge('-');
+    
+    table.printRow(CREATE, "creates the hash ledger schema using the given config");
+    table.printRow(null,   "file. (See " + SETUP + ")");
     table.println();
-    table.printRow(FILE + "=*", "outputs to the specified filepath", null);
-    table.printRow(null,        "If the given path is an existing directory (recommended!), then the", null);
-    table.printRow(null,        "filename is dynamically generated. Otherwise, unless overriden (see", null);
-    table.printRow(null,        "next), if the pathname doesn't already sport the standard extension,", null);
-    table.printRow(null,        "the extension is appended.", null);
+    
+    table.printRow(STATUS, "prints the status of the ledger");
     table.println();
-    table.printRow(EXT + "=*",  "if 'false', then no extension is appended to the given '" + FILE + "'", null);
-    table.printRow(null,        "(Valid only if '" + FILE + "' is not a directory)", null);
-    table.printRow(null,        "Valid values: 'true' or 'false'", null);
-    table.printRow(null,        "DEFAULT: true", null);
+    
+    table.printRow(LIST,   "lists (prints) the given source rows");
+    table.printRow(null,   "Args:");
+    table.println();
+    table.printRow(null,   "<row-numbers>         (required)");
+    table.println();
+    table.printRow(null,   "Strictly ascending row numbers separated by commas (no spaces)");
+    table.printRow(null,   "Ranges may be substituted for numbers. For example:");
+    table.printRow(null,   "250,692-717");
+    table.println();
+
+    table.printRow(HISTORY, "lists the crumtrails (witness records) in the ledger");
+    table.println();
+    
+    table.printRow(UPDATE, "appends the hashes of new source rows to the hash-ledger;");
+    table.printRow(null,   "unwitnessed rows are timestamped.");
+    table.printRow(null,   "Args:");
+    table.println();
+    table.printRow(null,   "<maximum number of rows to append>            (optional)");
+    table.printRow(null,   "DEFAULT: no maximum");
+    table.println();
+
+    table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
+    table.printRow(null,   "row numbers");
+    table.printRow(null,   "Args:");
+    table.println();
+    table.printRow(null,   "<row-numbers>         (required)");
+    table.println();
+    table.printRow(null,   "Strictly ascending row numbers separated by commas (no spaces)");
+    table.printRow(null,   "Ranges may be substituted for numbers. For example:");
+    table.printRow(null,   "308,466,592-598,717");
+    table.println();
+    table.printRow(null,   "<path/to/morselfile>  (optional)");
+    table.println();
+    table.printRow(null,   "If provided, then <path/to/morselfile> is the destination path.");
+    table.printRow(null,   "The given path should not be an existing file; however, if it's");
+    table.printRow(null,   "an existing directory, then a filename is generated for the");
+    table.printRow(null,   "file in the chosen directory.");
+    table.printRow(null,   "DEFAULT: '.'          (current directory)");
+    table.println();
+    
+    table.printRow(STATE_MORSEL, "creates a morsel file containing only the ledger's state-");
+    table.printRow(null,   "path. That is the shortest list of rows connecting the last row");
+    table.printRow(null,   "to the first. It serves as a fingerprint against which older");
+    table.printRow(null,   "morsels can be validated (and optionally be updated).");
+    table.println();
+    table.printRow(null,   "<path/to/morselfile>  (optional)");
+    table.println();
+    table.printRow(null,   "(Same semantics as with '" + MAKE_MORSEL + "' above)");
+    table.printRow(null,   "DEFAULT: '.'          (current directory)");
     table.println();
     
   }
-
-
-  private final static String REQ = "R";
-  private final static String REQ_CH = "R?";
-  private final static String REQ_PLUS = "R+";
-  private final static String OPT = "";
-  
-
-  private final static String DIR = "dir";
-  private final static String MODE = "mode";
-  
-  private final static String MODE_R = "r";
-  private final static String MODE_RW = "rw";
-  private final static String MODE_CRW = "crw";
-  private final static String MODE_C = "c";
   
   
-  
-
-
-  private final static String ADD = "add";
-//  private final static String ADDB = "addb";
-  private final static String INGEST = "ingest";
-  
-  private final static String WIT = "wit";
-  private final static String TEX = "tex";
-  private final static String WSTATE = "wstate";
-  
-
-  private final static String STATE = "state";
-  private final static String PATH = "path";
+  private final static String SETUP = "setup";
+  private final static String CREATE = "create";
   private final static String STATUS = "status";
   private final static String LIST = "list";
-  private final static String FIND = "find";
-//  private final static String NUG = "nug";
-  
-  
+  private final static String HISTORY = "history";
+  private final static String UPDATE = "update";
 
-  private final static String INFO = "info";
-  private final static String FILE = "file";
-  private final static String EXT = "ext";
-  private final static String LIMIT = "limit";
-  private final static String START = "start";
-  
-  
-  
-  public final static String PATH_EXT = ".spath";
-  public final static String STATE_EXT = "." + STATE + PATH_EXT;
-//  public final static String NUG_EXT = "." + NUG;
-  
-  
-  
-  
-  
+  private final static String MAKE_MORSEL = "make-morsel";
+  private final static String STATE_MORSEL = "state-morsel";
+
 }

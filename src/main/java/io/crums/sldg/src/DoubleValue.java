@@ -56,7 +56,7 @@ public final class DoubleValue extends ColumnValue {
   }
 
   @Override
-  protected void appendValue(StringBuilder s) {
+  public void appendValue(StringBuilder s) {
     s.append(value);
   }
 

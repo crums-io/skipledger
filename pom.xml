@@ -64,8 +64,8 @@
           <programs>
             
             <program>
-              <mainClass>io.crums.sldg.cli.Sqledge</mainClass>
-              <id>sqledge</id>
+              <mainClass>io.crums.sldg.cli.Sldg</mainClass>
+              <id>sldg</id>
             </program>
             
             <program>

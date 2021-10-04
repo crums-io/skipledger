@@ -3,9 +3,11 @@
  */
 package io.crums.sldg.time;
 
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -18,7 +20,6 @@ import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
-import io.crums.util.Lists;
 
 /**
  * Summary of a witnessing a {@linkplain HashLedger}.
@@ -43,9 +44,35 @@ public final class WitnessReport {
    * 
    * <h2>Algorithm for which rows are witnessed</h2>
    * <p>
-   * TODO
+   * By at most ({@linkplain SldgConstants#DEF_TOOTHED_WIT_COUNT}) or 9 unwitnessed
+   * rows are chosen to be witnessed. With the possible exception of the last row,
+   * these rows are numbered at multiples of some power of 2. This is motivated by the
+   * following:
+   * <ol>
+   * <li>Rows with higher powers of 2 show up more commonly in our hash proofs. Therefore
+   * a trail for that row enjoys efficiencies for a greater number of use cases.</li>
+   * <li>If new rows in the ledger are constantly in flux (constantly being appended to
+   * the ledger and getting witnessed), then this scheme allows a stable way to query for
+   * witnessed rows. (Recall it's a 2 step process: it takes minutes to retrieve a new crumtrail.)</li>
+   * </ol>
    * </p>
    * 
+   * <h2>Algorithm for which trails (witnessed rows) are stored</h2>
+   * <p>
+   * As a general rule, trails are stored in order of <em>both</em> row number and
+   * non-decreasing UTC witness-time. That is, the row number is always increasing, and the time is
+   * never decreasing. (It is possible to contrive a set up where higher row numbers were
+   * somehow witnessed before lower ones, but our storage model disallows such cases.)
+   * </p><p>
+   * However not all trails are stored in the database. If 2 or more trails share the same
+   * witness time, then at most 2 trails with that witness time are stored:
+   * <ol>
+   * <li>The trail of the row with the most hash pointers (determined by the row number).</li>
+   * <li>The trail of the row with the highest row number.</li>
+   * </ol>
+   * In some cases the same row may satisfy both conditions, so that if there are 2 or more rows
+   * witnessed at the same time, only 1 them (the last) is stored.
+   * </p>
    * @param includeLast if {@code true}
    */
   public static WitnessReport witness(HashLedger hashLedger, boolean includeLast) {
@@ -69,7 +96,7 @@ public final class WitnessReport {
     {
       int p = 1;
       for (; (unwitnessedRows >> p) > SldgConstants.DEF_TOOTHED_WIT_COUNT; ++p);
-      toothExponent = p - 1;
+      toothExponent = p;
     }
     
     return witness(hashLedger, toothExponent, true);
@@ -101,9 +128,9 @@ public final class WitnessReport {
     
     final long witNumDelta = 1L << exponent;
 
-    final boolean includeUntoothed = lastRowNum % witNumDelta != 0 && includeLast;
+    final boolean includeUntoothed = includeLast && lastRowNum % witNumDelta != 0;
     
-    List<Row> rowsToWitness;
+    final List<Row> rowsToWitness;
     {
       ArrayList<Row> rows = new ArrayList<>(SldgConstants.MAX_BLOCK_WITNESS_COUNT);
       final int maxLoopCount =
@@ -111,6 +138,8 @@ public final class WitnessReport {
       for (
           long toothedNum = ((lastWitNum + witNumDelta) / witNumDelta) * witNumDelta;
           // i.e. toothedNum % witNumDelta == 0
+          // PS this is key (!) .. we witness row numbers that are multiples
+          //    of 2^exponent
           toothedNum <= lastRowNum && rows.size() < maxLoopCount;
           toothedNum += witNumDelta) {
         
@@ -124,7 +153,7 @@ public final class WitnessReport {
       if (rows.isEmpty())
         return new WitnessReport(lastWitNum);
             
-      rowsToWitness = Lists.reverse(rows);
+      rowsToWitness = Collections.unmodifiableList(rows);
     }
     
 
@@ -137,27 +166,41 @@ public final class WitnessReport {
     
     SortedSet<WitnessRecord> trailedRecords = filterTrailed(zip);
     
-    long witnessedRowNumber = 0;
-    
     List<WitnessRecord> stored = new ArrayList<>(trailedRecords.size());
-    
+    WitnessRecord last = null; // monotonically increasing row number
+    boolean lastSkipped = false;
     for (WitnessRecord trailed : trailedRecords) {
       
-      final long rn = trailed.row().rowNumber();
+      final long rn = trailed.rowNum();
       
-      assert rn > lastWitNum;
-      
-      if (rn <= witnessedRowNumber) {
-        assert rn != witnessedRowNumber;
+      if (last != null && rn <= last.rowNum()) {
+        assert rn != last.rowNum();
         continue;
       }
+      
+      if (last != null && fuzzyTimeDiff(last, trailed) == 0) {
+        lastSkipped = true;
+        last = trailed;
+        continue;
+      }
+      
+      if (lastSkipped) {
+        hashLedger.addTrail(last);
+        stored.add(last);
+        lastSkipped = false;
+      }
+      
+      last = trailed;
       
       hashLedger.addTrail(trailed);
       stored.add(trailed);
     }
     
+    if (lastSkipped && hashLedger.addTrail(last))
+      stored.add(last);
+    
     stored = stored.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(stored);
-    return new WitnessReport(Lists.reverse(zip), stored, lastWitNum);
+    return new WitnessReport(zip, stored, lastWitNum);
   }
   
   
@@ -176,13 +219,44 @@ public final class WitnessReport {
   }
   
 
+  private final static int FUZZ_MILLIS = 10_000;
+  
+  private final static int fuzzyTimeDiff(WitnessRecord a, WitnessRecord b) {
+    return (int) (a.utc() / FUZZ_MILLIS - (b.utc() / FUZZ_MILLIS ));
+  }
+  
+  private static Comparator<WitnessRecord> TRAILED_REC_COMP = new Comparator<>() {
+    @Override
+    public int compare(WitnessRecord a, WitnessRecord b) {
+      if (a == b)
+        return 0;
+      // the first witnessed comes first, but only if by a sufficient margin (2 sec)
+      // (we work in modulo FUZZ_MILLIS in order to maintain transititity:
+      // so the margin works out to something like 2.5 +/- 0.5 sec, actually)
+      int comp = fuzzyTimeDiff(a, b);
+      if (comp != 0)
+        return comp;
+      // the row with more skip pointers comes first
+      comp = b.row().prevLevels() - a.row().prevLevels();
+      if (comp != 0)
+        return comp;
+      // the greater row number comes first
+      return Long.compare(b.rowNum(), a.rowNum());
+    }
+  };
+  
+  
+
   private static SortedSet<WitnessRecord> filterTrailed(Collection<WitnessRecord> records) {
-    TreeSet<WitnessRecord> trailed = new TreeSet<>();
+    TreeSet<WitnessRecord> trailed = new TreeSet<>(TRAILED_REC_COMP);
     for (WitnessRecord record : records)
       if (record.isTrailed())
         trailed.add(record);
     return trailed;
   }
+  
+  
+  
   
   
   

@@ -99,12 +99,6 @@ public class Config {
    */
   public final static String HASH_TABLE_PREFIX = ROOT + "hash.table.prefix";
   
-//  /**
-//   * The name of the value for the "AUTO INCREMENT" keyword for the SQL dialect.
-//   * Typical values are {@code AUTO INCREMENT}, {@code AUTO_INCREMENT}, etc.<br/>
-//   * Optional.
-//   */
-//  public final static String HASH_KEYWORD_AUTOINC = ROOT + "hash.keyword.autoinc";
   
   
   /**
@@ -123,7 +117,10 @@ public class Config {
   
   
   /**
-   * List of 
+   * List of ordered property names. Controls the order they're presented in the properties
+   * file.
+   * 
+   * @see #getTidyProperties()
    */
   public final static List<String> PROP_NAMES = Lists.asReadOnlyList(
     new String[] {
@@ -141,8 +138,8 @@ public class Config {
         HASH_JDBC_DRIVER_CLASSPATH,
         HASH_TABLE_PREFIX,
         HASH_SCHEMA_SKIP,
-        HASH_SCHEMA_TRAIL,
         HASH_SCHEMA_CHAIN,
+        HASH_SCHEMA_TRAIL,
     });
   
   
@@ -307,11 +304,21 @@ public class Config {
   }
   
   
+  /**
+   * Returns the state of this instance as a properties object.
+   * 
+   * @return {@linkplain #getTidyProperties()}
+   */
   public Properties getProperties() {
     return getTidyProperties();
   }
 
 
+  /**
+   * Returns the state of this instance as a properties object.
+   * 
+   * @see #PROP_NAMES
+   */
   public TidyProperties getTidyProperties() {
     TidyProperties props = new TidyProperties(PROP_NAMES);
     props.putAll(aux);

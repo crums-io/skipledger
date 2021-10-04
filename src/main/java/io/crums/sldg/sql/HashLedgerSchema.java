@@ -297,43 +297,6 @@ public class HashLedgerSchema {
     return sql;
   }
   
-  
-
-//  /**
-//   * Returns a 7-parameter prepared insert statement. The parameter values are (in order)
-//   * <ol>
-//   * <li>trl_id</li>
-//   * <li>row_num</li>
-//   * <li>utc</li>
-//   * <li>mrkl_idx</li>
-//   * <li>mrkl_cnt></li>
-//   * <li>chain_len</li>
-//   * <li>chn_id</li>
-//   * </ol>
-//   */
-//  public PreparedStatement insertTrailPrepStmt(Connection con) throws SQLException {
-//    Objects.requireNonNull(con, "null con");
-//    
-//    String sql =
-//        "INSERT INTO " + trailTable +
-//        " (" + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN + ", " + CHN_ID +
-//        ") VALUES ( ?, ?, ?, ?, ?, ?, ?)";
-//    
-//    return con.prepareStatement(sql);
-//  }
-  
-//  /**
-//   * Returns a single-parameter prepared select statement. The look-up key (parameter)
-//   * is the {@code row_num}.
-//   */
-//  public PreparedStatement selectTrailIdPrepStmt(Connection con) throws SQLException {
-//    Objects.requireNonNull(con, "null con");
-//    
-//    String sql =
-//        "SELECT " + TRL_ID + " FROM " + trailTable + " WHERE " + ROW_NUM + " = ?";
-//    
-//    return con.prepareStatement(sql);
-//  }
 
 }
   

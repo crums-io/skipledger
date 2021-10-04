@@ -56,8 +56,8 @@ public class ConfigFileBuilder {
       " Hash-ledger tables (3) use this prefix in their table names. Usually set to\n " +
       " the source table's name.\n\n " +
 
-      "The following 3 specify the SQL schemas for the hash tables. They can be\n " +
-      "DB vendor specific. For eg, the AUTO_INCREMENT keyword.\n\n" +
+      "The following 3 specify the SQL schemas for the hash tables. They may be\n " +
+      "DB vendor specific.\n\n " +
       
       HASH_SCHEMA_SKIP + ":\n " +
       " SQL schema (CREATE TABLE statement) for the skipledger table (defaulted)\n\n " +

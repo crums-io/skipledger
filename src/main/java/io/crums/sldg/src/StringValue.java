@@ -91,7 +91,7 @@ public final class StringValue extends ColumnValue {
 
 
   @Override
-  protected void appendValue(StringBuilder s) {
+  public void appendValue(StringBuilder s) {
     s.append(string);
   }
   

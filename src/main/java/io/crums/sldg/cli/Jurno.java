@@ -55,16 +55,6 @@ public class Jurno extends MainTemplate {
     List<Long> rowNums = Collections.emptyList();
     
     
-//    void setRowNums(List<Integer> rowNums) {
-//      if (rowNums == null || rowNums.isEmpty())
-//        throw new IllegalArgumentException("missing or illegally formatted row numbers");
-//      if (rowNums.get(0) < 1 || !Lists.isSortedNoDups(rowNums))
-//        throw new IllegalArgumentException(
-//            "row numbers must be > 0 and strictly ascending. Numbers parsed: " + rowNums);
-//      
-//      this.rowNums = Lists.map(rowNums, rn -> (long) rn);
-//    }
-    
     
     void setRowNums(ArgList args) {
       String match = args.removeSingle(NumbersArg.MATCHER);
@@ -123,12 +113,13 @@ public class Jurno extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, Exception {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(CREATE, STATUS, UPDATE, TRIM, LIST, MAKE_MORSEL, STATE_MORSEL);
+    this.command = argList.removeCommand(CREATE, STATUS, HISTORY, UPDATE, TRIM, LIST, MAKE_MORSEL, STATE_MORSEL);
     
     
     // set the opening preamble
     switch (command) {
     case STATUS:
+    case HISTORY:
     case LIST:
     case MAKE_MORSEL:
     case STATE_MORSEL:
@@ -228,6 +219,10 @@ public class Jurno extends MainTemplate {
       printStatus();
       break;
       
+    case HISTORY:
+      history();
+      break;
+      
     case LIST:
       listRows();
       break;
@@ -248,7 +243,8 @@ public class Jurno extends MainTemplate {
   }
   
   
-  private void update() {
+
+  void update() {
     String message;
     final int alreadyLedgered = journal.getLedgeredLines();
     switch (journal.getState()) {
@@ -326,7 +322,7 @@ public class Jurno extends MainTemplate {
     System.out.println(message);
   }
   
-  private void trim() {
+  void trim() {
     if (!journal.getState().needsMending()) {
       System.err.println("[ERROR] Journal does not need mending.");
       return;
@@ -365,16 +361,11 @@ public class Jurno extends MainTemplate {
   }
   
   
-  private void makeMorsel() throws IOException {
+  void makeMorsel() throws IOException {
     if (journal.getState().needsMending())
       throw new IllegalStateException(
           "Journaled file " + journal.getTextFile() + " is out-of-sync with its ledger." + System.lineSeparator() +
           "Run '" + STATUS + "' for details.");
-    
-    
-    
-    
-    
     
     File file = journal.writeMorselFile(makeMorsel.morselFile, makeMorsel.rowNums, null);
     int entries = makeMorsel.rowNums.size();
@@ -396,9 +387,14 @@ public class Jurno extends MainTemplate {
   private final static int RIGHT_STATUS_COL_WIDTH = 18;
   private final static int MID_STATUS_COL_WIDTH = RM - LEFT_STATUS_COL_WIDTH - RIGHT_STATUS_COL_WIDTH;
   
-  private void printStatus() {
-    TablePrint table = new TablePrint(
+  
+  private TablePrint statusTable() {
+    return new TablePrint(
         LEFT_STATUS_COL_WIDTH, MID_STATUS_COL_WIDTH, RIGHT_STATUS_COL_WIDTH);
+  }
+  
+  void printStatus() {
+    TablePrint table = statusTable();
     table.println();
     switch (journal.getState()) {
       
@@ -475,6 +471,7 @@ public class Jurno extends MainTemplate {
     }
     
     table.printRow("row", "[line]");
+    table.printHorizontalTableEdge('-');
     
     for (long rn: list.rowNums) {
       long lineNo = journal.getLineNumber(rn);
@@ -509,10 +506,29 @@ public class Jurno extends MainTemplate {
   }
   
   
+
+  void history() {
+    var table = statusTable();
+
+    int witnessedRows = journal.getHashLedger().getTrailCount();
+    
+    for (int index = 0; index < witnessedRows; ++index) {
+      table.println();
+      printTrailDetail(index, table);
+    }
+    table.println();
+    long ledgeredRows = journal.hashLedgerSize();
+    table.println(ledgeredRows + pluralize(" ledgered row", ledgeredRows));
+    table.println(
+        "state witnessed and recorded " +  witnessedRows + pluralize(" time", witnessedRows));
+    table.println();
+  }
+  
+  
   private void printTrailDetail(int index, TablePrint table) {
     TrailedRow trailedRow = journal.getHashLedger().getTrailByIndex(index);
     long utc = trailedRow.utc();
-    table.printRow("row #: ", journal.getHashLedger().getTrailedRowNumbers().get(index));
+    table.printRow("row #: ", trailedRow.rowNumber());
     table.printRow("created before:", new Date(utc), "UTC: " + utc);
     table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
     table.printRow("ref URL:", trailedRow.trail().getRefUrl());
@@ -599,6 +615,8 @@ public class Jurno extends MainTemplate {
     table.println();
     table.printRow(STATUS, "prints the status of the journaled text file");
     table.println();
+    table.printRow(HISTORY, "prints the trails (witness records) in the ledger");
+    table.println();
     table.printRow(UPDATE, "updates the ledger to the state of the journaled text file. Date");
     table.printRow(null,   "and time information (in the form of crumtrails and beacons) are");
     table.printRow(null,   "automatically embedded in the ledger as necessary.");
@@ -675,6 +693,7 @@ public class Jurno extends MainTemplate {
   
   private final static String CREATE = "create";
   private final static String STATUS = "status";
+  private final static String HISTORY = "history";
   private final static String UPDATE = "update";
   private final static String TRIM = "trim";
   

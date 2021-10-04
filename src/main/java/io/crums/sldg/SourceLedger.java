@@ -44,6 +44,16 @@ public interface SourceLedger extends AutoCloseable {
   SourceRow getSourceRow(long rn);
   
   
-  
+  /**
+   * Returns the column name for the given column-number.
+   * 
+   * @param col 1-based column number (&ge; 1)
+   * @return
+   */
+  default String getColumnName(int col) {
+    if (col < 1)
+      throw new IllegalArgumentException("col: " + col);
+    return Integer.toString(col);
+  }
 
 }

@@ -246,9 +246,24 @@ public abstract class ColumnValue implements Serial {
   }
   
   
+  /**
+   * Returns the value of this column as a string. The returned value does not
+   * contain any type information.
+   */
+  public String getStringValue() {
+    StringBuilder s = new StringBuilder();
+    appendValue(s);
+    return s.toString();
+  }
   
   
-  protected abstract void appendValue(StringBuilder s);
+  /**
+   * Appends the value of this column into the given buffer. The appended string
+   * does not contain any type information.
+   * 
+   * @param s the buffer appended to
+   */
+  public abstract void appendValue(StringBuilder s);
 
 
   public static int MAX_TO_STRING_CHARS = 480;

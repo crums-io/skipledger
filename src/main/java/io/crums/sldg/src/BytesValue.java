@@ -73,7 +73,7 @@ public class BytesValue extends ColumnValue {
   }
 
   @Override
-  protected void appendValue(StringBuilder s) {
+  public void appendValue(StringBuilder s) {
     ByteBuffer b = getBytes();
     if (bytes.remaining() > MAX_TO_STRING_CHARS / 2)
       b.limit(-1 + MAX_TO_STRING_CHARS / 2);

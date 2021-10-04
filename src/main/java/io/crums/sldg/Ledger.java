@@ -61,7 +61,7 @@ import io.crums.util.ticker.Ticker;
 public class Ledger implements AutoCloseable {
   
   /**
-   * Logger name. Forks and trims are logged as warnings; fatal errors (e.g. a tampered hashes
+   * Logger name. Forks and trims are logged as warnings; fatal errors (e.g. tampered hashes
    * in the skip ledger) are logged before an exception is thrown.
    * 
    * @see State#FORKED
@@ -819,7 +819,12 @@ public class Ledger implements AutoCloseable {
     final long lastSrcRow = srcLedger.size();
     checkPending(lastSrcRow - lastCommit);
     
-    final long lastTargetCommit = Math.min(lastSrcRow, lastCommit + maxNewRows);
+    
+    final long lastTargetCommit;
+    {
+      long max = lastCommit + maxNewRows;
+      lastTargetCommit = max < 0 ? lastSrcRow : Math.min(lastSrcRow, max);
+    }
     
     SkipLedger skipLedger = hashLedger.getSkipLedger();
     for (long nextRow = lastCommit + 1; nextRow <= lastTargetCommit; ++nextRow) {
