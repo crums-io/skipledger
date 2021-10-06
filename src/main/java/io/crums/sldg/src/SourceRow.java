@@ -14,6 +14,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
@@ -162,7 +163,7 @@ public class SourceRow implements Serial {
   /**
    * Returns a redacted version of this instance with the given column replaced
    * by its hash. However, if the given column's type is either
-   * {@linkplain ColumnType#HASH} or {@linkplain ColumnType#NULL}, then the column
+   * {@linkplain ColumnType#HASH}, then the column
    * is considered to be already redacted, and so, this instance is returned.
    * 
    * @param col 1-based column index (in keeping w/ SQL conventions)
@@ -182,6 +183,51 @@ public class SourceRow implements Serial {
     
     ColumnValue[] values = columns.toArray(new ColumnValue[columns.size()]);
     values[index] = new HashValue(values[index].getHash());
+    return new SourceRow(rowNumber, Lists.asReadOnlyList(values), false);
+  }
+  
+  
+  /**
+   * Returns a redacted version of this instance with the given columns replaced
+   * by theirs hashes. The only restriction on the input parameter is that it be
+   * well-formed.
+   * 
+   * @param cols non-null, possibly empty bag of 1-based column numbers in
+   *             striclty increasing order to redact.
+   * 
+   * @return a redacted version of this instance; {@code this} instance if
+   *         {@code cols} is empty
+   */
+  public SourceRow redactColumns(Collection<Integer> cols) {
+    if (cols.isEmpty())
+      return this;
+    
+    final int ccount = columns.size();
+    
+    var redactIter = cols.iterator();
+    int nextRedact = redactIter.next();
+    
+    if (ccount < nextRedact)
+      return this;
+    
+    if (nextRedact < 1)
+      throw new IllegalArgumentException("illegal redact column number: " + nextRedact);
+    
+    ColumnValue[] values = columns.toArray(new ColumnValue[ccount]);
+    
+    for (int index = 0; index < ccount; ++index) {
+      var cv = columns.get(index);
+      if (index + 1 < nextRedact)
+        values[index] = cv;
+      else {
+        values[index] = cv.getType().isHash() ? cv : new HashValue(cv.getHash());
+        int oldRedact = nextRedact;
+        nextRedact = redactIter.hasNext() ? redactIter.next() : Integer.MAX_VALUE;
+        if (oldRedact >= nextRedact)
+          throw new IllegalArgumentException(
+              "out-of-sequence redact column numbers: " + oldRedact + ", " + nextRedact);
+      }
+    }
     return new SourceRow(rowNumber, Lists.asReadOnlyList(values), false);
   }
   
@@ -312,20 +358,8 @@ public class SourceRow implements Serial {
   }
   
   
-  
-  
-
-  /**
-   * Writes this source row to the given writer.
-   * <p>
-   * Note this is totally inadequate. A user should be able to format this as they
-   * like. Keeping it simple for now.
-   * </p>
-   * 
-   * @param colSeparator Optional column separator. Eg comma, or tab delimited
-   */
   public void writeSource(Writer writer, String colSeparator) throws IOException {
-    
+
     final int colCount = columns.size();
     
     writeColumn(writer, columns.get(0));
@@ -341,6 +375,47 @@ public class SourceRow implements Serial {
     }
   }
   
+
+  /**
+   * Writes this source row to the given writer.
+   * <p>
+   * Note this is totally inadequate. A user should be able to format this as they
+   * like. Keeping it simple for now.
+   * </p>
+   * 
+   * @param colSeparator Optional column separator. Eg comma, or tab delimited
+   */
+  public void writeSource(Writer writer, String colSeparator, String redactSymbol) throws IOException {
+    
+    if (redactSymbol == null) {
+      writeSource(writer, colSeparator);
+      return;
+    }
+    final int colCount = columns.size();
+    
+    writeRedactableColumn(writer, columns.get(0), redactSymbol);
+    
+    
+    if (colCount > 1) {
+      if (colSeparator == null)
+        colSeparator = "";
+      
+      for (int index = 1; index < colCount; ++index) {
+        writer.write(colSeparator);
+        writeRedactableColumn(writer, columns.get(index), redactSymbol);
+      }
+    }
+  }
+  
+  
+  private void writeRedactableColumn(
+      Writer writer, ColumnValue col, String redactSymbol) throws IOException {
+    
+    if (col.getType().isHash())
+      writer.append(redactSymbol);
+    else
+      writeColumn(writer, col);
+  }
   
   
   private void writeColumn(Writer writer, ColumnValue col) throws IOException {
@@ -380,7 +455,7 @@ public class SourceRow implements Serial {
    * @see #safeDebugString()
    */
   public String toString() {
-    return toString(" ");
+    return toString(" ", null);
   }
   
   
@@ -390,12 +465,12 @@ public class SourceRow implements Serial {
    * 
    * @param sep the column separator
    */
-  public String toString(String sep) {
+  public String toString(String sep, String redactSymbol) {
     if (sep == null)
       sep = "";
     try {
       StringWriter sw = new StringWriter(64);
-      writeSource(sw, sep);
+      writeSource(sw, sep, redactSymbol);
       return sw.toString();
     } catch (IOException impossible) {
       throw new RuntimeException("assertion failed: " + impossible, impossible);

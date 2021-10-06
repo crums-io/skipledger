@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -853,22 +854,34 @@ public class Ledger implements AutoCloseable {
   }
   
   
+  public File writeMorselFile(
+      File target, List<Long> rowNumbers, String note) throws IOException {
+    
+    return writeMorselFile(target, rowNumbers, note, Collections.emptyList());
+  }
   
-  public File writeMorselFile(File target, List<Long> rowNumbers, String note) throws IOException {
-    var builder = loadBuilder(rowNumbers, note);
+  public File writeMorselFile(
+      File target, List<Long> rowNumbers, String note, List<Integer> redactCols)
+          throws IOException {
+    
+    var builder = loadBuilder(rowNumbers, note, redactCols);
     return MorselFile.createMorselFile(target, builder);
   }
   
   
-  public int writeMorselFile(WritableByteChannel ch, List<Long> rowNumbers, String note) throws IOException {
+  public int writeMorselFile(
+      WritableByteChannel ch, List<Long> rowNumbers, String note, List<Integer> redactCols)
+          throws IOException {
+    
     Objects.requireNonNull(ch, "null channel");
-    var builder = loadBuilder(rowNumbers, note);
+    var builder = loadBuilder(rowNumbers, note, redactCols);
     return MorselFile.writeMorselFile(ch, builder);
   }
   
   
   
-  private MorselPackBuilder loadBuilder(List<Long> rowNumbers, String note) {
+  private MorselPackBuilder loadBuilder(
+      List<Long> rowNumbers, String note, List<Integer> redactCols) {
     Objects.requireNonNull(rowNumbers, "null rowNumbers");
     final long maxRow = hashLedgerSize();
     LedgerMorselBuilder builder = new LedgerMorselBuilder(hashLedger, note);
@@ -876,7 +889,7 @@ public class Ledger implements AutoCloseable {
       SkipLedger.checkRealRowNumber(rn);
       if (rn > maxRow)
         throw new IllegalArgumentException("rowNumber " + rn + " out-of-bounds; max " + maxRow);
-      SourceRow srcRow = srcLedger.getSourceRow(rn);
+      SourceRow srcRow = srcLedger.getSourceRow(rn).redactColumns(redactCols);
       builder.addSourceRow(srcRow);
     }
     return builder;

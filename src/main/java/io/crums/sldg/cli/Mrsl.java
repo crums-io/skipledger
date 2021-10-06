@@ -689,7 +689,7 @@ public class Mrsl extends MainTemplate {
 
         SourceRow srcRow = pack.getSourceByRowNumber(rn);
         
-        String srcDesc = srcRow.toString(" ");
+        String srcDesc = srcRow.toString(" ", RED_TOKEN);
 
         if (date == null) {
 
@@ -738,34 +738,6 @@ public class Mrsl extends MainTemplate {
   
   private final static String SAVE = "save";
   private final static String SEP = "sep";
-  
-  // list options
-  
-  // scrapping this for now (?)
-//  /**
-//   * Beacon.
-//   */
-//  private final static char B = 'b';
-//  /**
-//   * Entry.
-//   */
-//  private final static char E = 'e';
-//  /**
-//   * Numbers.
-//   */
-//  private final static char N = 'n';
-//  /**
-//   * Hash.
-//   */
-//  private final static char S = 's';
-//  /**
-//   * Hash.
-//   */
-//  private final static char C = 'c';
-//  
-//  
-//  private final static String LIST_OPTS = new String(new char[] { B, E, N, S, });
-  
   
 
 }

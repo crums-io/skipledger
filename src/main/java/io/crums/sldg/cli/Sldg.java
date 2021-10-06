@@ -79,9 +79,24 @@ public class Sldg extends MainTemplate {
     
     File morselFile = new File(".");
     
+    List<Integer> redactCols = Collections.emptyList();
+    
     void setArgs(ArgList args, boolean state) {
       if (!state)
         setRowNums(args);
+
+      String rCols = args.removeValue(REDACT);
+      if (rCols != null) {
+        List<Integer> parsed = NumbersArg.parseInts(rCols);
+        if (parsed != null && !parsed.isEmpty()) {
+          parsed = new ArrayList<>(parsed);
+          Collections.sort(parsed);
+          if (parsed.get(0) < 1)
+            throw new IllegalArgumentException(
+                "illegal column number with '" + REDACT + "' option: " + parsed.get(0));
+          redactCols = parsed;
+        }
+      }
       
       switch (args.argsRemaining().size()) {
       case 0: return;
@@ -98,7 +113,6 @@ public class Sldg extends MainTemplate {
       
       if (morselFile.isFile())
         throw new IllegalArgumentException("morsel file already exists: " + morselFile);
-      
     }
     
     
@@ -222,7 +236,7 @@ public class Sldg extends MainTemplate {
       throw new IllegalStateException(
           "source ledger conflicts with hash ledger: " + ledger.getState());
     
-    File file = ledger.writeMorselFile(morselArgs.morselFile, morselArgs.rowNums, null);
+    File file = ledger.writeMorselFile(morselArgs.morselFile, morselArgs.rowNums, null, morselArgs.redactCols);
     int entries = morselArgs.rowNums.size();
     if (entries == 0)
       System.out.println("state path written to morsel: " + file);
@@ -1124,16 +1138,19 @@ public class Sldg extends MainTemplate {
     table.printRow(null,   "file in the chosen directory.");
     table.printRow(null,   "DEFAULT: '.'          (current directory)");
     table.println();
+    table.printRow(null,   REDACT + "=<column-numbers>  (optional)");
+    table.println();
+    table.printRow(null,   "If provided, then the given comma-separated column numbers will");
+    table.printRow(null,   "be redacted. The first column is numbered 1.");
+    table.println();
     
-    table.printRow(STATE_MORSEL, "creates a morsel file containing only the ledger's state-");
-    table.printRow(null,   "path. That is the shortest list of rows connecting the last row");
-    table.printRow(null,   "to the first. It serves as a fingerprint against which older");
-    table.printRow(null,   "morsels can be validated (and optionally be updated).");
+    table.printRow(STATE_MORSEL, "creates an empty morsel file containing only the ledger's");
+    table.printRow(null,   "opaque state-path: the shortest list of rows connecting the last");
+    table.printRow(null,   "row to the first. This is a verifiably evolving fingerprint.");
     table.println();
     table.printRow(null,   "<path/to/morselfile>  (optional)");
     table.println();
     table.printRow(null,   "(Same semantics as with '" + MAKE_MORSEL + "' above)");
-    table.printRow(null,   "DEFAULT: '.'          (current directory)");
     table.println();
     
   }
@@ -1148,5 +1165,8 @@ public class Sldg extends MainTemplate {
 
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String STATE_MORSEL = "state-morsel";
+  
+  private final static String REDACT = "redact";
+  
 
 }
