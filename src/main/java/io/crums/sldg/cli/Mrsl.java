@@ -60,6 +60,8 @@ import io.crums.util.main.TablePrint;
  */
 public class Mrsl extends MainTemplate {
   
+  public final static String PROGNAME = Mrsl.class.getSimpleName().toLowerCase();
+  
   private String command;
   private File morselFile;
   

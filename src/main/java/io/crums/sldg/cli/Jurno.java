@@ -537,14 +537,12 @@ public class Jurno extends MainTemplate {
 
   private final static int INDENT = 1;
   
-  private final static String MRSL_PROGNAME = Mrsl.class.getSimpleName().toLowerCase();
-  
   
   @Override
   protected void printLegend(PrintStream out) {
     out.println();
     out.println("For additional info on morsels try");
-    out.println("  " + MRSL_PROGNAME + " -help");
+    out.println("  " + Mrsl.PROGNAME + " -help");
     out.println("from the console.");
     out.println();
   }

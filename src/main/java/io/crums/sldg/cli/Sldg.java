@@ -150,10 +150,12 @@ public class Sldg extends MainTemplate {
     ArgList argList = newArgList(args);
     
     this.command = argList.removeCommand(
-        SETUP, CREATE, STATUS, LIST, HISTORY, UPDATE, MAKE_MORSEL, STATE_MORSEL);
+        SETUP, CREATE, STATUS, LIST, HISTORY, UPDATE, WITNESS, MAKE_MORSEL, STATE_MORSEL);
     
-    if (SETUP.equals(command))
+    if (SETUP.equals(command)) {
+      argList.enforceNoRemaining();
       return;
+    }
     
     // all other commands require the config file
     loadConfig(argList);
@@ -169,6 +171,7 @@ public class Sldg extends MainTemplate {
         this.updateCount = nums.isEmpty() ? Long.MAX_VALUE : nums.get(0);
       }
       break;
+    case WITNESS:
     case CREATE:
     case STATUS:
     case HISTORY:
@@ -217,6 +220,9 @@ public class Sldg extends MainTemplate {
       break;
     case UPDATE:
       update();
+      break;
+    case WITNESS:
+      witness();
       break;
     case STATE_MORSEL:
     case MAKE_MORSEL:
@@ -301,7 +307,7 @@ public class Sldg extends MainTemplate {
   
   
   void update() {
-    this.ledger = SqlLedger.loadInstance(config);
+    initLedger();
     var state = ledger.getState();
     switch (state) {
     case FORKED:
@@ -313,33 +319,40 @@ public class Sldg extends MainTemplate {
       printf("%n%d %s added%n%n", rowsAdded, pluralize("source row", rowsAdded));
     case COMPLETE:
       
-      try {
-        var witReport = ledger.witness();
-        if (witReport.nothingDone()) {
-          if (state.isComplete())
-            printf("%nUp to date.%n");
-          else {
-            printf("All rows recorded in hash ledger already witnessed.%n");
-          }
-        } else {
-          int crums = witReport.getRecords().size();
-          int crumtrails = witReport.getStored().size();
-          printf(
-              "%n%d %s submitted; %d %s (%s) stored%n%n",
-              crums, pluralize("crum", crums),
-              crumtrails, pluralize("crumtrail", crumtrails),
-              pluralize("witness record", crumtrails));
-          if (crumtrails == 0)
-            printf("Run '%s' in a few minutes", UPDATE);
-        }
-      } catch (ClientException cx) {
-        System.out.printf(
-            "%nEncountered a netword error while attempting to have the ledger witnessed%n" +
-            "[%d] is the last witnessed row%n%n", ledger.lastWitnessedRowNumber());
-        throw cx;
-      }
-      printf("%n");
+      witness();
     }
+  }
+  
+  
+  
+  void witness() {
+    initLedger();
+    try {
+      var witReport = ledger.witness();
+      if (witReport.nothingDone()) {
+        if (ledger.getState().isComplete() && UPDATE.equals(command))
+          printf("%nUp to date.%n");
+        else {
+          printf("All rows recorded in hash ledger already witnessed.%n");
+        }
+      } else {
+        int crums = witReport.getRecords().size();
+        int crumtrails = witReport.getStored().size();
+        printf(
+            "%n%d %s submitted; %d %s (%s) stored%n%n",
+            crums, pluralize("crum", crums),
+            crumtrails, pluralize("crumtrail", crumtrails),
+            pluralize("witness record", crumtrails));
+        if (crumtrails == 0)
+          printf("Run '%s' in a few minutes", WITNESS);
+      }
+    } catch (ClientException cx) {
+      System.out.printf(
+          "%nEncountered a netword error while attempting to have the ledger witnessed%n" +
+          "[%d] is the last witnessed row%n%n", ledger.lastWitnessedRowNumber());
+      throw cx;
+    }
+    printf("%n");
   }
   
   
@@ -1120,6 +1133,10 @@ public class Sldg extends MainTemplate {
     table.printRow(null,   "DEFAULT: no maximum");
     table.println();
 
+    table.printRow(WITNESS, "retrieves crumtrails (witness records) for the remaining rows");
+    table.printRow(null,   "in the hash ledger. Equivalent to '" + UPDATE + " 0'");
+    table.println();
+
     table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
     table.printRow(null,   "row numbers");
     table.printRow(null,   "Args:");
@@ -1154,6 +1171,15 @@ public class Sldg extends MainTemplate {
     table.println();
     
   }
+
+  @Override
+  protected void printLegend(PrintStream out) {
+    out.println();
+    out.println("For additional info on morsels try");
+    out.println("  " + Mrsl.class.getSimpleName().toLowerCase() + " -help");
+    out.println("from the console.");
+    out.println();
+  }
   
   
   private final static String SETUP = "setup";
@@ -1162,6 +1188,7 @@ public class Sldg extends MainTemplate {
   private final static String LIST = "list";
   private final static String HISTORY = "history";
   private final static String UPDATE = "update";
+  private final static String WITNESS = "witness";
 
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String STATE_MORSEL = "state-morsel";
