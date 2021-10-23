@@ -11,12 +11,27 @@ import io.crums.util.Base64_32;
 
 /**
  * Schema for SQL TABLEs as backing storage for a {@linkplain HashLedger}.
+ * The motivation here is to define a <em>portable</em> schema that hopefully
+ * works on most any SQL database. That in turn dumbs it down for now (e.g. no
+ * CASCADE ON DELETE or other vendor-specific niceties).
  * 
  * <h1>Schema</h1>
+ * <p>
+ * There are 3 tables in this design.
+ * <ol>
+ * <li><em>skip table</em>. Standalone table recording a sequence of hashes computed
+ *     from some user defined table. It models the skip ledger data structure.</li>
+ * <li><em>chain table</em>. Sequences of hashes recording merkle proofs in crumtrails.</li>
+ * <li><em>trail table</em>. Crumtrail (witness) records. Each row references both of
+ *     the above tables via FOREIGN KEYs.</li>
+ * </ol>
+ * </p><p>
+ * Their individual schemas are detailed below.
+ * </p>
  * 
  * <h2>Skip table</h2>
  * <pre>
- * {@code CREATE TABLE} <em>ledgerTable</em>
+ * {@code CREATE TABLE} <em>skipTable</em>
  *  {@code (row_num BIGINT NOT NULL,
  *   src_hash CHAR(43) NOT NULL,
  *   row_hash CHAR(43) NOT NULL,
@@ -53,7 +68,7 @@ import io.crums.util.Base64_32;
  * <pre>
  * {@code CREATE TABLE} <em>trailTable</em>
  *  {@code (trl_id INT NOT NULL,
- *   row_num BIGINT NOT NULL,
+ *   row_num BIGINT NOT NULL, // psst, you might wanna index this
  *   utc BIGINT NOT NULL,
  *   mrkl_idx  INT NOT NULL,
  *   mrkl_cnt  INT NOT NULL,
@@ -77,10 +92,29 @@ import io.crums.util.Base64_32;
  * is managed here at the application level, not by the DB.
  * </p>
  * 
- * <h2>Indexes</h2>
+ * <h2>No Indexes</p>
  * <p>
- * 
+ * Primary keys aside, no SQL indexes are defined here. Since these are performance related,
+ * and there maybe vendor-specific ways of creating them, we kick this can down the road. A DBA
+ * can always add an index later. (E.g. maybe a unique index on {@code trailTable.row_num}
+ * if there are very many crumtrails recorded.)
  * </p>
+ * 
+ * <h1>Customizations</h1>
+ * <p>
+ * Besides their table names (their prefixes, actually), the exact table definitions may be tweaked
+ * in one of two ways without any code changes.
+ * <ol>
+ * <li>By editing a configuration file.</li>
+ * <li>By creating the tables directly on the database.</li>
+ * </ol>
+ * Regardless how its done, while you may experiment with their SQL type defs, the column
+ * names must obviously remain the same. Also, note the exact SQL syntax only figures at creation
+ * time; once the tables are setup, the application cares little about the details. 
+ * </p>
+ * 
+ * @see Config
+ * @see ConfigFileBuilder
  */
 public class HashLedgerSchema {
   

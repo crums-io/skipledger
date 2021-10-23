@@ -38,6 +38,7 @@ import io.crums.util.main.NumbersArg;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
+import io.crums.util.ticker.Progress;
 
 /**
  * Manages a ledger formed from a relational database table or view that is
@@ -138,6 +139,8 @@ public class Sldg extends MainTemplate {
   
   private long updateCount;
   
+  private long conflictRow;
+  
   
   @Override
   protected void close() {
@@ -150,7 +153,8 @@ public class Sldg extends MainTemplate {
     ArgList argList = newArgList(args);
     
     this.command = argList.removeCommand(
-        SETUP, CREATE, STATUS, LIST, HISTORY, UPDATE, WITNESS, MAKE_MORSEL, STATE_MORSEL);
+        SETUP, CREATE, STATUS, LIST, HISTORY, UPDATE, WITNESS, VALIDATE, ROLLBACK,
+        MAKE_MORSEL, STATE_MORSEL);
     
     if (SETUP.equals(command)) {
       argList.enforceNoRemaining();
@@ -171,10 +175,12 @@ public class Sldg extends MainTemplate {
         this.updateCount = nums.isEmpty() ? Long.MAX_VALUE : nums.get(0);
       }
       break;
+
     case WITNESS:
     case CREATE:
     case STATUS:
     case HISTORY:
+    case VALIDATE:
       break;
     
     case LIST:
@@ -182,12 +188,48 @@ public class Sldg extends MainTemplate {
       listArgs.setRowNums(argList);
       break;
       
+    case ROLLBACK:
+      initLedger();
+      {
+        String numArg = argList.removeFirst();
+        argList.enforceNoRemaining();
+        
+        if (numArg == null && !ledger.getState().isTrimmed()) {
+          throw new IllegalArgumentException("missing <conflict-number>");
+        }
+        
+        if (numArg != null) {
+          try {
+            this.conflictRow = Long.parseLong(numArg);
+          } catch (NumberFormatException nfx) {
+            throw new IllegalArgumentException(
+                "expected <conflict-number>; actual given: " + numArg);
+          }
+          
+          if (conflictRow < 2)
+            throw new IllegalArgumentException("<conflict-number> " + conflictRow + " < 2");
+          
+          long hashLdgrSz = ledger.hashLedgerSize();
+          if (conflictRow > hashLdgrSz)
+            throw new IllegalArgumentException(
+                "<conflict-number> " + conflictRow +
+                " > hash ledger size (" + hashLdgrSz + ")");
+          
+          if (ledger.checkRow(conflictRow) && ledger.lastValidRow() > conflictRow)
+            throw new IllegalArgumentException(
+                "no conflict found at/before row [" + conflictRow + "]");
+        
+        } else if (!ledger.getState().isTrimmed())
+          throw new IllegalArgumentException("missing <conflict-number>");
+        
+      }
+      break;
+      
     case STATE_MORSEL:
     case MAKE_MORSEL:
       this.morselArgs = new MorselArg();
       morselArgs.setArgs(argList, STATE_MORSEL.equals(command));
       break;
-      
     }
 
     argList.enforceNoRemaining();
@@ -224,6 +266,12 @@ public class Sldg extends MainTemplate {
     case WITNESS:
       witness();
       break;
+    case VALIDATE:
+      validate();
+      break;
+    case ROLLBACK:
+      rollback();
+      break;
     case STATE_MORSEL:
     case MAKE_MORSEL:
       morsel();
@@ -234,6 +282,29 @@ public class Sldg extends MainTemplate {
   
   
   
+  void validate() {
+    initLedger();
+    long rows = ledger.lesserSize();
+    if (rows == 0) {
+      printf("%nNothing to validate.%n");
+      status();
+      return;
+    }
+    
+    printf("%nValidating %d %s%n", rows, pluralize("row", rows));
+    
+    // FIXME: this needlessly overflows at about 45B rows
+    ledger.setProgressTicker(Progress.newStdOut(rows));
+    
+    State state = ledger.validateState(false);
+    if (state.needsMending()) {
+      printf("WARNING (!):%n");
+      needsMendingMessage();;
+    } else {
+      printf("%nOK. All ledgered rows verified.%n");
+    }
+    
+  }
   
   
   void morsel() throws IOException {
@@ -356,6 +427,61 @@ public class Sldg extends MainTemplate {
   }
   
   
+  void rollback() {
+    initLedger();
+    initConsole();
+    
+    assert ledger.getState().needsMending();
+    
+    final long postSize;
+    final long rowsToLose;
+    if (conflictRow == 0) {
+      assert ledger.getState().isTrimmed();
+      postSize = ledger.sourceLedgerSize();
+      rowsToLose = ledger.hashLedgerSize() - postSize;
+    } else {
+      postSize = conflictRow - 1;
+      rowsToLose = ledger.hashLedgerSize() - postSize;
+    }
+    
+    final int preTrailCount = ledger.getHashLedger().getTrailCount();
+    var trail = ledger.getHashLedger().nearestTrail(postSize + 1);
+    
+    printf(
+        "WARNING: You are about to erase the last %d %s from the hash ledger!%n",
+        rowsToLose, pluralize("row", rowsToLose));
+    
+    if (trail != null) {
+      printf(
+        "         Crumtrails (witness records) dating back to row [%d] will also be lost:%n", trail.rowNumber());
+      printf(
+        "         (witnessed on %s)%n", new Date(trail.utc()));
+    }
+    
+    printf("%nConfirm rollback [y]:%n");
+
+    String ack = readLine();
+    boolean yes = "y".equalsIgnoreCase(ack) || "yes".equalsIgnoreCase(ack);
+    if (!yes) {
+      printf("%nOK. Rollback aborted.%n");
+      return;
+    }
+    
+    if (conflictRow == 0)
+      ledger.rollback();
+    else
+      ledger.rollback(conflictRow);
+    
+    final int trailsLost = preTrailCount - ledger.getHashLedger().getTrailCount();
+    
+    printf(
+        "%n%d %s rolled back; %d %s lost.%n",
+        rowsToLose, pluralize("row", rowsToLose),
+        trailsLost, pluralize("crumtrail", trailsLost));
+        
+  }
+  
+  
   void history() {
     initLedger();
     
@@ -405,23 +531,9 @@ public class Sldg extends MainTemplate {
     State state = ledger.getState();
     if (state.needsMending()) {
       
-      if (state.isForked()) {
-        long fc = ledger.getFirstConflict();
-        printf("%nrow [%d] has been modified%n", fc);
-        printf("%nTo fix, either%n");
-        printf("  a) restore row [%d] to its previous state, or%n", fc);
-        printf("  b) rollback (trim) the hash ledger to row [%d]%n", fc - 1);
-        
-      } else {
-        // assert state.isTrimmed();
-        long trimmed = ledger.sourceLedgerSize();
-        long missing = rowsRecorded - trimmed;
-        printf("%nsource ledger has been trimmed to %d %s%n", trimmed, pluralize("row", trimmed));
-        printf("%nTo fix, either%n");
-        printf("  a) restore the last %d missing %s, or%n", missing, pluralize("row", missing));
-        printf("  b) rollback (trim) the hash ledger to row [%d]%n", trimmed);
-        
-      }
+      needsMendingMessage();
+      printf("%nRun with the '" + VALIDATE + "' command to determine the first modified source row.%n");
+    
     } else {
       final long unwitnessRows = ledger.getHashLedger().unwitnessedRowCount();
       if (state.isPending()) {
@@ -464,6 +576,27 @@ public class Sldg extends MainTemplate {
   }
   
   
+  private void needsMendingMessage() {
+    if (ledger.getState().isForked()) {
+      long fc = ledger.getFirstConflict();
+      printf("%nrow [%d] has been modified%n", fc);
+      printf("%nTo fix, either%n");
+      printf("  a) restore the source row [%d] to its previous state, or%n", fc);
+      printf("  b) rollback to before conflict row [%d] in the hash ledger]%n", fc);
+      
+    } else {
+      // assert state.isTrimmed();
+      long trimmed = ledger.sourceLedgerSize();
+      long missing = ledger.hashLedgerSize() - trimmed;
+      printf("%nsource ledger has been trimmed to %d %s%n", trimmed, pluralize("row", trimmed));
+      printf("%nTo fix, either%n");
+      printf("  a) restore the last %d missing source %s, or%n", missing, pluralize("row", missing));
+      printf("  b) trim the hash ledger (to row [%d])%n", trimmed);
+      
+    }
+  }
+  
+  
   private void printTrailDetail(int index, TablePrint table) {
     TrailedRow trailedRow = ledger.getHashLedger().getTrailByIndex(index);
     long utc = trailedRow.utc();
@@ -484,13 +617,17 @@ public class Sldg extends MainTemplate {
 
   private ConfigFileBuilder builder;
   private Console console;
-
-  void setup() {
+  
+  private void initConsole() {
     this.console = System.console();
     if (console == null) {
       System.err.println("[ERROR] No console. Aborting.");
       StdExit.GENERAL_ERROR.exit();
     }
+  }
+
+  void setup() {
+    initConsole();
     console.printf("%nEntering interactive mode..%n");
     printf("Enter <CTRL-c> to abort at any time.%n%n");
     PrintSupport printer = new PrintSupport();
@@ -1137,6 +1274,22 @@ public class Sldg extends MainTemplate {
     table.printRow(null,   "in the hash ledger. Equivalent to '" + UPDATE + " 0'");
     table.println();
 
+    table.printRow(VALIDATE, "validates the source rows hashes haven't changed");
+    table.println();
+
+    table.printRow(ROLLBACK, "rolls back the ledger to before given row number. The source");
+    table.printRow(null,   "table or view is supposed to be append-only; in the real world");
+    table.printRow(null,   "mistakes happen. Requires interactive user confirmation.");
+    table.printRow(null,   "Args:");
+    table.println();
+    table.printRow(null,   "<conflict-number>     (required, unless source is trimmed)");
+    table.println();
+    table.printRow(null,   "Note if the source row's hash does not conflict at the given");
+    table.printRow(null,   "row number then the command will fail. If the source table has");
+    table.printRow(null,   "been trimmed (truncated) and no <conflict-number> is supplied,");
+    table.printRow(null,   "then the hash ledger is rolled back to the size of the source.");
+    table.println();
+
     table.printRow(MAKE_MORSEL, "creates a morsel file containing the contents of the given");
     table.printRow(null,   "row numbers");
     table.printRow(null,   "Args:");
@@ -1189,11 +1342,14 @@ public class Sldg extends MainTemplate {
   private final static String HISTORY = "history";
   private final static String UPDATE = "update";
   private final static String WITNESS = "witness";
+  private final static String VALIDATE = "validate";
+  private final static String ROLLBACK = "rollback";
 
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String STATE_MORSEL = "state-morsel";
   
   private final static String REDACT = "redact";
+  
   
 
 }

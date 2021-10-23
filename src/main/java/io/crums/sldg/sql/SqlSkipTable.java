@@ -171,6 +171,7 @@ public class SqlSkipTable implements SkipTable {
       throw new SqlLedgerException("on size()", sx);
     }
   }
+  
 
   
   @Override
@@ -180,6 +181,27 @@ public class SqlSkipTable implements SkipTable {
     } catch (SQLException sx) {
       // eat it but nag
       Logger.getLogger(SldgConstants.LOGGER_NAME).warning("ignoring con.close() complaint: " + sx);
+    }
+  }
+
+
+
+
+  @Override
+  public synchronized void trimSize(long newSize) {
+    if (newSize < 0)
+      throw new IllegalArgumentException("newSize: " + newSize);
+    
+    long size = size();
+    if (newSize > size)
+      throw new IllegalArgumentException("newSize " + newSize + " > size " + size);
+    
+    String deleteSql = "DELETE FROM " + tableName + " WHERE " + ROW_NUM + " > " + newSize;
+    try (var stmt = con.createStatement()) {
+      stmt.execute(deleteSql);
+      con.commit();
+    } catch (SQLException sx) {
+      throw new SqlLedgerException("on trimSize(" + newSize + ")", sx);
     }
   }
 

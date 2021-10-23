@@ -19,7 +19,11 @@ import io.crums.util.IntegralStrings;
 import io.crums.util.TidyProperties;
 
 /**
+ * {@linkplain Config} file builder.
  * 
+ * @see #toConfig()
+ * @see #toProperties(boolean)
+ * @see #save()
  */
 public class ConfigFileBuilder {
   

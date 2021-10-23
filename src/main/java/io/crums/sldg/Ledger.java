@@ -421,8 +421,6 @@ public class Ledger implements AutoCloseable {
    * 
    * @param lo &ge; 1
    * @param hi &le; {@linkplain #lesserSize()}
-   * @param asc if {@code false}, then the range is checked in descending order; ascending, o.w.
-   * @param progress optional progress ticker
    * 
    * @return the first conflicting row number found; 0 (zero) if none found
    */
@@ -431,6 +429,41 @@ public class Ledger implements AutoCloseable {
     
     long conflict = firstConflictInRange(lo, hi);
     return setFork(conflict);
+  }
+  
+  
+
+  
+  /**
+   * Checks the given row number and returns the result. If this method returns
+   * {@code false} then the instance's {@linkplain #getState() state} will
+   * {@linkplain State#needsMending() need mending}. No state assertion can be made
+   * about the converse (i.e. when this method returns {@code true}).
+   * 
+   * @param rowNumber &ge; 1 and &le; {@linkplain #hashLedgerSize()}
+   * 
+   * @return {@code true} iff the hash of the source row at the given
+   *         row number checks out
+   */
+  public boolean checkRow(long rowNumber) {
+    long hashLedgerSize = hashLedgerSize();
+    
+    if (rowNumber < 1 || rowNumber > hashLedgerSize) {
+      throw new IllegalArgumentException(
+          "out-of-bounds row number " + rowNumber +
+          "; valid range is [1, " + hashLedgerSize + "]");
+    }
+    
+    if (sourceLedgerSize() < rowNumber) {
+      assert state.isTrimmed();
+      return false;
+    }
+    
+    if (firstConflictInRange(rowNumber, rowNumber, false) == 0)
+      return true;
+    
+    setFork(rowNumber);
+    return false;
   }
   
   
@@ -598,12 +631,34 @@ public class Ledger implements AutoCloseable {
   public void rollback() {
     if (state.ok())
       return;
-    long trimmedSize = state.isForked() ? firstConflict - 1 : srcLedger.size();
+    long trimmedSize = lastValidRow();
     assert trimmedSize > 0;
     hashLedger.trimSize(trimmedSize);
     firstConflict = 0;
     state = null;
     checkEndRows();
+  }
+  
+  
+
+  /**
+   * Rolls back the hash ledger to its state before the given conflictng row.
+   * This method should be invoked with caution, since the ledger loses history.
+   * 
+   * @param conflictRn &gt; {@linkplain #lastValidRow()}
+   * 
+   * @see HashLedger#trimSize(long)
+   */
+  public void rollback(long conflictRn) {
+    if (checkRow(conflictRn) && lastValidRow() >= conflictRn)
+      throw new IllegalArgumentException(
+          "no known conflicting rows at or before row [" + conflictRn + "]");
+    hashLedger.trimSize(conflictRn - 1);
+    if (conflictRn == firstConflict) {
+      firstConflict = 0;
+      state = null;
+      checkEndRows();
+    }
   }
   
   

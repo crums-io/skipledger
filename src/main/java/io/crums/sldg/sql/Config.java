@@ -22,17 +22,23 @@ import io.crums.util.Lists;
 import io.crums.util.TidyProperties;
 
 /**
- * SQL data source configuration.
+ * SQL data source configuration. Instances are immutable.
  * 
  * <h2>Quirks and Features</h2>
  * <p>
- * A simple properties file is used to store configuration.
+ * A simple <em>properties file</em> is used to store configuration. (This could have been
+ * JSON, but honestly, this seems simpler.)
  * </p>
  * <h3>Relative Paths</h3>
  * <p>
  * Filepaths may be specified in either absolute or relative form. For relative
  * paths, <em>paths are resolved relative to the location of the configuration
  * file.</em>
+ * </p>
+ * <h3>Credentials</h3>
+ * <p>
+ * DB access credentials may be stored in the file this loads from. This is questionable
+ * practice. Will address in a future release.
  * </p>
  */
 public class Config {

@@ -22,10 +22,13 @@ import io.crums.sldg.SkipLedger;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.Base64_32;
+import io.crums.util.TaskStack;
 import io.crums.util.mrkl.Proof;
 
 /**
  * A {@linkplain HashLedger} that lives in an SQL database.
+ * 
+ * @see HashLedgerSchema
  */
 public class SqlHashLedger implements HashLedger {
   
@@ -169,25 +172,16 @@ public class SqlHashLedger implements HashLedger {
           CHAIN_LEN + ", " + CHN_ID +
           " FROM " + schema.getTrailTable() +
           " WHERE " + TRL_ID + " = ?");
-//          "SELECT * FROM (\n" +
-//          "  SELECT ROW_NUMBER() OVER (ORDER BY " + TRL_ID + " ASC) AS row_index, " +
-//          TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
-//          " FROM " + schema.getTrailTable() + ") AS snap WHERE row_index = ?");
       
       this.selectChainByChainId = con.prepareStatement(
           "SELECT " + CHN_ID + ", " + N_HASH + " FROM " + schema.getChainTable() +
           " WHERE " + CHN_ID + " >= ? ORDER BY " + CHN_ID + " LIMIT ?");
-//          "SELECT " + CHN_ID + ", " + N_HASH + " FROM " + schema.getChainTable() +
-//          " WHERE " + TRL_ID + " = ? ORDER BY " + CHN_ID);
       
       this.selectNearestTrailStmt = con.prepareStatement(
           "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " +
           CHAIN_LEN + ", " + CHN_ID +
           " FROM " + schema.getTrailTable() +
           " WHERE " + ROW_NUM + " >= ? ORDER BY " + ROW_NUM + " LIMIT 1");
-//          "SELECT " + TRL_ID + ", " + ROW_NUM + ", " + UTC + ", " + MRKL_IDX + ", " + MRKL_CNT + ", " + CHAIN_LEN +
-//          " FROM " + schema.getTrailTable() +
-//          " WHERE " + ROW_NUM + " >= ? ORDER BY " + ROW_NUM + " LIMIT 1");
       
       this.selectLastTrailedRnStmt = con.prepareStatement(
           "SELECT " + TRL_ID + ", " + ROW_NUM + " FROM " + schema.getTrailTable() +
@@ -225,34 +219,34 @@ public class SqlHashLedger implements HashLedger {
     final long rowNum = trailedRecord.rowNum();
     CrumTrail trail = trailedRecord.record().trail();
     
-
-    final int size = this.getTrailCount();
-    if (size > 0) {
-      var lastTrailedRow = getTrailByIndex(size - 1);
-      // if the new trail is for a row number less than the last row witnessed,
-      // discard it
-      if (rowNum <= lastTrailedRow.rowNumber())
-        return false;
-      
-      // if this higher row number was witnessed before the last
-      // recorded row witnessed, balk. (Otherwise, the invariant
-      // that the witness times be non-decreasing would be broken.)
-      
-      // this is unfortunate: it shouldn't happen along normal usage
-      // however. The solution is to manually remove the trails from
-      // the tables.
-      if (trail.crum().utc() < lastTrailedRow.utc()) {
-        var logger = Logger.getLogger(SqlHashLedger.class.getSimpleName());
-        logger.warning(
-            "row [" + lastTrailedRow.rowNumber() +
-            "] is already recorded as being witnessed after (!) row [" + rowNum +
-            "]: " + new Date(lastTrailedRow.utc()) + " v. " + new Date(trail.crum().utc()) +
-            ". Not adding crumtrail for row [" + rowNum + "] as this would violate model invariants.");
-        return false;
-      }
-    }
-    
     synchronized (lock) {
+
+      final int size = this.getTrailCount();
+      if (size > 0) {
+        var lastTrailedRow = getTrailByIndex(size - 1);
+        // if the new trail is for a row number less than the last row witnessed,
+        // discard it
+        if (rowNum <= lastTrailedRow.rowNumber())
+          return false;
+        
+        // if this higher row number was witnessed before the last
+        // recorded row witnessed, balk. (Otherwise, the invariant
+        // that the witness times be non-decreasing would be broken.)
+        
+        // this is unfortunate: it shouldn't happen along normal usage
+        // however. The solution is to manually remove the trails from
+        // the tables.
+        if (trail.crum().utc() < lastTrailedRow.utc()) {
+          var logger = Logger.getLogger(SqlHashLedger.class.getSimpleName());
+          logger.warning(
+              "row [" + lastTrailedRow.rowNumber() +
+              "] is already recorded as being witnessed after (!) row [" + rowNum +
+              "]: " + new Date(lastTrailedRow.utc()) + " v. " + new Date(trail.crum().utc()) +
+              ". Not adding crumtrail for row [" + rowNum + "] as this would violate model invariants.");
+          return false;
+        }
+      }
+      
       try {
         
         var rs = this.chainTableCountStmt.executeQuery();
@@ -303,43 +297,6 @@ public class SqlHashLedger implements HashLedger {
         trailInsert.setInt(7, nextChainId);
         
         trailInsert.executeUpdate();
-        
-//        PreparedStatement selectTrailId = selectTrailIdStmt;
-//        selectTrailId.setLong(1, rowNum);
-//        rs = selectTrailId.executeQuery();
-//        if (!rs.next()) {
-//          con.rollback();
-//          throw new SqlLedgerException("expected INSERT was ineffective: " + trailedRecord);
-//        }
-//        
-//        final long trailId = rs.getLong(1);
-//        
-//        if (rs.next()) {
-//          con.rollback();
-//          return false;
-//        }
-//        
-//        StringBuilder sql =
-//            new StringBuilder("INSERT INTO " ).append(schema.getChainTable())
-//              .append(" (").append(TRL_ID).append(", ").append(N_HASH).append(") VALUES");
-        
-//        for (byte[] cHash : trail.hashChain())
-//          sql.append("\n(").append(trailId).append(", '").append(Base64_32.encode(cHash)).append("'),");
-//        
-//        // remove the last comma
-//        sql.setLength(sql.length() - 1);
-//        
-//        Statement stmt = con.createStatement();
-//        stmt.execute(sql.toString());
-//        
-//        int updateCount = stmt.getUpdateCount();
-//        
-//        if (updateCount != trail.hashChain().size()) {
-//          con.rollback();
-//          throw new SqlLedgerException(
-//              "INSERT did not yield expected updateCount " + trail.hashChain().size() +
-//              "; actual was " + updateCount + "; SQL:\n" + sql);
-//        }
         
         con.commit();
         return true;
@@ -505,6 +462,67 @@ public class SqlHashLedger implements HashLedger {
         throw new SqlLedgerException("on lastWitnessedRowNumber(): " + sqx, sqx);
       }
     }
+  }
+
+  
+  /**
+   * {@inheritDoc}
+   * 
+   * <h3>Implementation Note</h3>
+   * <p>
+   * The SQL implementation performs this in 2 steps. The crumtrails are deleted in the
+   * 1st transaction; the skip ledger rows are deleted in a 2nd transaction. It's punishment
+   * for modularizing skipledger as its own standalone component :/
+   * </p>
+   */
+  @Override
+  public void trimSize(long newSize) {
+    
+    if (newSize < 0)
+      throw new IllegalArgumentException("newSize: " + newSize);
+    
+    synchronized (lock) {
+      
+      try (var closer = new TaskStack()) {
+        
+        selectNearestTrailStmt.setLong(1, newSize);
+        ResultSet rs = selectNearestTrailStmt.executeQuery();
+        closer.pushClose(rs);
+        
+        if (rs.next()) {
+          final int tid = rs.getInt(1);
+          final long rowNumber = rs.getLong(2);
+          final int chainLen = rs.getInt(6);
+          final int chainId = rs.getInt(7);
+          
+          assert rowNumber >= newSize;
+          
+          boolean include = rowNumber > newSize;
+          
+          String trailDelSql =
+              "DELETE FROM " + schema.getTrailTable() + " WHERE " + TRL_ID +
+              (include ? " >= " : " > ") + tid;
+          
+          String chainDelSql =
+              "DELETE FROM " + schema.getChainTable() + " WHERE " + CHN_ID + " >= " +
+              (include ? chainId : chainId + chainLen);
+          
+          Statement stmt = con.createStatement();
+          closer.pushClose(stmt);
+          
+          stmt.executeUpdate(trailDelSql);
+          stmt.executeUpdate(chainDelSql);
+        }
+        
+        con.commit();
+        
+        this.skipLedger.trimSize(newSize);
+        
+      } catch (SQLException sqx) {
+        throw new SqlLedgerException("on lastWitnessedRowNumber(): " + sqx, sqx);
+      }
+    }
+    
   }
 
 }
