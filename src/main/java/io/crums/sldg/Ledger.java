@@ -21,6 +21,7 @@ import io.crums.sldg.packs.LedgerMorselBuilder;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.time.WitnessReport;
+import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.TaskStack;
 import io.crums.util.ticker.Ticker;
@@ -360,7 +361,7 @@ public class Ledger implements AutoCloseable {
     }
     
     // check the 
-    if (maxCheck > 1 && firstConflict(maxCheck) != 0) {
+    if (maxCheck > 1 && firstConflictInRange(maxCheck, maxCheck, false) != 0) {
       setFork(maxCheck);
     
     } else if (state == null) {
@@ -668,7 +669,7 @@ public class Ledger implements AutoCloseable {
    * Return the lesser of the source- and hash-ledger sizes.
    */
   public final long lesserSize() {
-    return Math.max(srcLedger.size(), hashLedger.size());
+    return Math.min(srcLedger.size(), hashLedger.size());
   }
 
 
@@ -729,6 +730,14 @@ public class Ledger implements AutoCloseable {
       ByteBuffer expectHash = row.inputHash();
       if (! srcRow.rowHash().equals(expectHash))
         return rn;
+      
+      if (rn == 1) {
+        var sentinelPtr = row.prevHash(0);
+        if (!SldgConstants.DIGEST.sentinelHash().equals(sentinelPtr))
+          throw new HashConflictException(
+              "hash ptr to sentinel row corrupted on row [1]: " +
+              IntegralStrings.toHex(sentinelPtr));
+      }
     }
     return 0L;
   }
