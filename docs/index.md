@@ -1,4 +1,5 @@
-# skipledger
+skipledger
+========
 
 Tools for maintaining tamper proof evolving historical private ledgers and for disclosing any of their parts in an efficient, provable way.
 
@@ -42,17 +43,17 @@ some business activity), *sldg* can also emit (output) morsels of the ledger's s
 Morsels are compact files containing tamper proof structures that encapsulate information about the ledger's state. They
 may contain:
 
-1. *only opaque hashes*. These are called *state-morsel*s. Such a morsel only reveals how many rows are in the ledger as
-well as how the hash of the last row is related to that of the first in the ledger. This information is compact no matter how many rows the ledger has. State morsels can be thought of as rich fingerprints: as a ledger evolves its new fingerprint can be
-validated against older ones.
+1. *opaque row hashes only*. These are called *state-morsel*s. Such a morsel only reveals how many rows are in the ledger it represents as
+well as how the hash of the last row is related to that of the first in the ledger. This information is compact no matter how many rows the ledger has. Think of state morsels as rich fingerprints: as a ledger evolves its new fingerprint can be
+validated against its older ones.
 
-2. *source rows*. Any reasonably small subset of the source rows from a ledger may be included in a morsel. (Morsels are
+2. *source rows*. A morsel may include any reasonably small subset of source rows from a ledger. (Morsels are
 designed to be, well.. morsels: they're supposed to fit in memory.) Any column value in these source rows may
-optionally be redacted by substituting that value with the column's hash. (The hashing procedure resists both
+have been redacted by its substitution with a hash. (The hashing procedure resists both
 rainbow attacks and frequency analysis.)
 
 3. *witness records*. A morsel may also contain one or more tamper proof records (called *crumtrail*s) indicating the time
-the hash of a particular row in the ledger (identified by its row number) was witnessed by the `crums.io ` service. Since
+the hash of a particular row in the ledger (identified by its row number) was witnessed by the `crums.io` service. Since
 the hash of every row in the ledger [also] depends on the hash of every row before it, a crumtrail for a given row number
 establishes the minimum age of that row and *every row before that row number*.
 
@@ -91,7 +92,7 @@ A *skip ledger* (new terminology) is a tamper proof, append-only list of objects
 Internally, it models a tamper proof [skip list](https://en.wikipedia.org/wiki/Skip_list ).  It's use here is as a tamper proof *list*,
 not as a search structure. Here are some of its key differences:
 
-1. *Append only.* Items are only ever be appended to the end of the list. (In skip list terms, the items are ordered in the ordered in they appear.)
+1. *Append only.* Items are only ever be appended to the end of the list. (In skip list terms, the items are ordered in the order in they were added.)
 2. *Hash pointers.* Instead of the handles, pointers and such in skip lists, the pointers in a skip ledger are hash pointers. (A hash pointer is the hash of another node in the skip list.)
 3. *Hash of items only.* We only ever append the *hash* of items, not the items themselves. (Item storage is an orthogonal issue: an item may come from a row in a database table, for example.)
 4. *Deterministic structure.* The row number (the index of an item in the list) uniquely determines the number of skip pointers its corresponding node (row) in the list has: unlike a skip list, no randomization is involved.
@@ -168,7 +169,7 @@ The direct file implementation is faster and more compact; the SQL implementatio
 setting.
 
 Constructing a *complete* skip ledger row under this model (which contains both the input hash and the row's hashpointers to previous rows) then
-takes on average 3 row accesses: one for row's input hash, and 2 for its hash pointers to previous rows (on average, each row has 2 hash pointers).
+takes on average 3 row accesses: one for the row's input hash, and 2 for its hash pointers to previous rows (on average, each row has 2 hash pointers).
 In a good many cases, however, we don't need the full row object: therefore the library also offers *lazy* versions of its row abstraction.
 
 ### Morsel Model
@@ -186,8 +187,10 @@ Following feedback after the first release (thank you!), the project's focus tur
 Here's what changed under the hood since the last release:
 
 - Hash ledger (the skip ledger data structure with annotated crumtrails) implemented on RDBMS.
+- The special beacon rows of the previous version were dropped. (Users can still embed beacon values in their own business records
+ in order to the establish *maximum age* of their rows.)
 - Modeled the *source ledger* (the source of the ledger's data). This supports rows composed of columns in the usual way.
-    - Simplified column types (strings, fixed precision integral types, null, etc.)
+    - Simplified column types (strings, fixed / floating precision integral types, null, etc.)
     - Salted hashing in order to resist decoding values from their hashes via rainbow attacks or frequency analysis. 
     - SQL column value type mappings to those modeled in the source ledger.
 - The source ledger is now encoded in morsel files; source rows in these files are now automatically validated against their
@@ -199,9 +202,10 @@ Here's what changed under the hood since the last release:
 
 The following features are slated for version `0.0.4`:
 
-- JSON representation of morsel data. This will provide programmatic access from other enviroments than Java.
+- JSON representation of morsel data. Can expose existing type information about column values this way, as well as provide programmatic access from other enviroments than Java.
 - Submerge command: slice out of pieces of data out of one or more morsel files from a same ledger into a new morsel file. (The owner of
  a morsel may not want to share every row in it).
+- Support for customized meta-info for morsels. This info needn't be necessarily validated but can help with usability. For eg, column titles/headings.
 - ?
 
 
