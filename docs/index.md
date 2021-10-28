@@ -38,6 +38,8 @@ columns defined in the SQL query above.
 Besides commands for updating the hash ledger as the source table grows (as new rows are appended as a result of
 some business activity), *sldg* can also emit (output) morsels of the ledger's state and its contents in a tamper proof way.
 
+See also its [manual](./sldg_manual.md).
+
 ## Morsels
 
 Morsels are compact files containing tamper proof structures that encapsulate information about the ledger's state. They
@@ -73,6 +75,9 @@ morsel. It does not assert anything about whether the descendant ledger is autho
 2. *redact information from a morsel*. The recipient of a morsel may desire to share only parts of the information in the
 morsel with others. Instead of sharing morsels whole, a user can redact any column values or entire (source) rows from a
 given morsel file.
+
+
+See also its [manual](./mrsl_manual.md).
 
 # Library
 
