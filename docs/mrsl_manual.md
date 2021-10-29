@@ -39,7 +39,7 @@ establishes the minimum age of that row and *every row before that row number*.
 ### Use Model
 
 Morsels originate from ledger owners, but morph once in the wild, as they're lumped together, or sliced and diced with
-redactions (coming features), etc. Exactly how these tamper proof files are to be disseminated, is left open. Let's illustrate the "trust model" by a hypothetical example:
+redactions (coming features), etc. Exactly how these tamper proof files are to be disseminated, is left open. Let's illustrate the "trust model" using a hypothetical example:
 
 Say, you have a morsel. It's a tamper proof window into a historical ledger. Yes, you can verify
 that it hasn't been tampered with (by the fact mrsl loads it without a fuss).

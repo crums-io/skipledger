@@ -1,0 +1,162 @@
+
+Morsel File Format Version 0.1
+======================
+
+
+Parsing a morsel requires knowledge about how skip ledgers and Merkle proofs
+are organized. That information is not provided here. The goal here to describe
+the skeletal organization of the file. As a result some parts are a bit opaque.
+In particular, sections 2.4 and 2.5, gloss over some details that can otherwise
+be found in the source code.
+
+
+1. Basic Types:
+
+BYTE :=               // needs no introduction
+UBYTE := [BYTE]       // unsigned byte
+SHORT := [BYTE] ^ 2   // big endian, signed short
+UHORT := [BYTE] ^ 2   // big endian, unsigned short
+INT := [BYTE] ^ 4     // big endian, signed int
+LONG := [BYTE] ^ 8    // big endian, signed long
+HASH := [BYTE] ^ 32   // eg SHA-256
+
+2. Morsel
+
+The exposition below is top-down.
+
+2.1 Preamble
+
+MSRL := [HEADER] [MRSL_PACK]
+
+HEADER := "MRSL  0.1 "                    // (10 bytes) -- we're fussy about the 'MRSL' part
+
+
+2.2 Components
+
+Version 0.1 is organized in 4 parts called "packs". An index at the head of these
+supports random access to them.
+
+MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK]
+
+
+
+2.3 Packs and Sizes
+
+PACK_HDR := [PACK_CNT] [PACK_SIZES]
+PACK_CNT := [UBYTE]                       // current minimum is (4)
+PACK_SIZES := [PACK_SZ] ^ [PACK_CNT]
+PACK_SZ := [INT]
+
+
+2.4 Row Pack
+
+The row pack contains row numbers and the hashes of rows. Internally the [skip ledger] rows
+in the pack are in one of 2 bags: a bag of referenced rows and a bag of full rows. Each bag
+contains a single HASH per row. The hash recorded per row in the referenced-rows bag is that
+of the entire skip ledger row; the hash recorded per row in the full-row bag, is the input-hash
+of the skip ledger row. Only the "full-row" numbers are listed; the referenced row numbers are
+inferred from the "full-row" numbers.
+
+ROW_PACK := [ROW_NUMS] [REF_HASHES] [INPUT_HASHES]
+ROW_NUMS := [RN_CNT] [RN_LIST]
+RN_CNT := [INT]    // >= 0
+RN_LIST := [LONG] ^ [RN_CNT]              // > 0, strictly ascending sequence of row numbers
+
+REF_RN_COUNT := // not spec'ed here:
+                // calculated as the difference in
+                // the size of the RN_LIST's coverage-set (sans row [0])
+                // and RN_CNT
+                
+                // Sorry I couldn't do better :(
+
+REF_HASHES := [HASH] ^ [REF_RN_COUNT]
+
+INPUT_HASHES := [HASH] ^ [RN_CNT]
+
+
+2.5 Trail Pack
+
+TRAIL_PACK := [TRL_PACK_HDR] [TRAILS]
+TRL_PACK_HDR := [TRL_CNT] [TRL_RN_SZ] ^ [TRL_CNT]
+TRL_CNT := [USHORT]
+TRL_RN_SZ := [LONG] [INT]                 // row number, crumtrail size tuple
+
+TRAILS := [BYTE] ^ (sum of TRL_RN_SZ's)
+
+
+TODO: spec out crumtrails (Merkle proofs), which is a document onto itself
+In the meantime, see 
+
+
+2.6 Source Pack
+
+SOURCE_PACK := [SRC_CNT] [SRC_ROW] ^ [SRC_CNT]
+SRC_CNT := [SHORT]    // unsigned short
+
+2.6.1 Source Row
+
+SRC_ROW := [SRC_RN] [COL_CNT] [COL_VAL] ^ [COL_CNT]
+SRC_RN := [LONG]    // > 0
+COL_CNT := [SHORT]    // unsigned
+
+
+2.6.2 Source Column Value (Table Cell)
+
+COL_VAL := [COL_TYP] [*COL_SALT] [TYPED_COL_VAL]
+COL_TYP := [BYTE]   // signed; if negative, then [*COL_SALT] above  is present; otherwise, it isn't
+
+2.6.3 Column Salt
+
+With few exceptions, every column value is expected to be salted (but doesn't have to be).
+A *negatve* COL_TYP value indicates salting is present. The "hash" column type, is the exception:
+it is an error to salt it.
+
+COL_SALT = [BYTE] ^ 32
+
+
+2.6.4 Column Value Types & Sizes
+
+Depending on the column type (absolute value of COL_TYP above) the byte-size
+of the value may be fixed or variable:
+
+| Code | Type   | Size | Comments |
+| ---- | ----   | ---- | -------- |
+|  1   | null   |   0  | SQL NULLs are mapped to this |
+|  2   | hash   |  32  | Never salted. A redacted column value takes this form. |
+|  3   | bytes  | var  | Max 64 kB |
+|  4   | string | var  | Max 64 kB, UTF-8 encoded |
+|  5   | long   |   8  | Big Endian |
+|  6   | double |   8  |            |
+|  7   | date   |   8  | UTC time in milliseconds |
+
+So, excepting for types 'bytes' and 'string', the byte-size of TYPED_COL_VAL is
+determined from the table above.
+
+For the variable-size 'bytes' and 'string' types:
+
+TYPED_COL_VAL := [COL_VAL_SZ] [BYTE] ^ [COL_VAL_SIZE]
+COL_VAL_SZ := [USHORT]
+
+
+2.7 Path Pack
+
+The only thing validated with the path-pack is that the hashes of the declared row numbers
+per path-info object indeed do occur in the morsel.
+
+PATH_PACK := [PATH_INFO_CNT] [PATH_INFO] ^ [PATH_INFO_CNT]
+PATH_INFO_CNT := [USHORT]
+PATH_INFO := [DECLARED_RNS][PATH_META]
+
+DECLARED_RNS := [DECL_RN_CNT] [DECL_RN_LIST]
+DECL_RN_CNT := [USHORT]
+DECL_RN_LIST := [LONG] ^ [DECL_RN_CNT]
+
+PATH_META := [PATH_META_SZ] [BYTE] ^ [PATH_META_SZ]
+PATH_META_SZ := [USHORT]
+
+
+
+
+
+
+

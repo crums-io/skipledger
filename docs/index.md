@@ -38,7 +38,7 @@ columns defined in the SQL query above.
 Besides commands for updating the hash ledger as the source table grows (as new rows are appended as a result of
 some business activity), *sldg* can also emit (output) morsels of the ledger's state and its contents in a tamper proof way.
 
-See also its [manual](./sldg_manual.md).
+More information is avaliable in the [manual](./sldg_manual.md).
 
 ## Morsels
 
@@ -77,7 +77,7 @@ morsel with others. Instead of sharing morsels whole, a user can redact any colu
 given morsel file.
 
 
-See also its [manual](./mrsl_manual.md).
+More information is avaliable in the [manual](./mrsl_manual.md).
 
 # Library
 
@@ -184,6 +184,7 @@ the minimum information necessary to construct the data's hash proofs. According
 skip ledger using a single hash cell that is either the row's input hash or, if the row is only referenced
 (via one or more hash pointers from higher numbered rows), the row's (final) hash.
 
+The file format is documented [here](./morsel_file_format.txt).
 
 
 # Changes
@@ -217,7 +218,10 @@ The following features are slated for version `0.0.4`:
 
 # API Javadocs
 
-Presently, the documentation is near the code. This is because things move fairly at early stages, and it's difficult to maintain (or easy to overlook) docs and keep them in synch with code changes. 
+Presently, the documentation is near the code. This is because things move fairly often at early stages, and it's difficult to maintain (or easy to overlook) docs and keep them in synch with code changes.
+
+
+
 
 
 
