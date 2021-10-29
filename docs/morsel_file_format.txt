@@ -4,13 +4,13 @@ Morsel File Format Version 0.1
 
 
 Parsing a morsel requires knowledge about how skip ledgers and Merkle proofs
-are organized. That information is not provided here. The goal here to describe
+are organized. That information is not provided here. The goal here is to describe
 the skeletal organization of the file. As a result some parts are a bit opaque.
 In particular, sections 2.4 and 2.5, gloss over some details that can otherwise
 be found in the source code.
 
 
-1. Basic Types:
+1. Basic Types & Conventions:
 
 BYTE :=               // needs no introduction
 UBYTE := [BYTE]       // unsigned byte
@@ -20,9 +20,18 @@ INT := [BYTE] ^ 4     // big endian, signed int
 LONG := [BYTE] ^ 8    // big endian, signed long
 HASH := [BYTE] ^ 32   // eg SHA-256
 
+The '^' symbol is like exponentiaton: it binds to the object immediately
+to its left and means the object on the left is repeated as many times as specified on
+the right of the '^'. So [K]^3 means a sequence of 3 K's: [K] [K] [K]. The righthand
+side of '^' may be a (read-in) variable instead of a constant: for e.g. [K] ^ [M], where
+the value in M is interpreted as a non-negative number. Note if M evaluates to zero,
+then K does not occur: i.e. [K] ^ 0 evaluates to an empty sequence.
+
+
 2. Morsel
 
 The exposition below is top-down.
+
 
 2.1 Preamble
 
@@ -33,14 +42,15 @@ HEADER := "MRSL  0.1 "                    // (10 bytes) -- we're fussy about the
 
 2.2 Components
 
-Version 0.1 is organized in 4 parts called "packs". An index at the head of these
-supports random access to them.
+Version 0.1 is organized in 4 parts called "packs".
 
 MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK]
 
 
-
 2.3 Packs and Sizes
+
+An index at the head of these packs supports random access to each of them. Future versions
+of this format may have more parts, without breaking backward compatibility.
 
 PACK_HDR := [PACK_CNT] [PACK_SIZES]
 PACK_CNT := [UBYTE]                       // current minimum is (4)
@@ -56,6 +66,9 @@ contains a single HASH per row. The hash recorded per row in the referenced-rows
 of the entire skip ledger row; the hash recorded per row in the full-row bag, is the input-hash
 of the skip ledger row. Only the "full-row" numbers are listed; the referenced row numbers are
 inferred from the "full-row" numbers.
+
+Constraint: every row (identified by row number) in the row pack can be verified against the
+row at the highest number.
 
 ROW_PACK := [ROW_NUMS] [REF_HASHES] [INPUT_HASHES]
 ROW_NUMS := [RN_CNT] [RN_LIST]
@@ -76,6 +89,9 @@ INPUT_HASHES := [HASH] ^ [RN_CNT]
 
 2.5 Trail Pack
 
+Contains a list of crumtrails ordered by row number witnessed. Constraint: witness times are
+non-decreasing when enumerated (in order of row number).
+
 TRAIL_PACK := [TRL_PACK_HDR] [TRAILS]
 TRL_PACK_HDR := [TRL_CNT] [TRL_RN_SZ] ^ [TRL_CNT]
 TRL_CNT := [USHORT]
@@ -85,10 +101,21 @@ TRAILS := [BYTE] ^ (sum of TRL_RN_SZ's)
 
 
 TODO: spec out crumtrails (Merkle proofs), which is a document onto itself
-In the meantime, see 
+Note: It's possible to shave 64 bytes in the encoding of Merkle proofs.
+      Not implemented because crumtrails are not expected to number that many,
+      and would cause further interdepedence between this pack and the row-pack.
 
 
 2.6 Source Pack
+
+Contains source rows. Source rows are modeled with column values in the usual way.
+However, there are only 7 value-types, far fewer than say SQL.
+
+Note: In principle, it's possible to shave 32 bytes (the hash of the row), when a
+      source row is present. Not implemented because that would make the row-pack
+      dependent on this pack. Which would complicate things, because the row-pack
+      is presently authoratitive.
+      
 
 SOURCE_PACK := [SRC_CNT] [SRC_ROW] ^ [SRC_CNT]
 SRC_CNT := [SHORT]    // unsigned short
@@ -103,13 +130,14 @@ COL_CNT := [SHORT]    // unsigned
 2.6.2 Source Column Value (Table Cell)
 
 COL_VAL := [COL_TYP] [*COL_SALT] [TYPED_COL_VAL]
+
 COL_TYP := [BYTE]   // signed; if negative, then [*COL_SALT] above  is present; otherwise, it isn't
 
 2.6.3 Column Salt
 
 With few exceptions, every column value is expected to be salted (but doesn't have to be).
-A *negatve* COL_TYP value indicates salting is present. The "hash" column type, is the exception:
-it is an error to salt it.
+A *negatve* COL_TYP value indicates salting is present. The "hash" column type, is the
+exception: it is an error to salt it.
 
 COL_SALT = [BYTE] ^ 32
 
@@ -119,15 +147,15 @@ COL_SALT = [BYTE] ^ 32
 Depending on the column type (absolute value of COL_TYP above) the byte-size
 of the value may be fixed or variable:
 
-| Code | Type   | Size | Comments |
-| ---- | ----   | ---- | -------- |
-|  1   | null   |   0  | SQL NULLs are mapped to this |
+| Code | Type   | Size |                    Comments                            |
+| ---- | ----   | ---- |                    --------                            |
+|  1   | null   |   0  | SQL NULLs are mapped to this                           |
 |  2   | hash   |  32  | Never salted. A redacted column value takes this form. |
-|  3   | bytes  | var  | Max 64 kB |
-|  4   | string | var  | Max 64 kB, UTF-8 encoded |
-|  5   | long   |   8  | Big Endian |
-|  6   | double |   8  |            |
-|  7   | date   |   8  | UTC time in milliseconds |
+|  3   | bytes  | var  | Max 64 kB                                              |
+|  4   | string | var  | Max 64 kB, UTF-8 encoded                               |
+|  5   | long   |   8  | Big Endian                                             |
+|  6   | double |   8  |                                                        |
+|  7   | date   |   8  | UTC time in milliseconds                               |
 
 So, excepting for types 'bytes' and 'string', the byte-size of TYPED_COL_VAL is
 determined from the table above.
