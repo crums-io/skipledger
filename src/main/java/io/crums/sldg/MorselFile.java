@@ -109,7 +109,7 @@ public class MorselFile {
     ByteBuffer packBytes = builder.serialize();
     int size = HEADER_SIZE + packBytes.remaining();
     ChannelUtils.writeRemaining(ch, header());
-    ChannelUtils.writeRemaining(ch, builder.serialize());
+    ChannelUtils.writeRemaining(ch, packBytes);
     return size;
   }
   
