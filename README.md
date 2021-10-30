@@ -3,7 +3,30 @@ skipledger
 
 Tools for maintaining tamper proof evolving historical private ledgers and for disclosing any of their parts in an efficient, provable way.
 
-# Overview
+## Contents
+
+- [Overview](#overview)
+    - [sldg](#sldg)
+    - [Morsels](#morsels)
+    - [mrsl](#mrsl)
+- [Library](#library)
+- [Data Structure](#data-structure)
+    - [Hash Pointers and Row Numbering](#hash-pointers-and-row-numbering)
+    - [Skip (Hash) Pointers](#skip-hash-pointers)
+    - [Ledger Rows](#ledger-rows)
+        - [Row Hash](#row-hash)
+    - [Ledger State](#ledger-state)
+    - [Entry Proof](#entry-proof)
+- [Storage Models](#storage-models)
+    - [Skip Ledger Model](#skip-ledger-model)
+    - [Morsel Model](#morsel-model)
+- [Building](#building)
+- [Changes](#changes)
+- [Roadmap](#roadmap)
+
+
+
+## Overview
 
 Ledgers are historical lists of things. Whether by markings on a stick, carvings in clay, or ink on paper, ledgers have always
 recorded human activity. And while the technologies for maintaining the veracity of those records have evolved, one
@@ -24,7 +47,7 @@ files and manipulating (merging/redacting) them.
 So in a sense *sldg* is on the server-side (where the owner of the private ledger resides), while *mrsl* is on the
 client side (the consumer of the morsel of rows from the ledger).
 
-## sldg
+### sldg
 
 This tool takes a config file as argument. Among other things, the config file (you can name it whatever) specs out the
 the SQL query that defines both the order of rows (and their row numbers) in an append-only table or view and the columns
@@ -40,7 +63,7 @@ some business activity), *sldg* can also emit (output) morsels of the ledger's s
 
 More information is avaliable in the [manual](./docs/sldg_manual.md).
 
-## Morsels
+### Morsels
 
 Morsels are compact files containing tamper proof structures that encapsulate information about the ledger's state. They
 may contain:
@@ -62,7 +85,7 @@ establishes the minimum age of that row and *every row before that row number*.
 Morsels files (`.mrsl` extension) originate as outputs of the *sldg* program. Since they're in binary format, we need another
 tool to independently validate and read these..
 
-## mrsl
+### mrsl
 
 The *mrsl* tool works independently of the *sldg* program: it only deals with `.mrsl` files. Besides its ability validate and
 display the information in an existing morsel file, it can also be used to:
@@ -79,7 +102,7 @@ given morsel file.
 
 More information is avaliable in the [manual](./docs/mrsl_manual.md).
 
-# Library
+## Library
 
 Underlying the above tools is a fairly modular library that allows other storage models than a relational database. In particular,
 it includes a direct implementation of the hash ledger on the file system. The *jurno* program demos its use (and was in fact
@@ -89,7 +112,7 @@ Much changed since the first version, so from a programmer's perspective, althou
 this is not settled API. 
 
 
-# Data structure
+## Data structure
 
 This section concerns the hashing method and data structure used to capture the state of the list in the ledger.
 
@@ -109,14 +132,14 @@ Which ledger? (Which list?) In the same way that the root hash of a Merkle tree 
 
 ![Components Overview](./docs/images/skip-ledger.svg)
 
-## Hash Pointers and Row Numbering
+### Hash Pointers and Row Numbering
 
 Rows are identified and ordered by row number. Row numbers start at 1 (not zero) and increase monotonically by 1 with the addition
 of each new row (no gaps). A row's number in the ledger uniquely determines how many pointers it has (and which row numbers they point to).
 
 Note conceptually, there is also zero'th row. It is a sentinel row whose hash evaluates to a string of 32 zero-bytes (as wide as the hash algo requires), the contents of which is undefined.
 
-## Skip (Hash) Pointers
+### Skip (Hash) Pointers
 
 As mentioned above, unlike a skip list, the number of pointers per row is not randomized; it is determined by the largest power of 2 that divides
 the row number. If the row number is *r* and 2<sup>*n*</sup> is that largest power of 2 that divides *r* (*n* = 0 if *r* is odd), then the number of
@@ -126,24 +149,24 @@ Another way to define the number of pointers is to write down the row number *r*
 is 1 plus the number of trailing zeroes of *r*, written in binary.
 
 
-## Ledger Rows
+### Ledger Rows
 
 Every row in the ledger is composed of a variable number of fixed-width, 32-byte hash cells. If there are *n* + 1 pointers for a row numbered *r*,
 then the row contains *n* + 2 hash cells. The first holds the *input-hash*, the hash of the
 object in the row. The second cell, which is always present, holds the hash of the previous row (the so-called hash pointer).
 The next cells in that row (assuming *r* even) hold the hashes of rows *r* - 2<sup>1</sup>, *r* - 2<sup>2</sup>, .. *r* - 2<sup>*n*</sup>.
 
-### Row Hash
+#### Row Hash
 
 The *hash* of a row numbered *r* containing *n* + 1 pointers is the SHA-256 hash of a byte sequence of consisting of the row's *n* + 2 hash cells,
 ordered as above.
 
-## Ledger State
+### Ledger State
 
 The hash of the last row uniquely identifies the ledger's state. As noted above, the state-morsel is a richer fingerprint of state. It's
 still manageably small: unlike a straight hash, one can verify whether two distinct state-morsels share common lineage.
 
-## Entry Proof
+### Entry Proof
 
 The *source* of a row, whether a raw byte-sequence of an object whose SHA-256 hash matches the row's *input-hash*, or something
 more structured as implemented in this library, together with a sequence of ledger row hashes connecting the last (latest) row to
@@ -188,7 +211,23 @@ skip ledger using a single hash cell that is either the row's input hash or, if 
 The file format is documented [here](./docs/morsel_file_format.txt).
 
 
-# Changes
+## Building
+
+Project dependencies are listed in the maven `pom.xml` file. A few of these have no publicly distributed artifacts, and must be installed manually:
+
+* [junit-io](https://github.com/gnahraf/junit-io)
+* [merkle-tree](https://github.com/crums-io/merkle-tree)
+* [io-util](https://github.com/crums-io/io-util)
+* [crums-core](https://github.com/crums-io/crums-pub)
+
+To build to these, clone the above repos (in the suggested order) and invoke
+
+> mvn clean install -DskipTests=true
+
+in each of their directories. Omit the last argument above, to include unit tests.
+
+
+## Changes
 
 Following feedback after the first release (thank you!), the project's focus turned to relational databases (where many ledgers already reside).
 Here's what changed under the hood since the last release:
@@ -205,7 +244,7 @@ Here's what changed under the hood since the last release:
 - Support for individual column value (table cell) redactions in morsel files added.
 
 
-# Roadmap
+## Roadmap
 
 The following features are slated for version `0.0.4`:
 
@@ -215,7 +254,7 @@ The following features are slated for version `0.0.4`:
 - Support for customized meta-info for morsels. This info needn't be necessarily validated but can help with usability. For eg, column titles/headings.
 - ?
 
-# Thank you
+## Thank you
 
 Thanks for reading this far, and if you did, for trying out these tools. I hope this concept of ledgers and morsels has piqued your interest
 and lights bright ideas about how you might use them. Feel free to drop suggestions, thoughts, feedback, and yes, code.
