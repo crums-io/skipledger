@@ -39,7 +39,7 @@ of the data structure, it helps to first illustrate what we can do with it.
 
 Version `0.0.3` ships with 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
 update the history of an *operationally append-only* table or view in a relational database. It supports tear outs
-of the table (specific rows) in the form morsel files (`.mrsl` extension). *mrsl*, in turn, is a tool for both readiing morsel
+of the table (specific rows) in the form morsel files (`.mrsl` extension). *mrsl*, in turn, is a tool for both reading morsel
 files and manipulating (merging/redacting) them.
 
 <img src="./docs/images/sldg-mrsl_overview.svg" width="429" height="696" />

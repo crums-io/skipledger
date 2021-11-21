@@ -1,6 +1,6 @@
 
-Morsel File Format Version 0.1
-======================
+Morsel File Format Version 0.2
+==============================
 
 
 Parsing a morsel requires knowledge about how skip ledgers and Merkle proofs
@@ -12,13 +12,14 @@ be found in the source code.
 
 1. Basic Types & Conventions:
 
-BYTE :=               // needs no introduction
-UBYTE := [BYTE]       // unsigned byte
-SHORT := [BYTE] ^ 2   // big endian, signed short
-UHORT := [BYTE] ^ 2   // big endian, unsigned short
-INT := [BYTE] ^ 4     // big endian, signed int
-LONG := [BYTE] ^ 8    // big endian, signed long
-HASH := [BYTE] ^ 32   // eg SHA-256
+BYTE :=                 // needs no introduction
+UBYTE := [BYTE]         // unsigned byte
+SHORT := [BYTE] ^ 2     // big endian, signed short
+USHORT := [BYTE] ^ 2    // big endian, unsigned short
+BSHORT := [BYTE] ^ 3    // bigendian, unsigned 3-byte value (bigshort)
+INT := [BYTE] ^ 4       // big endian, signed int
+LONG := [BYTE] ^ 8      // big endian, signed long
+HASH := [BYTE] ^ 32     // eg SHA-256
 
 The '^' symbol is like exponentiaton: it binds to the object immediately
 to its left and means the object on the left is repeated as many times as specified on
@@ -37,7 +38,7 @@ The exposition below is top-down.
 
 MSRL := [HEADER] [MRSL_PACK]
 
-HEADER := "MRSL  0.1 "                    // (10 bytes) -- we're fussy about the 'MRSL' part
+HEADER := "MRSL  0.2 "                    // (10 bytes) -- we're fussy about the 'MRSL' part
 
 
 2.2 Components
@@ -53,7 +54,7 @@ An index at the head of these packs supports random access to each of them. Futu
 of this format may have more parts, without breaking backward compatibility.
 
 PACK_HDR := [PACK_CNT] [PACK_SIZES]
-PACK_CNT := [UBYTE]                       // current minimum is (4)
+PACK_CNT := [UBYTE]                       // current minimum is (5)
 PACK_SIZES := [PACK_SZ] ^ [PACK_CNT]
 PACK_SZ := [INT]
 
@@ -118,13 +119,13 @@ Note: In principle, it's possible to shave 32 bytes (the hash of the row), when 
       
 
 SOURCE_PACK := [SRC_CNT] [SRC_ROW] ^ [SRC_CNT]
-SRC_CNT := [SHORT]    // unsigned short
+SRC_CNT := [INT]     // non-negative
 
 2.6.1 Source Row
 
 SRC_ROW := [SRC_RN] [COL_CNT] [COL_VAL] ^ [COL_CNT]
 SRC_RN := [LONG]    // > 0
-COL_CNT := [SHORT]    // unsigned
+COL_CNT := [USHORT]    // unsigned
 
 
 2.6.2 Source Column Value (Table Cell)
@@ -151,8 +152,8 @@ of the value may be fixed or variable:
 | ---- | ----   | ---- |                    --------                            |
 |  1   | null   |   0  | SQL NULLs are mapped to this                           |
 |  2   | hash   |  32  | Never salted. A redacted column value takes this form. |
-|  3   | bytes  | var  | Max 64 kB                                              |
-|  4   | string | var  | Max 64 kB, UTF-8 encoded                               |
+|  3   | bytes  | var  | Max 16,777,216B                                        |
+|  4   | string | var  | Max 16,777,216B, UTF-8 encoded                         |
 |  5   | long   |   8  | Big Endian                                             |
 |  6   | double |   8  |                                                        |
 |  7   | date   |   8  | UTC time in milliseconds                               |
@@ -163,7 +164,7 @@ determined from the table above.
 For the variable-size 'bytes' and 'string' types:
 
 TYPED_COL_VAL := [COL_VAL_SZ] [BYTE] ^ [COL_VAL_SIZE]
-COL_VAL_SZ := [USHORT]
+COL_VAL_SZ := [BSHORT]
 
 
 2.7 Path Pack
@@ -181,6 +182,49 @@ DECL_RN_LIST := [LONG] ^ [DECL_RN_CNT]
 
 PATH_META := [PATH_META_SZ] [BYTE] ^ [PATH_META_SZ]
 PATH_META_SZ := [USHORT]
+
+
+
+2.8 MetaPack
+
+Excepting its 3-byte header, this is in fact JSON.
+
+META_PACK := [META_JSON_SZ] [META_JSON]
+META_JSON_SZ := [BSHORT]
+META_JSON := [BYTE] ^ [META_JSON_SZ]
+
+The actual JSON fomat is not documented here. (TODO: document *somewhere*.)
+
+
+
+3. Changes
+
+The following were changed in version 0.2:
+
+* Meta information (Meta pack) introduced.
+* The maximum byte size of source table-cell (column) values was increased to
+  16,777,215 bytes (was previously 64kB).
+* The maximum number of source rows is now a 4-byte value; it was previously bound
+  at 64k rows.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
