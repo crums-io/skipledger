@@ -19,18 +19,18 @@ import io.crums.util.Lists;
  * <h2>Serial Foramt</h2>
  * <p>
  * <pre>
- *    SRC_CNT   := SHORT
+ *    SRC_CNT   := INT
  *    
  *    // per row
- *    COL_CNT   := SHORT
+ *    COL_CNT   := USHORT
  *    // pre column
  *    COL_TYPE  := BYTE         // 
- *    COL_VALUE := <em>function_of</em>( COL_TYPE ) // TODO: document this tedius bit
+ *    COL_VALUE := <em>function_of</em>( COL_TYPE ) // see docs/morsel_file_format.txt
  *    
  *    COLUMN    := COL_TYPE COL_VALUE
- *    ROW       := RN [COLUMN ^COL_CNT]
+ *    ROW       := RN COLUMN ^ [COL_CNT]
  *    
- *    SRC_PACK  := ROW ^SRC_CNT
+ *    SRC_PACK  := SRC_CNT ROW ^ [SRC_CNT]
  * </pre>
  * </p>
  * 
@@ -42,7 +42,9 @@ public class SourcePack implements SourceBag {
   
   
   public static SourcePack load(ByteBuffer in) {
-    final int count = 0xffff & in.getShort();
+    final int count = 0xffff & in.getInt();
+    if (count < 0)
+      throw new ByteFormatException("negative source row-count: " + count);
     if (count == 0)
       return EMPTY;
     

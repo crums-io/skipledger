@@ -31,6 +31,7 @@ import io.crums.sldg.src.NullValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
 import io.crums.sldg.src.TableSalt;
+import io.crums.util.BigShort;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
@@ -248,17 +249,29 @@ public class SqlSourceQuery implements SourceLedger {
   private final PreparedStatement sizeQuery;
   private final PreparedStatement rowByNumberQuery;
   private final TableSalt shaker;
+  private int maxColumnBytes;
 
   /**
    * Creates a salted instance.
    */
   public SqlSourceQuery(PreparedStatement sizeQuery, PreparedStatement rowByNumberQuery, TableSalt shaker)
       throws SqlLedgerException {
+    this(sizeQuery, rowByNumberQuery, shaker, DEFAULT_MAX_COL_MEM_SIZE);
+  }
+
+  /**
+   * Creates a salted instance.
+   */
+  public SqlSourceQuery(
+      PreparedStatement sizeQuery, PreparedStatement rowByNumberQuery,
+      TableSalt shaker, int maxColumnBytes)
+      throws SqlLedgerException {
     
     try {
       this.sizeQuery = Objects.requireNonNull(sizeQuery, "null sizeQuery");
       this.rowByNumberQuery = Objects.requireNonNull(rowByNumberQuery, "null rowByNumberQuery");
       this.shaker = Objects.requireNonNull(shaker, "null shaker");
+      setMaxColumnBytes(maxColumnBytes);
       
       if (sizeQuery.isClosed() || rowByNumberQuery.isClosed())
         throw new IllegalArgumentException("prepared statement[s] is closed");
@@ -266,6 +279,18 @@ public class SqlSourceQuery implements SourceLedger {
     } catch (SQLException sqx) {
       throw new SqlLedgerException(sqx);
     }
+  }
+  
+  
+  public synchronized void setMaxColumnBytes(int maxColumnBytes) {
+    if (maxColumnBytes < 0)
+      throw new IllegalArgumentException("negative maxColumnBytes: " + maxColumnBytes);
+    this.maxColumnBytes = maxColumnBytes;
+  }
+  
+  
+  public int getMaxColumnBytes() {
+    return maxColumnBytes;
   }
 
   @Override
@@ -303,7 +328,7 @@ public class SqlSourceQuery implements SourceLedger {
       
       final int columnCount = meta.getColumnCount();
       if (columnCount < 2)
-        throw new SqlLedgerException("no columns in result-set (wtf?)");
+        throw new SqlLedgerException("no columns in result-set (!)");
       
       // the row number is returned in the result set
       ColumnValue[] columns = new ColumnValue[columnCount - 1];
@@ -361,7 +386,7 @@ public class SqlSourceQuery implements SourceLedger {
         
         final long len = blob.length();
         try (var stream = blob.getBinaryStream()) {
-          if (len > DEFAULT_MAX_COL_MEM_SIZE) {
+          if (len > maxColumnBytes) {
             MessageDigest digest = SldgConstants.DIGEST.newDigest();
             byte[] in = new byte[DEFAULT_MAX_COL_MEM_SIZE];
             while (true) {
@@ -371,7 +396,8 @@ public class SqlSourceQuery implements SourceLedger {
               digest.update(in, 0, amtRead);
             }
             
-            byte[] hash = digest.digest();
+            byte[] unsaltedHash = digest.digest();
+            byte[] hash = ColumnValue.saltHash(salt, unsaltedHash, digest);
             return new HashValue(ByteBuffer.wrap(hash));
           
           } else {
@@ -395,7 +421,13 @@ public class SqlSourceQuery implements SourceLedger {
       // see https://docs.oracle.com/javase/tutorial/jdbc/basics/retrieving.html#retrieve_rs
       //
       String stringVal = rs.getString(col);
-      return stringVal == null ? new NullValue(salt) : new StringValue(stringVal, salt);
+      if (stringVal == null)
+        return new NullValue(salt);
+      
+      var out = new StringValue(stringVal, salt);
+      return
+          (out.serialSize() > maxColumnBytes + BigShort.BYTES + 1) ?
+              new HashValue(out.getHash()) : out;
     }
   }
 

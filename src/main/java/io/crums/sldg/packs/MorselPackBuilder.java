@@ -16,6 +16,7 @@ import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.Sets;
 
@@ -30,6 +31,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
   protected final SourcePackBuilder sourcePackBuilder = new SourcePackBuilder();
   protected final PathPackBuilder pathPackBuilder = new PathPackBuilder();
   
+  private MetaPack metaPack = MetaPack.EMPTY;
   
   
   protected final Object lock() {
@@ -65,6 +67,16 @@ public class MorselPackBuilder implements MorselBag, Serial {
       }
       return count;
     }
+  }
+  
+  
+  public void setMetaPack(SourceInfo sourceInfo) {
+    this.metaPack = new MetaPack(sourceInfo);
+  }
+  
+  
+  public MetaPack getMetaPack() {
+    return metaPack;
   }
   
   
@@ -347,13 +359,14 @@ public class MorselPackBuilder implements MorselBag, Serial {
    */
   @Override
   public int serialSize() {
-    int headerBytes = 1 + 4*4;
+    int headerBytes = 1 + 4 * MorselPack.VER_PACK_COUNT;
     return
         headerBytes +
         rowPackBuilder.serialSize() +
         trailPackBuilder.serialSize() +
         sourcePackBuilder.serialSize() +
-        pathPackBuilder.serialSize();
+        pathPackBuilder.serialSize() +
+        metaPack.serialSize();
   }
 
 
@@ -362,15 +375,17 @@ public class MorselPackBuilder implements MorselBag, Serial {
    */
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
-    out.put((byte) 4).putInt(rowPackBuilder.serialSize())
+    out.put((byte) MorselPack.VER_PACK_COUNT).putInt(rowPackBuilder.serialSize())
     .putInt(trailPackBuilder.serialSize())
     .putInt(sourcePackBuilder.serialSize())
-    .putInt(pathPackBuilder.serialSize());
+    .putInt(pathPackBuilder.serialSize())
+    .putInt(metaPack.serialSize());
   
   rowPackBuilder.writeTo(out);
   trailPackBuilder.writeTo(out);
   sourcePackBuilder.writeTo(out);
   pathPackBuilder.writeTo(out);
+  metaPack.writeTo(out);
   return out;
   }
   

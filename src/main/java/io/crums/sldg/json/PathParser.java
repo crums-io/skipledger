@@ -18,6 +18,8 @@ import io.crums.sldg.Row;
 /**
  * Parses both lists of rows and paths. The representations are exactly the
  * same; paths involve constraints on both the order and the row numbers.
+ * 
+ * @deprecated a prototyping remnant. Will be removed.
  */
 public class PathParser implements JsonEntityParser<Path> {
   

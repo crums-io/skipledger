@@ -25,8 +25,11 @@ import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.json.ColumnInfoParserTest;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.ColumnInfo;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.hash.Digests;
@@ -118,6 +121,7 @@ public class MorselPackTest extends IoTestCase {
   
   
   
+  @SuppressWarnings("deprecation")
   @Test
   public void testWithSources_1() throws IOException {
 
@@ -205,6 +209,7 @@ public class MorselPackTest extends IoTestCase {
   }
   
   
+  @SuppressWarnings("deprecation")
   @Test
   public void testWithSources_2() throws IOException {
 
@@ -383,6 +388,113 @@ public class MorselPackTest extends IoTestCase {
   }
   
   
+  @Test
+  public void testWithSourceInfo() throws IOException {
+
+    final Object label = new Object() { };
+
+    final int finalSize = 2021;
+    
+    final String comment = "this is not a real comment";
+    
+    final TableSalt shaker = randomShaker(101);
+    
+    int[] srcRns = {
+        1574,
+        1580
+    };
+    String[] col1 = {
+        "this is a test",
+        "this is _only_ a test",
+    };
+    
+    SourceInfo srcInfo;
+    {
+      ColumnInfo[] cols = {
+          new ColumnInfo("Title", 1, "A smidgeon of description", "words"),
+          new ColumnInfo("num_val", 2),
+      };
+      srcInfo = new SourceInfo("Test Ledger", "not much to say.. ", List.of(cols));
+    }
+    
+    Number[] col2 = { 23, null };
+    
+    // prepare the ledger..
+    
+    SkipLedger ledger = newLedger();
+    Random random = new Random(finalSize);
+    
+    SourceRow[] srcs = new SourceRow[srcRns.length];
+    byte[] randHash = new byte[SldgConstants.HASH_WIDTH];
+    
+    for (int index = 0; index < srcRns.length; ++index) {
+      
+      final long rn = srcRns[index];
+      
+      while (ledger.size() + 1 < rn) {
+        random.nextBytes(randHash);
+        ledger.appendRows(ByteBuffer.wrap(randHash));
+      }
+      assertTrue( ledger.size() == rn - 1) ;
+      srcs[index] = SourceRow.newSaltedInstance(rn, shaker, col1[index], col2[index]);
+      ledger.appendRows(srcs[index].rowHash());
+    }
+    while (ledger.size() < finalSize) {
+      random.nextBytes(randHash);
+      ledger.appendRows(ByteBuffer.wrap(randHash));
+    }
+    
+    MorselPackBuilder builder = new MorselPackBuilder();
+    builder.initPath(ledger.statePath(), comment);
+    builder.setMetaPack(srcInfo);
+    for (var src : srcs) {
+      builder.addPathToTarget(src.rowNumber(), ledger);
+      builder.addSourceRow(src);
+    }
+    
+    long witRow = ((srcs[0].rowNumber() + 1) / 16) * 16;
+    builder.addPathToTarget(witRow, ledger);
+    
+    CrumTrail trail = mockCrumTrail(builder, witRow);
+    builder.addTrail(witRow, trail);
+    
+    for (var src : srcs)
+      assertInBag(src, builder);
+    
+    File mFile = getMethodOutputFilepath(label);
+    
+    MorselFile.createMorselFile(mFile, builder);
+    
+    MorselFile morselFile = new MorselFile(mFile);
+    
+    MorselPack pack = morselFile.getMorselPack();
+
+    
+    assertInBag(ledger.skipPath(srcs[0].rowNumber(), builder.hi()), pack);
+    assertStateDeclaration(ledger, pack, comment);
+    
+
+    for (var src : srcs)
+      assertInBag(src, pack);
+    
+    assertInBag(trail, witRow, pack);
+    
+    var metaPack = pack.getMetaPack();
+    assertTrue(metaPack.getSourceInfo().isPresent());
+    
+    var outSrcInfo = metaPack.getSourceInfo().get();
+    
+    assertEquals(srcInfo.getName(), outSrcInfo.getName());
+    assertEquals(srcInfo.getDescription(), outSrcInfo.getDescription());
+    var expectedCols = srcInfo.getColumnInfos();
+    var outCols = outSrcInfo.getColumnInfos();
+    assertEquals(srcInfo.getColumnInfoCount(), outSrcInfo.getColumnInfoCount());
+    assertEquals(expectedCols.size(), outSrcInfo.getColumnInfoCount());
+    for (int index = expectedCols.size(); index-- > 0; )
+      ColumnInfoParserTest.assertEqual(expectedCols.get(index), outCols.get(index));
+  }
+  
+  
   
   
 
@@ -467,6 +579,9 @@ public class MorselPackTest extends IoTestCase {
     CrumTrail actual = bag.crumTrail(rowNumber);
     assertEquals(expected, actual);
   }
+  
+  
+  
 
   
 //  public static Ledger newRandomLedger(int initSize) {

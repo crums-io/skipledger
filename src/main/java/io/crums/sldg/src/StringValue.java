@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Objects;
 
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.BigShort;
 import io.crums.util.Strings;
 
 /**
@@ -21,7 +21,7 @@ import io.crums.util.Strings;
 public final class StringValue extends ColumnValue {
   
   static StringValue loadString(ByteBuffer in, ByteBuffer salt) {
-    int len = 0xffff & in.getShort();
+    int len = BigShort.getBigShort(in);
     byte[] bytes = new byte[len];
     in.get(bytes);
     return new StringValue(new String(bytes, Strings.UTF_8), bytes, salt);
@@ -31,12 +31,6 @@ public final class StringValue extends ColumnValue {
   private final byte[] bytes;
   
   
-  /**
-   * Without salt.
-   */
-  public StringValue(String string) {
-    this(string, BufferUtils.NULL_BUFFER);
-  }
   
   
   /**
@@ -44,9 +38,9 @@ public final class StringValue extends ColumnValue {
    */
   public StringValue(String string, ByteBuffer salt) {
     this(string, Objects.requireNonNull(string, "null string argument").getBytes(Strings.UTF_8), salt);
-    if (bytes.length > 0xffff)
+    if (bytes.length > MAX_BYTE_SIZE)
       throw new IllegalArgumentException(
-          "string byte-length greater than capacity (64k): " + bytes.length);
+          "string byte-length greater than capacity (" + MAX_BYTE_SIZE + "): " + bytes.length);
   }
   
   
@@ -58,6 +52,10 @@ public final class StringValue extends ColumnValue {
   
   
   
+  @Override
+  public String getValue() {
+    return string;
+  }
   
   
   /**
@@ -80,13 +78,15 @@ public final class StringValue extends ColumnValue {
 
   @Override
   public int serialSize() {
-    return headSize() + 2 + bytes.length;
+    return headSize() + BigShort.BYTES + bytes.length;
   }
 
 
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
-    return writeTypeAndSalt(out).putShort((short) bytes.length).put(bytes);
+    writeTypeAndSalt(out);
+    BigShort.putBigShort(out, bytes.length);
+    return out.put(bytes);
   }
 
 

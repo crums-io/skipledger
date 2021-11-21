@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 
 /**
  * All floating point values are represented as 8-byte {@code double}s.
- * Eschew this type if possible: mixed-precision arithmetic can be
+ * Avoid this type if possible: mixed-precision arithmetic can be
  * problematic for proof-statements.
  */
 public final class DoubleValue extends ColumnValue {
@@ -33,7 +33,13 @@ public final class DoubleValue extends ColumnValue {
   }
   
   
-  public double getValue() {
+  @Override
+  public Double getValue() {
+    return value;
+  }
+  
+  
+  public double getNumber() {
     return value;
   }
 

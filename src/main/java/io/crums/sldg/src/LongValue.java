@@ -43,9 +43,13 @@ public class LongValue extends ColumnValue {
   
   
   
+  @Override
+  public final Long getValue() {
+    return number;
+  }
   
   
-  public long getNumber() {
+  public final long getNumber() {
     return number;
   }
   

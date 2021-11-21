@@ -62,7 +62,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
   
   @Override
   public int serialSize() {
-    int size = 2;
+    int size = Integer.BYTES;
     for (var src : sources.values())
       size += src.serialSize();
     return size;
@@ -71,7 +71,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
     synchronized (sources) {
-      out.putShort((short) sources.size());
+      out.putInt(sources.size());
       for (var src : sources.values())
         src.writeTo(out);
       return out;

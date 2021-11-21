@@ -18,6 +18,7 @@ import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.fs.Filenaming;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.SourceRow;
 import io.crums.util.Strings;
 
 /**
@@ -25,7 +26,7 @@ import io.crums.util.Strings;
  * <p>
  * Morsel files are assumed to fit in memory. In most cases, the majority of the space
  * is taken not by the hash evidence of the ledger's rows, but by the <em>contents</em> that
- * generated the input hashes for select rows (our {@linkplain Entry} abstraction). 
+ * generated the input hashes for select rows (our {@linkplain SourceRow} abstraction). 
  * </p>
  * 
  * <h1>Limits</h2>
@@ -43,7 +44,7 @@ public class MorselFile {
    * File header magic + version string with room for a leading or trailing
    * digit.
    */
-  public final static String HEADER_STRING = "MRSL  0.1 ";
+  public final static String HEADER_STRING = "MRSL  0.2 ";
   
   private final static String HEADER_SANS_VER =
       HEADER_STRING.substring(0, 5);
@@ -64,8 +65,8 @@ public class MorselFile {
   }
   
   /**
-   * Returns a read-only view of the expected file header. It reads <em>MRSL  0.1</em> in ASCII.
-   * (That's 10 bytes includng the trailing space.
+   * Returns a read-only view of the expected file header. It reads <em>MRSL  0.2</em> in ASCII.
+   * (That's 10 bytes includng a trailing space.)
    */
   public static ByteBuffer header() {
     return HEADER.asReadOnlyBuffer();

@@ -15,6 +15,7 @@ import java.util.Objects;
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.model.Constants;
+import io.crums.util.BigShort;
 import io.crums.util.hash.Digest;
 
 /**
@@ -29,10 +30,17 @@ import io.crums.util.hash.Digest;
 public abstract class ColumnValue implements Serial {
   
   
+  /**
+   * The maximum byte size of a column's value.
+   */
+  public final static int MAX_BYTE_SIZE = BigShort.MAX_VALUE;
+  
   
   /**
    * Returns an unsalted instance. Generally not a good idea. This may be marked
    * deprecated in a future version. For now included for closure.
+   * 
+   * @deprecated
    */
   public static ColumnValue toInstance(Object obj) {
     return toInstance(obj, BufferUtils.NULL_BUFFER);
@@ -219,13 +227,27 @@ public abstract class ColumnValue implements Serial {
   public ByteBuffer getHash(MessageDigest digest) {
     Objects.requireNonNull(digest, "null digest");
     ByteBuffer hash = unsaltedHash(digest);
-    if (isSalted()) {
-      digest.reset();
-      digest.update(getSalt());
-      digest.update(hash);
-      hash = Digest.bufferDigest(digest);
-    }
+    if (isSalted())
+      hash = ByteBuffer.wrap(saltHash(getSalt(), hash, digest));
     return hash;
+  }
+  
+  
+  
+  public static byte[] saltHash(ByteBuffer salt, byte[] unsaltedHash, MessageDigest digest) {
+    digest.reset();
+    digest.update(salt);
+    digest.update(unsaltedHash);
+    return digest.digest();
+  }
+  
+  
+  
+  public static byte[] saltHash(ByteBuffer salt, ByteBuffer unsaltedHash, MessageDigest digest) {
+    digest.reset();
+    digest.update(salt);
+    digest.update(unsaltedHash);
+    return digest.digest();
   }
   
   
@@ -255,6 +277,16 @@ public abstract class ColumnValue implements Serial {
     appendValue(s);
     return s.toString();
   }
+  
+  
+  /**
+   * Returns the value.
+   * 
+   * @return  null <b>iff</b> the instance {@linkplain #getType() type} is
+   *          {@linkplain ColumnType#NULL}.
+   * 
+   */
+  public abstract Object getValue();
   
   
   /**

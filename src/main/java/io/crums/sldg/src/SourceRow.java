@@ -108,7 +108,10 @@ public class SourceRow implements Serial {
   /**
    * Creates an unsalted instance. This constructor will likely be deprecated in a future
    * version. It's included here for now for completeness.
+   * 
+   * @deprecated
    */
+  @SuppressWarnings("deprecation")
   public SourceRow(long rowNumber, Object... colValues) {
     this(
         rowNumber,
@@ -350,7 +353,7 @@ public class SourceRow implements Serial {
       break;
     case DOUBLE:
       {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putDouble(0, ((DoubleValue) col).getValue());
+        ByteBuffer buf = ByteBuffer.wrap(new byte[8]).putDouble(0, ((DoubleValue) col).getNumber());
         ChannelUtils.writeRemaining(ch, buf);
       }
       break;
@@ -433,7 +436,7 @@ public class SourceRow implements Serial {
       writer.write(((StringValue) col).getString());
       break;
     case DOUBLE:
-      writer.write(String.valueOf(((DoubleValue) col).getValue()));
+      writer.write(String.valueOf(((DoubleValue) col).getNumber()));
       break;
     case DATE:
       writer.write(new Date(((DateValue) col).getUtc()).toString());
@@ -507,7 +510,7 @@ public class SourceRow implements Serial {
         string.append('[').append(new Date(((DateValue) columnVal).getUtc())).append(']');
         break;
       case DOUBLE:
-        string.append(((DoubleValue) columnVal).getValue()).append(']');
+        string.append(((DoubleValue) columnVal).getNumber()).append(']');
       case NULL:
       }
     }

@@ -42,6 +42,12 @@ public final class NullValue extends ColumnValue {
   public NullValue(ByteBuffer salt) {
     super(ColumnType.NULL, salt);
   }
+  
+  
+  @Override
+  public Object getValue() {
+    return null;
+  }
 
   @Override
   public int serialSize() {

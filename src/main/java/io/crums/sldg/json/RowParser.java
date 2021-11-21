@@ -20,7 +20,10 @@ import io.crums.sldg.SldgConstants;
 import io.crums.util.IntegralStrings;
 
 /**
+ * Row parser.
  * 
+ * @deprecated a prototyping remnant. Terribly inefficient in space if a bunch of rows
+ * (as in a path), are packaged together. Will be removed. 
  */
 public class RowParser {
   

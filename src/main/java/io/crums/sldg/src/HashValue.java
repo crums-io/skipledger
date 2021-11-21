@@ -18,7 +18,9 @@ import io.crums.sldg.SldgConstants;
  * <p>
  * There are 2 use cases for this class:
  * <ol>
- * <li>When a column value takes too many bytes to be packaged in a morsel.</li>
+ * <li><strike>When a column value takes too many bytes to be packaged in a morsel.</strike>
+ * (No, a better strategy is define a {@code BytesValue} column that is understood to be
+ * the hash of the blob. That way, its hash can remain salted.)</li>
  * <li>When a column value is redacted from its row.</li>
  * </ol>
  * </p>
@@ -30,6 +32,14 @@ public final class HashValue extends BytesValue {
   static HashValue loadHash(ByteBuffer in) {
     ByteBuffer bytes = BufferUtils.slice(in, SldgConstants.HASH_WIDTH);
     return new HashValue(bytes);
+  }
+
+  
+  /**
+   * @param bytes 32-bytes
+   */
+  public HashValue(byte[] bytes) {
+    this(ByteBuffer.wrap(bytes));
   }
 
   

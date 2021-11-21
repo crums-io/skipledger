@@ -467,7 +467,7 @@ public class Mrsl extends MainTemplate {
       writer.append(((StringValue) col).getString());
       break;
     case DOUBLE:
-      writer.append(String.valueOf(((DoubleValue) col).getValue()));
+      writer.append(String.valueOf(((DoubleValue) col).getNumber()));
       break;
     case DATE:
       writer.append(new Date(((DateValue) col).getUtc()).toString());

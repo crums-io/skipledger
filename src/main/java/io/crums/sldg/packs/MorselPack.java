@@ -35,7 +35,7 @@ import io.crums.util.Sets;
  * </p>
  * <p>
  * <pre>
- *    PACK_COUNT  := BYTE (current version is 4)
+ *    PACK_COUNT  := BYTE (current version is 5)
  *    PACK_SIZES  := INT ^PACK_COUNT
  *    MORSEL_PACK := PACK_COUNT PACK_SIZES ROW_PACK TRAIL_PACK SRC_PACK PATH_PACK
  * </pre>
@@ -44,18 +44,19 @@ import io.crums.util.Sets;
  */
 public final class MorselPack implements MorselBag {
   
-  
+  public final static int MIN_PACK_COUNT = 4;
+  public final static int VER_PACK_COUNT = 5;
   
   
   public static MorselPack load(ByteBuffer in) {
     final int packCount = 0xff & in.get();
     
-    if (packCount < 4)
+    if (packCount < MIN_PACK_COUNT)
       throw new ByteFormatException("PACK_COUNT " + packCount);
     
-    ArrayList<Integer> packSizes = new ArrayList<>(4);
+    ArrayList<Integer> packSizes = new ArrayList<>(packCount);
     int totalSize = 0;
-    for (int index = 0; index < 4; ++index) {
+    for (int index = 0; index < packCount; ++index) {
       int size = in.getInt();
       if (size < 0)
         throw new ByteFormatException("negative size " + size + " at index " + index);
@@ -63,10 +64,8 @@ public final class MorselPack implements MorselBag {
       totalSize += size;
     }
     
-    // ignore the parts we don't understand
-    // (maybe lame, but a way to future-proof the format)
-    for (int index = 4; index < packCount; ++index)
-      in.getInt();
+//    for (int index = VER_PACK_COUNT; index < packCount; ++index)
+//      in.getInt();
     
     ByteBuffer block = BufferUtils.slice(in, totalSize);
     if (!block.isReadOnly())
@@ -80,7 +79,12 @@ public final class MorselPack implements MorselBag {
     SourcePack sourcePack = SourcePack.load(parts.getPart(2));
     PathPack pathPack = PathPack.load(parts.getPart(3));
     
-    return new MorselPack(new CachingRowPack(rowPack), trailPack, sourcePack, pathPack);
+    MetaPack metaPack =
+        packCount >= VER_PACK_COUNT ?
+            MetaPack.load(parts.getPart(4)) : MetaPack.EMPTY;
+    
+    return new MorselPack(
+        new CachingRowPack(rowPack), trailPack, sourcePack, pathPack, metaPack);
   }
   
   
@@ -89,15 +93,18 @@ public final class MorselPack implements MorselBag {
   private final TrailPack trailPack;
   private final SourcePack sourcePack;
   private final PathPack pathPack;
+  private final MetaPack metaPack;
   
   
   private MorselPack(
-      RowPack rowPack, TrailPack trailPack, SourcePack sourcePack, PathPack pathPack) {
+      RowPack rowPack, TrailPack trailPack, SourcePack sourcePack, PathPack pathPack,
+      MetaPack metaPack) {
     
     this.rowPack = rowPack;
     this.trailPack = trailPack;
     this.sourcePack = sourcePack;
     this.pathPack = pathPack;
+    this.metaPack = metaPack;
     
     // Validate:
     // the rowPack is the backing "given". Other packs are validated against the row pack
@@ -119,7 +126,7 @@ public final class MorselPack implements MorselBag {
         throw new HashConflictException("hash referenced in crumtrail does not match row " + rn);
     }
     
-    // validate sourcePack (yay! .. didn't have a proper model to do this in prev version)
+    // validate sourcePack
     //
     for (SourceRow src : sourcePack.sources()) {
       Long srn = src.rowNumber();
@@ -161,6 +168,9 @@ public final class MorselPack implements MorselBag {
   }
 
   
+  public MetaPack getMetaPack() {
+    return metaPack;
+  }
   
   
   //  I N T E R F A C E    M E T H O D S

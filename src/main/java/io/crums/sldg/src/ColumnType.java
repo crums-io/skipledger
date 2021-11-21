@@ -3,6 +3,7 @@
  */
 package io.crums.sldg.src;
 
+import java.util.Objects;
 
 /**
  * Data type for a column value in a row. The classification is supposed to map a broad
@@ -25,7 +26,8 @@ public enum ColumnType {
   DOUBLE(6, "D"),
   
   /**
-   * Signed long. All numeric values are to be mapped to {@code long}s.
+   * Signed long. All fixed precision numeric values are to be mapped to {@code long}s;
+   * booleans are mapped to 0 and 1, for {@code false} and {@code true}, resp.
    */
   LONG(5, "L"),
   /**
@@ -46,7 +48,7 @@ public enum ColumnType {
   /**
    * A null value is specially marked.
    */
-  NULL(1, "NULL");
+  NULL(1, "NUL");
   
   
   public static ColumnType forCode(int code) {
@@ -60,6 +62,22 @@ public enum ColumnType {
     case 7:   return DATE;
     default:
       throw new IllegalArgumentException("unknown code " + code);
+    }
+  }
+  
+  
+  public static ColumnType forSymbol(String symbol) {
+    Objects.requireNonNull(symbol, "null symbol arg");
+    switch (symbol) {
+    case "NUL":   return NULL;
+    case "H":     return HASH;
+    case "B":     return BYTES;
+    case "S":     return STRING;
+    case "L":     return LONG;
+    case "D":     return DOUBLE;
+    case "T":     return DATE;
+    default:
+      throw new IllegalArgumentException("unknown symbol: '" + symbol + "'");
     }
   }
   

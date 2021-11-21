@@ -9,15 +9,16 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 
 import io.crums.io.buffer.BufferUtils;
+import io.crums.util.BigShort;
 import io.crums.util.IntegralStrings;
 
 /**
- * A blob of bytes no greater that 64kB.
+ * A blob of bytes no greater 16,777,215 bytes.
  */
 public class BytesValue extends ColumnValue {
   
   static BytesValue loadBytes(ByteBuffer in, ByteBuffer salt) {
-    int len = 0xffff & in.getShort();
+    int len = BigShort.getBigShort(in);
     ByteBuffer bytes = BufferUtils.slice(in, len);
     return new BytesValue(bytes, salt);
   }
@@ -32,13 +33,23 @@ public class BytesValue extends ColumnValue {
     this(bytes, ColumnType.BYTES, salt);
   }
   
+  public BytesValue(byte[] bytes, ByteBuffer salt) {
+    this(ByteBuffer.wrap(bytes), ColumnType.BYTES, salt);
+  }
+  
   
   BytesValue(ByteBuffer bytes, ColumnType type, ByteBuffer salt) {
     super(type, salt);
     this.bytes = BufferUtils.readOnlySlice(bytes);
-    if (bytes.remaining() > 0xffff)
+    if (bytes.remaining() > MAX_BYTE_SIZE)
       throw new IllegalArgumentException(
-          "string byte-length greater than capacity (64k): " + bytes);
+          "byte-length greater than capacity (" + MAX_BYTE_SIZE + "): " + bytes);
+  }
+  
+  
+  @Override
+  public final ByteBuffer getValue() {
+    return getBytes();
   }
   
   
@@ -64,12 +75,14 @@ public class BytesValue extends ColumnValue {
 
   @Override
   public int serialSize() {
-    return headSize() + 2 + size();
+    return headSize() + BigShort.BYTES + size();
   }
 
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
-    return writeTypeAndSalt(out).putShort((short) size()).put(getBytes());
+    writeTypeAndSalt(out);
+    BigShort.putBigShort(out, size());
+    return out.put(getBytes());
   }
 
   @Override
