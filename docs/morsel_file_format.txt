@@ -43,9 +43,9 @@ HEADER := "MRSL  0.2 "                    // (10 bytes) -- we're fussy about the
 
 2.2 Components
 
-Version 0.1 is organized in 4 parts called "packs".
+Version 0.2 is organized in 5 parts called "packs".
 
-MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK]
+MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK] [META_PACK]
 
 
 2.3 Packs and Sizes
