@@ -4,6 +4,8 @@
 package io.crums.sldg.json;
 
 
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.UncheckedIOException;
@@ -11,10 +13,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import io.crums.util.json.simple.JSONArray;
+import io.crums.util.json.simple.JSONObject;
+import io.crums.util.json.simple.parser.JSONParser;
+import io.crums.util.json.simple.parser.ParseException;
 
 /**
  * JSON read-interface for an entity.
@@ -59,8 +61,10 @@ public interface JsonEntityReader<T> {
    * 
    * @throws JsonParsingException if the given object is malformed, or if the given
    * JSON is not a single object and is in fact an array of objects
+   * 
+   * @throws UncheckedIOException {@code IOException}s are unchecked
    */
-  default T toEntity(Reader reader) throws JsonParsingException {
+  default T toEntity(Reader reader) throws JsonParsingException, UncheckedIOException {
     try {
       return toEntity((JSONObject) new JSONParser().parse(reader));
     } catch (ParseException px) {
@@ -69,6 +73,15 @@ public interface JsonEntityReader<T> {
       throw new JsonParsingException("appears to be a JSON array", ccx);
     } catch (IOException iox) {
       throw new UncheckedIOException(iox);
+    }
+  }
+  
+  
+  default T toEntity(File file) throws JsonParsingException, UncheckedIOException {
+    try (var reader = new FileReader(file)) {
+      return toEntity(reader);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("on toEntity(file=" + file + "): " + iox , iox);
     }
   }
   

@@ -10,12 +10,10 @@ import static io.crums.util.Strings.*;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Reader;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -23,7 +21,6 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 
-import org.json.simple.JSONObject;
 
 import io.crums.io.Opening;
 import io.crums.sldg.Path;
@@ -33,13 +30,11 @@ import io.crums.sldg.SldgException;
 import io.crums.sldg.fs.Filenaming;
 import io.crums.sldg.fs.Format;
 import io.crums.sldg.fs.HashLedgerDir;
-import io.crums.sldg.json.PathParser;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessReport;
 import io.crums.sldg.util.Finder;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
-import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
@@ -49,6 +44,8 @@ import io.crums.util.main.TablePrint;
 
 /**
  * Manages a {@linkplain HashLedgerDir} from the command line.
+ * 
+ * @deprecated Or will need a re-write.
  */
 public class Fsldg extends MainTemplate {
 
@@ -363,13 +360,13 @@ public class Fsldg extends MainTemplate {
   
   private void writePath(File out, Path path) {
     
-    String json = PathParser.INSTANCE.toJsonObject(path).toJSONString();
-    
-    try (FileWriter writer = new FileWriter(out, Strings.UTF_8)) {
-      writer.append(json);
-    } catch (IOException iox) {
-      throw new UncheckedIOException("on writing " + path, iox);
-    }
+//    String json = PathParser.INSTANCE.toJsonObject(path).toJSONString();
+//    
+//    try (FileWriter writer = new FileWriter(out, Strings.UTF_8)) {
+//      writer.append(json);
+//    } catch (IOException iox) {
+//      throw new UncheckedIOException("on writing " + path, iox);
+//    }
     
   }
   
@@ -479,18 +476,18 @@ public class Fsldg extends MainTemplate {
 
 
   private void printPath(Path path) {
-    if (path == null)
-      System.out.println("{}");
-    else
-      System.out.println(injectVersion(PathParser.INSTANCE.toJsonObject(path)));
+//    if (path == null)
+//      System.out.println("{}");
+//    else
+//      System.out.println(injectVersion(PathParser.INSTANCE.toJsonObject(path)));
   }
   
   
-  @SuppressWarnings("unchecked")
-  private JSONObject injectVersion(JSONObject obj) {
-    obj.put(SldgConstants.VERSION_TAG, SldgConstants.VERSION);
-    return obj;
-  }
+//  @SuppressWarnings("unchecked")
+//  private JSONObject injectVersion(JSONObject obj) {
+//    obj.put(SldgConstants.VERSION_TAG, SldgConstants.VERSION);
+//    return obj;
+//  }
   
   
   

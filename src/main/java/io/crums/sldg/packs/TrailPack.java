@@ -14,6 +14,8 @@ import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.bags.TrailBag;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.util.Lists;
 
 /**
  * 
@@ -132,7 +134,7 @@ public class TrailPack implements TrailBag {
   
 
   @Override
-  public List<Long> trailedRows() {
+  public List<Long> trailedRowNumbers() {
     return rows;
   }
 
@@ -141,7 +143,33 @@ public class TrailPack implements TrailBag {
     int index = Collections.binarySearch(rows, rowNumber);
     if (index < 0)
       throw new IllegalArgumentException("rowNumber " + rowNumber + " is not a trailed row");
+    return crumTrailByIndex(index);
+  }
+  
+  
+  private CrumTrail crumTrailByIndex(int index) {
     return CrumTrail.load(trailParts.getPart(index));
   }
+
+
+  @Override
+  public List<TrailedRow> getTrailedRows() {
+    if (rows.isEmpty())
+      return Collections.emptyList();
+    
+    return new Lists.RandomAccessList<TrailedRow>() {
+      @Override
+      public TrailedRow get(int index) {
+        return new TrailedRow(rows.get(index), crumTrailByIndex(index));
+      }
+      @Override
+      public int size() {
+        return rows.size();
+      }
+    };
+  }
+  
+  
+  
 
 }

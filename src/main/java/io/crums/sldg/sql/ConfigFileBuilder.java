@@ -68,10 +68,7 @@ public class ConfigFileBuilder {
       HASH_SCHEMA_CHAIN + ":\n " +
       " SQL schema (CREATE TABLE statement) for the chain table (defaulted)\n\n " +
       HASH_SCHEMA_TRAIL + ":\n " +
-      " SQL schema (CREATE TABLE statement) for the trail table (defaulted)\n\n " +
-      
-      "Note, driver classpaths above may either be set absolutely, or relative to\n " +
-      "the location of this file.\n\n";
+      " SQL schema (CREATE TABLE statement) for the trail table (defaulted)\n\n";
   
   private final Properties aux = new Properties();
   
@@ -104,6 +101,8 @@ public class ConfigFileBuilder {
   private String srcSizeQuery;
   private String srcRowQuery;
   
+  private String metaPath;
+  
   
 
   /**
@@ -118,6 +117,18 @@ public class ConfigFileBuilder {
   
   
   
+  public String getMetaPath() {
+    return metaPath;
+  }
+
+
+
+  public void setMetaPath(String metaPath) {
+    this.metaPath = metaPath;
+  }
+
+
+
   public void setSourceUrl(String srcUrl) {
     this.srcUrl = srcUrl;
   }
@@ -181,6 +192,7 @@ public class ConfigFileBuilder {
     set(props, SOURCE_SALT_SEED, srcSalt);
     set(props, SOURCE_QUERY_SIZE, srcSizeQuery);
     set(props, SOURCE_QUERY_ROW, srcRowQuery);
+    set(props, META_PATH, metaPath);
     if (includeBase)
       props.put(BASE_DIR, baseDir.getAbsolutePath());
     return props;
@@ -196,11 +208,16 @@ public class ConfigFileBuilder {
         FileUtils.ensureDir(parentDir);
     }
     try (var out = new FileOutputStream(configFile)) {
-      props.store(out, PREAMBLE);
+      props.store(out, preamble());
     } catch (IOException iox) {
       throw new UncheckedIOException(
           "while attempting to write to <" + configFile + ">: " + iox, iox);
     }
+  }
+  
+  
+  protected String preamble() {
+    return PREAMBLE;
   }
   
   

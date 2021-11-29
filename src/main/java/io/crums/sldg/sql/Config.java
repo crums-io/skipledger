@@ -12,10 +12,14 @@ import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.PreparedStatement;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.logging.Logger;
 
 import io.crums.io.FileUtils;
 import io.crums.sldg.SldgConstants;
+import io.crums.sldg.json.SourceInfoParser;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
@@ -107,9 +111,7 @@ public class Config {
   
   
   
-  /**
-   * The
-   */
+  
   public final static String HASH_SCHEMA_SKIP = ROOT + "hash.schema.skip";
 
   public final static String HASH_SCHEMA_CHAIN = ROOT + "hash.schema.chain";
@@ -121,6 +123,10 @@ public class Config {
   public final static String HASH_INFO_PREFIX = ROOT + "hash.info.";
   
   
+  /**
+   * Path to JSON meta file.
+   */
+  public final static String META_PATH = ROOT + "meta.path";
   
   /**
    * List of ordered property names. Controls the order they're presented in the properties
@@ -131,6 +137,7 @@ public class Config {
   public final static List<String> PROP_NAMES = Lists.asReadOnlyList(
     new String[] {
         BASE_DIR,
+        META_PATH,
         
         SOURCE_JDBC_URL,
         SOURCE_JDBC_DRIVER,
@@ -149,7 +156,12 @@ public class Config {
     });
   
   
-  private static Properties loadProperties(File propertiesFile) {
+  
+  /**
+   * Loads the given properties file and injects the {@linkplain #BASE_DIR} property
+   * using the file's location (used to resolve relative paths).
+   */
+  public static Properties loadProperties(File propertiesFile) {
     Properties props = new Properties();
     try (var in = new FileInputStream(propertiesFile)) {
       props.load(in);
@@ -164,7 +176,7 @@ public class Config {
   }
   
   
-  private final File baseDir;
+  protected final File baseDir;
   
   private final String srcUrl;
   private final String srcDriverClass;
@@ -203,7 +215,7 @@ public class Config {
   
   private final Properties aux;
   
-  
+  private final String metaPath;
   
   
   
@@ -245,6 +257,29 @@ public class Config {
     enforceRequired(SOURCE_QUERY_ROW, srcRowQuery);
     
     this.aux = makeAux(props);
+    
+    this.metaPath = props.getProperty(META_PATH);
+  }
+  
+  
+  
+  public Optional<SourceInfo> getSourceInfo() {
+    if (metaPath == null)
+      return Optional.empty();
+    
+    File file = FileUtils.getRelativeUnlessAbsolute(metaPath, baseDir);
+    if (!file.isFile())
+      Optional.empty();
+    
+    SourceInfo srcInfo;
+    try {
+      srcInfo = SourceInfoParser.INSTANCE.toEntity(file);
+    
+    } catch (Exception x) {
+      Logger.getGlobal().warning("Failed to parse " + file + " :: " + x.getMessage());
+      srcInfo = null;
+    }
+    return Optional.ofNullable(srcInfo);
   }
   
   

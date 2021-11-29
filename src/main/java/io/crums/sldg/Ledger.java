@@ -19,6 +19,7 @@ import java.util.logging.Logger;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.packs.LedgerMorselBuilder;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.time.WitnessReport;
 import io.crums.util.IntegralStrings;
@@ -919,33 +920,36 @@ public class Ledger implements AutoCloseable {
   
   
   public File writeMorselFile(
-      File target, List<Long> rowNumbers, String note) throws IOException {
+      File target, List<Long> rowNumbers, String note, SourceInfo srcInfo) throws IOException {
     
-    return writeMorselFile(target, rowNumbers, note, Collections.emptyList());
+    return writeMorselFile(target, rowNumbers, note, Collections.emptyList(), srcInfo);
   }
   
+  
+  
+  
   public File writeMorselFile(
-      File target, List<Long> rowNumbers, String note, List<Integer> redactCols)
+      File target, List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo)
           throws IOException {
     
-    var builder = loadBuilder(rowNumbers, note, redactCols);
+    var builder = loadBuilder(rowNumbers, note, redactCols, srcInfo);
     return MorselFile.createMorselFile(target, builder);
   }
   
   
   public int writeMorselFile(
-      WritableByteChannel ch, List<Long> rowNumbers, String note, List<Integer> redactCols)
+      WritableByteChannel ch, List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo)
           throws IOException {
     
     Objects.requireNonNull(ch, "null channel");
-    var builder = loadBuilder(rowNumbers, note, redactCols);
+    var builder = loadBuilder(rowNumbers, note, redactCols, srcInfo);
     return MorselFile.writeMorselFile(ch, builder);
   }
   
   
   
   private MorselPackBuilder loadBuilder(
-      List<Long> rowNumbers, String note, List<Integer> redactCols) {
+      List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo) {
     Objects.requireNonNull(rowNumbers, "null rowNumbers");
     final long maxRow = hashLedgerSize();
     LedgerMorselBuilder builder = new LedgerMorselBuilder(hashLedger, note);
@@ -956,6 +960,7 @@ public class Ledger implements AutoCloseable {
       SourceRow srcRow = srcLedger.getSourceRow(rn).redactColumns(redactCols);
       builder.addSourceRow(srcRow);
     }
+    builder.setMetaPack(srcInfo);
     return builder;
   }
   

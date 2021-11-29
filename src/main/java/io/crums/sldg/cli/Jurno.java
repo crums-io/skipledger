@@ -367,7 +367,12 @@ public class Jurno extends MainTemplate {
           "Journaled file " + journal.getTextFile() + " is out-of-sync with its ledger." + System.lineSeparator() +
           "Run '" + STATUS + "' for details.");
     
-    File file = journal.writeMorselFile(makeMorsel.morselFile, makeMorsel.rowNums, null);
+    File file = journal.writeMorselFile(
+        makeMorsel.morselFile,
+        makeMorsel.rowNums,
+        null,
+        null);  // Here's where the name and description of journal can go
+                // TODO: configure source-info
     int entries = makeMorsel.rowNums.size();
     if (entries == 0)
       System.out.println("state path written to morsel: " + file);

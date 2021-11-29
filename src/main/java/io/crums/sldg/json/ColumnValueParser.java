@@ -10,9 +10,8 @@ import static io.crums.util.IntegralStrings.toHex;
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.Objects;
 
-import org.json.simple.JSONObject;
+import io.crums.util.json.simple.JSONObject;
 
 import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.src.BytesValue;
@@ -70,16 +69,20 @@ public class ColumnValueParser implements JsonEntityParser<ColumnValue> {
   
   
 
+  
+
+  public JSONObject toJsonObject(ColumnValue entity, DateFormat dateFormatter) {
+    return injectEntity(entity, new JSONObject(), dateFormatter);
+  }
+  
+  
   @Override
-  public JSONObject toJsonObject(ColumnValue entity) {
-    return toJsonObject(entity, dateFormatter);
+  public JSONObject injectEntity(ColumnValue columnValue, JSONObject jObj) {
+    return injectEntity(columnValue, jObj, dateFormatter);
   }
 
   @SuppressWarnings("unchecked")
-  public JSONObject toJsonObject(ColumnValue entity, DateFormat dateFormatter) {
-
-    var jObj = new JSONObject();
-    
+  public JSONObject injectEntity(ColumnValue entity, JSONObject jObj, DateFormat dateFormatter) {
     var type = entity.getType();
     jObj.put(TYPE, type.symbol());
     

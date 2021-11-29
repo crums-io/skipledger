@@ -8,8 +8,8 @@ import static io.crums.sldg.json.JsonUtils.*;
 
 import java.util.List;
 
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
+import io.crums.util.json.simple.JSONArray;
+import io.crums.util.json.simple.JSONObject;
 
 import io.crums.sldg.src.ColumnInfo;
 
@@ -37,9 +37,7 @@ public class ColumnInfoParser implements JsonEntityParser<ColumnInfo> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public JSONObject toJsonObject(ColumnInfo column) {
-    
-    JSONObject jObj = new JSONObject();
+  public JSONObject injectEntity(ColumnInfo column, JSONObject jObj) {
     jObj.put(NAME, column.getName());
     jObj.put(CN, column.getColumnNumber());
     addIfPresent(jObj, DESC, column.getDescription());

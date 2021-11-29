@@ -8,7 +8,7 @@ import static io.crums.sldg.json.JsonUtils.*;
 
 import java.util.Objects;
 
-import org.json.simple.JSONObject;
+import io.crums.util.json.simple.JSONObject;
 
 import io.crums.sldg.src.SourceInfo;
 
@@ -20,6 +20,7 @@ public class SourceInfoParser implements JsonEntityParser<SourceInfo> {
   public final static String NAME = "name";
   public final static String DESC = "desc";
   public final static String COLS = "columns";
+  public final static String DATE_FORMAT = "date_format";
   
 
   /**
@@ -43,14 +44,14 @@ public class SourceInfoParser implements JsonEntityParser<SourceInfo> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public JSONObject toJsonObject(SourceInfo sourceInfo) {
-    var jObj = new JSONObject();
+  public JSONObject injectEntity(SourceInfo sourceInfo, JSONObject jObj) {
     jObj.put(NAME, sourceInfo.getName());
     addIfPresent(jObj, DESC, sourceInfo.getDescription());
     if (sourceInfo.hasFixedColumns())
       jObj.put(
           COLS,
           ColumnInfoParser.INSTANCE.toJsonArray(sourceInfo.getColumnInfos()));
+    addIfPresent(jObj, DATE_FORMAT, sourceInfo.getDateFormatPattern());
     return jObj;
   }
 
@@ -60,8 +61,9 @@ public class SourceInfoParser implements JsonEntityParser<SourceInfo> {
     String desc = getString(jObj, DESC, false);
     var jArray = getJsonArray(jObj, COLS, false);
     var columns = columnParser.toColumnInfos(jArray);
+    String dateFormat = getString(jObj, DATE_FORMAT, false);
     try {
-      return new SourceInfo(name, desc, columns);
+      return new SourceInfo(name, desc, columns, dateFormat);
     } catch (IllegalArgumentException iax) {
       throw new JsonParsingException(iax.getMessage());
     }

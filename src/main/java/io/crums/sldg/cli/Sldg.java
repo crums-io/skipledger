@@ -21,12 +21,15 @@ import java.util.function.Consumer;
 import io.crums.client.ClientException;
 import io.crums.sldg.Ledger.State;
 import io.crums.sldg.SourceLedger;
+import io.crums.sldg.json.JsonParsingException;
+import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.sql.Config;
 import io.crums.sldg.sql.ConfigFileBuilder;
 import io.crums.sldg.sql.ConnectionInfo;
 import io.crums.sldg.sql.SqlLedger;
 import io.crums.sldg.sql.SqlSourceQuery;
 import io.crums.sldg.src.ColumnValue;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
@@ -76,28 +79,49 @@ public class Sldg extends MainTemplate {
   
   
   
-  private static class MorselArg extends RowArg {
+  private class MorselArg extends RowArg {
     
     File morselFile = new File(".");
+    SourceInfo sourceInfo;
     
     List<Integer> redactCols = Collections.emptyList();
     
     void setArgs(ArgList args, boolean state) {
-      if (!state)
+      
+      if (!state) {
         setRowNums(args);
-
-      String rCols = args.removeValue(REDACT);
-      if (rCols != null) {
-        List<Integer> parsed = NumbersArg.parseInts(rCols);
-        if (parsed != null && !parsed.isEmpty()) {
-          parsed = new ArrayList<>(parsed);
-          Collections.sort(parsed);
-          if (parsed.get(0) < 1)
+        
+        String rCols = args.removeValue(REDACT);
+        if (rCols != null) {
+          List<Integer> parsed = NumbersArg.parseInts(rCols);
+          if (parsed != null && !parsed.isEmpty()) {
+            parsed = new ArrayList<>(parsed);
+            Collections.sort(parsed);
+            if (parsed.get(0) < 1)
+              throw new IllegalArgumentException(
+                  "illegal column number with '" + REDACT + "' option: " + parsed.get(0));
+            redactCols = parsed;
+          } else
             throw new IllegalArgumentException(
-                "illegal column number with '" + REDACT + "' option: " + parsed.get(0));
-          redactCols = parsed;
+                "RHS of " + REDACT + "=" + rCols + " must parse to numbers");
+        }
+
+        String metaPath = args.removeValue(META);
+        if (metaPath == null)
+          this.sourceInfo = config.getSourceInfo().orElse(null);
+        else {
+          File metaFile = new File(metaPath);
+          if (!metaFile.isFile())
+            throw new IllegalArgumentException("file not found (" + META + "=): " + metaFile);
+          try {
+            this.sourceInfo = SourceInfoParser.INSTANCE.toEntity(metaFile);
+          } catch (JsonParsingException jpx) {
+            throw new IllegalArgumentException(
+                "failed to load: (" + META + "=" + metaPath + "): " + jpx, jpx);
+          }
         }
       }
+
       
       switch (args.argsRemaining().size()) {
       case 0: return;
@@ -114,6 +138,7 @@ public class Sldg extends MainTemplate {
       
       if (morselFile.isFile())
         throw new IllegalArgumentException("morsel file already exists: " + morselFile);
+      
     }
     
     
@@ -313,7 +338,12 @@ public class Sldg extends MainTemplate {
       throw new IllegalStateException(
           "source ledger conflicts with hash ledger: " + ledger.getState());
     
-    File file = ledger.writeMorselFile(morselArgs.morselFile, morselArgs.rowNums, null, morselArgs.redactCols);
+    File file = ledger.writeMorselFile(
+        morselArgs.morselFile,
+        morselArgs.rowNums,
+        null,   // no note
+        morselArgs.redactCols,
+        morselArgs.sourceInfo);
     int entries = morselArgs.rowNums.size();
     if (entries == 0)
       System.out.println("state path written to morsel: " + file);
@@ -1349,6 +1379,8 @@ public class Sldg extends MainTemplate {
   private final static String STATE_MORSEL = "state-morsel";
   
   private final static String REDACT = "redact";
+  
+  private final static String META = "meta";
   
   
 

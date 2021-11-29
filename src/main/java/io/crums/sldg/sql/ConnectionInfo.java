@@ -15,6 +15,8 @@ import java.sql.SQLException;
 import java.util.Objects;
 import java.util.Properties;
 
+import io.crums.io.FileUtils;
+
 /**
  * Encapsulates {@linkplain Driver} and connection URL information. Password
  * info deliberately kept out.
@@ -72,7 +74,7 @@ public class ConnectionInfo {
           throw new SqlLedgerException("failed to load driver class " + driverClassname, cnfx);
         }
       else {
-        File classpath = new File(baseDir, driverClasspath);
+        File classpath = FileUtils.getRelativeUnlessAbsolute(driverClasspath, baseDir);
         if (!classpath.isFile())
           throw new SqlLedgerException(
               driverClasspath + " resolved to " + classpath + " is not an existing jar file");

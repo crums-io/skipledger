@@ -15,9 +15,10 @@ import io.crums.sldg.src.SourceRow;
 import io.crums.util.Lists;
 
 /**
- * Builds a {@linkplain SourcePack}. Holds a maximum of 64k source-rows.
+ * Builds a {@linkplain SourcePack}.
  */
 public class SourcePackBuilder implements SourceBag, Serial {
+  
   
   private final TreeMap<Long, SourceRow> sources = new TreeMap<>();
 
@@ -28,10 +29,8 @@ public class SourcePackBuilder implements SourceBag, Serial {
     Objects.requireNonNull(src, "null src");
     synchronized (sources) {
       Long rn = src.rowNumber();
-      if (sources.size() < 0xffff || sources.containsKey(rn))
-        return sources.put(rn, src);
+      return sources.put(rn, src);
     }
-    throw new IllegalStateException("filled to capacity");
   }
   
   
@@ -39,7 +38,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
     Objects.requireNonNull(src, "null src");
     synchronized (sources) {
       Long rn = src.rowNumber();
-      if (sources.containsKey(rn) || sources.size() == 0xffff)
+      if (sources.containsKey(rn))
         return false;
       sources.put(rn, src);
       return true;

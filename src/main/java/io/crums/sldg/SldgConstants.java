@@ -3,6 +3,8 @@
  */
 package io.crums.sldg;
 
+import java.util.logging.Logger;
+
 import io.crums.client.repo.TrailRepo;
 import io.crums.util.hash.Digest;
 import io.crums.util.hash.Digests;
@@ -58,12 +60,6 @@ public class SldgConstants {
    * Used in json.
    */
   public final static String VERSION_TAG = "version";
-
-  
-  /**
-   * Nugget binary file extension (includes the dot).
-   */
-  public final static String NUG_EXT = ".nug";
   
   
   /**
@@ -79,17 +75,26 @@ public class SldgConstants {
   public final static String JSON_EXT = ".json";
   
 
-  public static final String NUG_JSON_EXT = NUG_EXT + JSON_EXT;
-  
-
   public static final String SPATH_JSON_EXT = SPATH_EXT + JSON_EXT;
   
   
 
   /**
-   * Logger name.
+   * The module's logger name.
+   * 
+   * @see #getLogger()
    */
-  public static final String LOGGER_NAME = "skipledger";
+  public static final String LOGGER_NAME = "sldg";
+  
+  
+  /**
+   * Returns the module logger.
+   * 
+   * @see #LOGGER_NAME
+   */
+  public static Logger getLogger() {
+    return Logger.getLogger(LOGGER_NAME);
+  }
   
   
   

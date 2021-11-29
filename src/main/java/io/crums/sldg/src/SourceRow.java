@@ -101,13 +101,17 @@ public class SourceRow implements Serial {
   
   
   
+  public final static int MAX_COLUMNS = 0xffff;
+  
+  
+  
   private final long rowNumber;
   private final List<ColumnValue> columns;
   
   
   /**
-   * Creates an unsalted instance. This constructor will likely be deprecated in a future
-   * version. It's included here for now for completeness.
+   * Creates an unsalted instance. This constructor is deprecated.
+   * It's only call-site are unit tests. Pending removal.
    * 
    * @deprecated
    */
@@ -117,14 +121,17 @@ public class SourceRow implements Serial {
         rowNumber,
         Lists.map(Arrays.asList(colValues), o -> ColumnValue.toInstance(o)));
   }
-  
+
+  /**
+   * @see #newSaltedInstance(long, TableSalt, Object...)
+   */
   public SourceRow(long rowNumber, ColumnValue... colValues) {
     this(rowNumber, Arrays.asList(colValues));
   }
   
   
   /**
-   * 
+   * @see #newSaltedInstance(long, TableSalt, Object...)
    */
   public SourceRow(long rowNumber, List<ColumnValue> colValues) {
     this.rowNumber = rowNumber;
@@ -132,9 +139,9 @@ public class SourceRow implements Serial {
     SkipLedger.checkRealRowNumber(rowNumber);
     if (columns.isEmpty())
       throw new IllegalArgumentException("empty column values");
-    if (columns.size() > Short.MAX_VALUE)
+    if (columns.size() > MAX_COLUMNS)
       throw new IllegalArgumentException(
-          "number of columns exceeds model capacity (" + Short.MAX_VALUE + "): " + columns.size());
+          "number of columns exceeds model capacity (" + MAX_COLUMNS + "): " + columns.size());
   }
   
   

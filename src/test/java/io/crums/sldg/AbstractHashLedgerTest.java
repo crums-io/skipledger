@@ -64,14 +64,14 @@ public abstract class AbstractHashLedgerTest extends IoTestCase {
       assertEquals(trail, trailedRow.trail());
       assertEquals(trail.crum(), trailedRow.trail().crum());
       assertEquals(1, trailedRow.rowNumber());
-      assertEquals(row.hash(), trailedRow.rowHash());
+      assertEquals(row.hash(), trailedRow.hash());
       
       trailedRow = hLedger.nearestTrail(1L);
       assertNotNull(trailedRow);
       assertEquals(trail, trailedRow.trail());
       assertEquals(trail.crum(), trailedRow.trail().crum());
       assertEquals(1, trailedRow.rowNumber());
-      assertEquals(row.hash(), trailedRow.rowHash());
+      assertEquals(row.hash(), trailedRow.hash());
       
       assertEquals(1L, hLedger.lastWitnessedRowNumber());
       
@@ -139,7 +139,7 @@ public abstract class AbstractHashLedgerTest extends IoTestCase {
         assertEquals(trailedRns[index], trailedRow.rowNumber());
         assertEquals(MOCK_START_UTC + utcDelta * trailedRns[index], trailedRow.utc());
         Row row = hLedger.getSkipLedger().getRow(trailedRns[index]);
-        assertEquals(row.hash(), trailedRow.rowHash());
+        assertEquals(row.hash(), trailedRow.hash());
       }
       
       

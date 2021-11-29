@@ -5,8 +5,8 @@ package io.crums.sldg.json;
 
 import java.util.List;
 
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
+import io.crums.util.json.simple.JSONArray;
+import io.crums.util.json.simple.JSONObject;
 
 /**
  * The JSON entity output interface.
@@ -18,8 +18,24 @@ public interface JsonEntityWriter<T> {
   
   /**
    * Returns the given {@code entity} as JSON.
+   * 
+   * @return {@code injectEntity(entity, new JSONObject())}
    */
-  JSONObject toJsonObject(T entity);
+  default JSONObject toJsonObject(T entity) {
+    return injectEntity(entity, new JSONObject());
+  }
+  
+  
+  /**
+   * Injects the given {@code entity}'s fields into the
+   * given {@code JSONObject}.
+   * 
+   * @param entity  not null
+   * @param jObj    not null
+   * 
+   * @return the given {@code jObj}
+   */
+  JSONObject injectEntity(T entity, JSONObject jObj);
   
   
   /**

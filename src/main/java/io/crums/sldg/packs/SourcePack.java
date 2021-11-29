@@ -42,7 +42,7 @@ public class SourcePack implements SourceBag {
   
   
   public static SourcePack load(ByteBuffer in) {
-    final int count = 0xffff & in.getInt();
+    final int count = in.getInt();
     if (count < 0)
       throw new ByteFormatException("negative source row-count: " + count);
     if (count == 0)

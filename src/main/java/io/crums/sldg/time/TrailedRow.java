@@ -8,11 +8,12 @@ import java.util.Objects;
 
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
+import io.crums.sldg.RowHash;
 
 /**
  * A row's witness record is a row-number/crumtrail tuple.
  */
-public class TrailedRow {
+public class TrailedRow extends RowHash {
   
   private final long rowNumber;
   private final CrumTrail trail;
@@ -61,26 +62,11 @@ public class TrailedRow {
   /**
    * Returns the row hash (the hash witnessed in the crumtrail).
    */
-  public final ByteBuffer rowHash() {
+  @Override
+  public final ByteBuffer hash() {
     return trail.crum().hash().slice();
   }
   
-  
-  @Override
-  public boolean equals(Object o) {
-    if (o == this)
-      return true;
-    if (!(o instanceof TrailedRow))
-      return false;
-    
-    TrailedRow other = (TrailedRow) o;
-    return rowNumber == other.rowNumber && trail.equals(other.trail);
-  }
-  
-  @Override
-  public int hashCode() {
-    return Long.hashCode(rowNumber);
-  }
   
 
 }

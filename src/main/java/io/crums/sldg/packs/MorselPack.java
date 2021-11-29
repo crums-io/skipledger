@@ -113,10 +113,10 @@ public final class MorselPack implements MorselBag {
 
     // validate trailPack
     //
-    if (!rowNums.containsAll(trailPack.trailedRows()))
+    if (!rowNums.containsAll(trailPack.trailedRowNumbers()))
       throw new ByteFormatException("trail pack references rows not found in row-pack");
     
-    for (Long rn : trailPack.trailedRows()) {
+    for (Long rn : trailPack.trailedRowNumbers()) {
       CrumTrail trail = trailPack.crumTrail(rn);
       if (!trail.verify())
         throw new HashConflictException("crumtrail for row " + rn + " is tampered or malformed");
@@ -202,8 +202,8 @@ public final class MorselPack implements MorselBag {
 
 
   @Override
-  public List<Long> trailedRows() {
-    return trailPack.trailedRows();
+  public List<Long> trailedRowNumbers() {
+    return trailPack.trailedRowNumbers();
   }
 
 

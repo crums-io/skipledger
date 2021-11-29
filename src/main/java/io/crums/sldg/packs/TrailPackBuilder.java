@@ -33,11 +33,11 @@ public class TrailPackBuilder implements TrailBag, Serial {
     int count = 0;
     synchronized (trailedRows) {
       if (trailedRows.isEmpty()) {
-        pack.trailedRows().forEach(rn -> trailedRows.put(rn, pack.crumTrail(rn)));
+        pack.trailedRowNumbers().forEach(rn -> trailedRows.put(rn, pack.crumTrail(rn)));
         count = trailedRows.size();
       } else {
-        checkCapacity(pack.trailedRows().size());
-        for (Long rn : pack.trailedRows()) {
+        checkCapacity(pack.trailedRowNumbers().size());
+        for (Long rn : pack.trailedRowNumbers()) {
           CrumTrail prev = trailedRows.put(rn, pack.crumTrail(rn));
           if (prev == null)
             ++count;
@@ -117,7 +117,7 @@ public class TrailPackBuilder implements TrailBag, Serial {
   
   
   @Override
-  public List<Long> trailedRows() {
+  public List<Long> trailedRowNumbers() {
     synchronized (trailedRows) {
       return Lists.readOnlyCopy(trailedRows.keySet());
     }

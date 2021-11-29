@@ -3,8 +3,8 @@
  */
 package io.crums.sldg.json;
 
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
+import io.crums.util.json.simple.JSONArray;
+import io.crums.util.json.simple.JSONObject;
 
 /**
  * 

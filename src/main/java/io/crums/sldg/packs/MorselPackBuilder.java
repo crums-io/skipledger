@@ -237,7 +237,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
    * @return the number of crumtrails added
    */
   public int addTrails(MorselPack pack) {
-    List<Long> trailedRns = pack.trailedRows();
+    List<Long> trailedRns = pack.trailedRowNumbers();
     if (trailedRns.isEmpty())
       return 0;
     synchronized (lock()) {
@@ -330,8 +330,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
 
   @Override
-  public List<Long> trailedRows() {
-    return trailPackBuilder.trailedRows();
+  public List<Long> trailedRowNumbers() {
+    return trailPackBuilder.trailedRowNumbers();
   }
 
   @Override
