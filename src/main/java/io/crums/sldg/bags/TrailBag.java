@@ -45,6 +45,11 @@ public interface TrailBag {
   }
   
   
+  /**
+   * Returns the index of the first crumtrail (in the list returned by
+   * {@linkplain #getTrailedRows()} that establishes minimum age of the row with
+   * the given number, or -1 if no such crumtrail exists.
+   */
   default int indexOfNearestTrail(long rowNumber) {
     var trailedRns = trailedRowNumbers();
     if (trailedRns.isEmpty())
