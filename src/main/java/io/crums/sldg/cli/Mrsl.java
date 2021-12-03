@@ -5,70 +5,53 @@ package io.crums.sldg.cli;
 
 
 import static io.crums.sldg.SldgConstants.MRSL_EXT;
+import static io.crums.util.Strings.nOf;
 import static io.crums.util.Strings.pluralize;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.StringWriter;
-import java.nio.ByteBuffer;
+import java.io.UncheckedIOException;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import io.crums.util.json.simple.JSONArray;
-import io.crums.util.json.simple.JSONObject;
-
-import io.crums.io.Opening;
-import io.crums.io.channels.ChannelUtils;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.MorselFile;
-import io.crums.sldg.PathInfo;
 import io.crums.sldg.SldgException;
-import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.json.SourceRowParser;
 import io.crums.sldg.json.TrailedRowWriter;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.BytesValue;
-import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.DateValue;
-import io.crums.sldg.src.DoubleValue;
-import io.crums.sldg.src.LongValue;
 import io.crums.sldg.src.SourceRow;
-import io.crums.sldg.src.StringValue;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
-import io.crums.util.Strings;
+import io.crums.util.TaskStack;
 import io.crums.util.json.JsonPrinter;
+import io.crums.util.json.simple.JSONArray;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.MainTemplate;
+import io.crums.util.main.NumbersArg;
 import io.crums.util.main.Option;
+import io.crums.util.main.OptionGroup;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
 
 /**
  * CLI for morsel files.
- * <p>
- * TODO:
- * <ul>
- * <li>List {@linkplain PathInfo}s and user-notes.</li>
- * <li>Support adding specific rows instead of bulk merge.</li>
- * <li>Support pruning rows.</li>
- * <li>Support adding new {@linkplain PathInfo}s (and user-notes).</li>
- * </ul>
- * </p>
  */
 public class Mrsl extends MainTemplate {
   
@@ -80,6 +63,7 @@ public class Mrsl extends MainTemplate {
   private List<Long> rowNumbers;
   private File saveFile;
   private String sep = " ";
+  private List<Integer> colWidths;
   
   private List<File> morselFiles;
   
@@ -112,11 +96,50 @@ public class Mrsl extends MainTemplate {
       if (rowNumbers.isEmpty())
         throw new IllegalArgumentException("missing entry row numbers");
       
-      options = JSON_OPT.removeOption(argList);
+      options = OptionGroup.remove(argList, JSON_OPT, SLIM_OPT, TIME_OPT, PACK_OPT, NO_ROWNUM_OPT);
       setSaveFile(argList);
-      String separator = argList.removeValue(SEP);
-      if (separator != null)
-        this.sep = Strings.unescape(separator);
+      if (isJson()) {
+        if (options.contains(NO_ROWNUM_OPT))
+          throw new IllegalArgumentException(
+              NO_ROWNUM_OPT + " option cannot be used with JSON: " + argList.getArgString());
+      
+      } else {
+        // text output (not json)
+        if (options.contains(PACK_OPT))
+          throw new IllegalArgumentException(
+              PACK_OPT + " option can only be used with JSON: " + argList.getArgString());
+        
+        // set the column display widths
+        String columnWidths = argList.removeValue(COL_SIZES);
+        if (columnWidths != null) {
+          this.colWidths = NumbersArg.parseInts(columnWidths);
+          if (colWidths == null || colWidths.isEmpty() || colWidths.size() > 0xffff)
+            throw new IllegalArgumentException(columnWidths);
+          for (int index = colWidths.size(); index-- > 0; ) {
+            int w = colWidths.get(index);
+            if (w < MIN_COL_DISPLAY_WIDTH)
+              throw new IllegalArgumentException(
+                  "col [" + (index + 1) + "] display size (" + w + ") in '" +
+                  COL_SIZES + "=" + columnWidths + "' is less than minimum (" +
+                  MIN_COL_DISPLAY_WIDTH + ")");
+            if (w > MAX_COL_DISPLAY_WIDTH)
+              throw new IllegalArgumentException(
+                  "col [" + (index + 1) + "] display size (" + w + ") in '" +
+                  COL_SIZES + "=" + columnWidths + "' is greater than maximum (" +
+                  MIN_COL_DISPLAY_WIDTH + ")");
+          }
+        }
+        
+        // set column separator
+        String separator = argList.removeValue(SEP);
+        if (separator != null) {
+          separator = separator.replace(SEP_S, " ");
+          separator = separator.replace(SEP_T, "\t");
+          this.sep = separator;
+        } else if (this.colWidths != null)
+          this.sep = "";  // if column widths are set, default to no separator
+        
+      }
       break;
     case MERGE:
       this.morselFiles = argList.removeExistingFiles();
@@ -138,6 +161,14 @@ public class Mrsl extends MainTemplate {
     
     
     argList.enforceNoRemaining();
+  }
+  
+  private final static int MAX_COL_DISPLAY_WIDTH = 512;
+  private final static int MIN_COL_DISPLAY_WIDTH = 3;
+  
+  
+  private boolean isJson() {
+    return options.contains(JSON_OPT) || options.contains(SLIM_OPT);
   }
   
   
@@ -180,7 +211,8 @@ public class Mrsl extends MainTemplate {
         throw new HashConflictException(msg, sx);
       
       } else if (sx instanceof ByteFormatException) {
-        throw new ByteFormatException("Illegal byte format in morsel file " + morselFile, sx);
+        throw new ByteFormatException(
+            "Illegal byte format in morsel file " + morselFile + ": " + sx.getMessage(), sx);
       
       } else
         throw sx;
@@ -221,14 +253,10 @@ public class Mrsl extends MainTemplate {
 
   
   void entry() throws IOException {
-    if (options.contains(JSON_OPT)) {
-      jsonEntry();
+    if (options.contains(JSON_OPT) || options.contains(SLIM_OPT)) {
+      entryJson();
     } else {
-      MorselFile morsel = new MorselFile(morselFile);
-      if (saveFile == null)
-        printSources(morsel);
-      else
-        saveSources(morsel);
+      entryText();
     }
   }
 
@@ -328,39 +356,12 @@ public class Mrsl extends MainTemplate {
       comp = packA.getFullRowNumbers().size() - packB.getFullRowNumbers().size();
     return comp;
   }
-
-
-  private void saveSources(MorselFile morsel) throws IOException {
-    checkSourceRowNums(morsel);
-    ByteBuffer eol;
-    {
-      byte[] lineFeed = { (byte) '\n' };
-      eol = ByteBuffer.wrap(lineFeed);
-    }
-    try (var ch = Opening.CREATE.openChannel(this.saveFile)) {
-
-      MorselPack pack = morsel.getMorselPack();
-      byte[] sepBytes = (sep == null || sep.isEmpty()) ? null : Strings.utf8Bytes(sep);
-      for (long rn : this.rowNumbers) {
-        pack.getSourceByRowNumber(rn).writeSource(ch, sepBytes);
-        ChannelUtils.writeRemaining(ch, eol.clear());
-      }
-    }
-    
-    int count = rowNumbers.size();
-    System.out.println(count + pluralize(" source-row", count) + " written to " + saveFile);
-  }
   
   
   
   
   
-  private void checkSourceRowNums(MorselFile morsel) {
-    var srcNums = Sets.sortedSetView(morsel.getMorselPack().sourceRowNumbers());
-    if (!srcNums.containsAll(this.rowNumbers)) {
-      throw new IllegalArgumentException("illegal / unknown entry numbers: " + rowNumbers);
-    }
-  }
+  
   
   
   private SortedSet<Long> sourceRowNumSet(MorselPack pack) {
@@ -369,49 +370,57 @@ public class Mrsl extends MainTemplate {
   
   
   @SuppressWarnings("unchecked")
-  void jsonEntry() {
+  void entryJson() throws IOException {
     MorselPack pack = new MorselFile(morselFile).getMorselPack();
     
-    var entryRns = sourceRowsRequested(pack);
-    var trails = pack.getTrailedRows();
-    int trailIndex = pack.indexOfNearestTrail(entryRns.first());
+    var entryRns = sourceRowsSelected(pack);
+    
+    int trailIndex = this.options.contains(TIME_OPT) ?
+        pack.indexOfNearestTrail(entryRns.first()) : -1;
+    
+    List<TrailedRow> trails;
     TrailedRow nextTrail;
     long nextTrailedRn;
+    
     if (trailIndex == -1) {
+      trails = null;
       nextTrail = null;
       nextTrailedRn = Long.MAX_VALUE;
     } else {
+      trails = pack.getTrailedRows();
       nextTrail = trails.get(trailIndex);
       nextTrailedRn = nextTrail.rowNumber();
+      trails = pack.getTrailedRows();
     }
     
-    DateFormat dateFormat;
-    {
-      var info = pack.getMetaPack().getSourceInfo();
-      if (info.isEmpty())
-        dateFormat = null;
-      else
-        dateFormat = info.get().getDateFormat().orElse(null);
-    }
+    DateFormat dateFormat = getDateFormat(pack);
     
-    var parser = new SourceRowParser(dateFormat);
+    var rowParser = new SourceRowParser(dateFormat);
+    var trailParser = new TrailedRowWriter(dateFormat);
+    
+    boolean slim = options.contains(SLIM_OPT);
+    
+    var rowWriter = slim ? rowParser.toSlim() : rowParser;
+    var trailWriter = slim ? trailParser.toSlim() : trailParser;
     
     var jArray = new JSONArray();
     
     boolean inject = false;
+    int trailCount = 0;
     for (long rn : entryRns) {
       var srcRow = pack.getSourceByRowNumber(rn);
-      boolean advanceTrail = rn >= nextTrailedRn;
+      final boolean advanceTrail = rn >= nextTrailedRn;
       inject = rn == nextTrailedRn;
       if (advanceTrail && !inject)
-        jArray.add(TrailedRowWriter.DEFAULT_INSTANCE.toJsonObject(nextTrail));
+        jArray.add(trailWriter.toJsonObject(nextTrail));
       
       var jObj = inject ?
-          parser.toJsonObject(srcRow, nextTrail) :
-            parser.toJsonObject(srcRow);
+          rowParser.toSlimJsonObject(srcRow, nextTrail) :
+            rowWriter.toJsonObject(srcRow);
       jArray.add(jObj);
       
       if (advanceTrail) {
+        ++trailCount;
         if (++trailIndex >= trails.size()) {
           nextTrail = null;
           nextTrailedRn = Long.MAX_VALUE;
@@ -422,21 +431,55 @@ public class Mrsl extends MainTemplate {
       }
     }
     
-    if (nextTrail != null && !inject)
-      jArray.add(TrailedRowWriter.DEFAULT_INSTANCE.toJsonObject(nextTrail));
+    if (nextTrail != null && !inject) {
+      ++trailCount;
+      jArray.add(trailWriter.toJsonObject(nextTrail));
+    }
     
-    var printer = new JsonPrinter(System.out);
-    if (jArray.size() == 1)
-      printer.print((Map<?,?>) jArray.get(0));
-    else
-      printer.print(jArray);
+    boolean indent = !options.contains(PACK_OPT);
+    boolean save = saveFile != null;
     
-    System.out.println();
-  }
 
+    try (var closer = new TaskStack()) {
+      if (indent) {
+        JsonPrinter printer;
+        if (save) {
+          var out = new FileWriter(saveFile);
+          closer.pushClose(out);
+          printer = new JsonPrinter(out);
+        } else
+          printer = new JsonPrinter(System.out);
+        
+        printer.print(jArray);
+      } else {  // not indenting
+        String json = jArray.toJSONString();
+        if (save) {
+          var out = new FileWriter(saveFile);
+          closer.pushClose(out);
+          out.append(json);
+        } else
+          System.out.println(json);
+      }
+      
+      if (save)
+        System.out.println(
+            nOf(entryRns.size(), "row") + ", " + nOf(trailCount, "trail") + " saved to file.");
+      else
+        System.out.println();
+    }
+  }
   
   
-  private TreeSet<Long> sourceRowsRequested(MorselPack pack) {
+  
+
+  private DateFormat getDateFormat(MorselPack pack) {
+    var info = pack.getMetaPack().getSourceInfo();
+    return info.isEmpty() ? null : info.get().getDateFormat().orElse(null);
+  }
+  
+  
+  
+  private TreeSet<Long> sourceRowsSelected(MorselPack pack) {
 
     TreeSet<Long> entryRns = new TreeSet<>(this.rowNumbers);
     entryRns.retainAll(sourceRowNumSet(pack));
@@ -451,142 +494,142 @@ public class Mrsl extends MainTemplate {
   }
   
   
-  
-  
-
-  private void printSources(MorselFile morsel) {
-    MorselPack pack = morsel.getMorselPack();
-    
-    TreeSet<Long> entryRns = new TreeSet<>(this.rowNumbers);
-    entryRns.retainAll(sourceRowNumSet(pack));
-    
-    if (entryRns.isEmpty()) {
-      System.err.println("[ERROR] No entries match the row numbers given.");
-      StdExit.ILLEGAL_ARG.exit();
-      return; // never reached
-    }
-    
-    final Long first  = entryRns.first();
-    
-    TablePrint table;
-    {
-      long lastRn = entryRns.last();
-      int fcw = Math.max(
-          ROOT_HASH.length() + 1 + RN_PAD,
-          String.valueOf(lastRn).length() + 1 + RN_PAD);
+  void entryText() {
+    try (var closer = new TaskStack()) {
       
-      table = new TablePrint(fcw, DATE_COL, RM - fcw - DATE_COL);
-    }
-    
-    table.println();
-    
-    
-    var trailRns = pack.trailedRowNumbers();
-    
-    final int tindexStart;
-    int tindex;
-    long nextWitRn;
-    {
-      int index = Collections.binarySearch(trailRns, first);
-      if (index < 0) {
-        tindex = -1 - index;
-        nextWitRn = tindex == trailRns.size() ? Long.MAX_VALUE : trailRns.get(tindex);
-      } else {
-        // an row entry can be trailed
-        tindex = index;
-        nextWitRn = trailRns.get(index);
+      var pack = new MorselFile(this.morselFile).getMorselPack();
+      
+      TreeSet<Long> entryRns = sourceRowsSelected(pack);
+      
+      final boolean includeRns = !this.options.contains(NO_ROWNUM_OPT);
+      final boolean saving = saveFile != null;
+      
+      TablePrint table;
+      {
+        var out = saving ? System.out : new PrintStream(saveFile);
+        if (this.colWidths == null) {
+          // w/ possible exception of the first column,
+          // columns are simply appended
+          int fcw = includeRns ?
+                entryRns.last().toString().length() + 2 + RN_PAD : 2;
+          
+          table = new TablePrint(out, fcw);
+          
+        } else
+          table = new TablePrint(out, colWidths);  // user-defined
+        
       }
-      tindexStart = tindex;
+      
+      table.setColSeparator(this.sep);
+      
+      int trailIndex = this.options.contains(TIME_OPT) ?
+          pack.indexOfNearestTrail(entryRns.first()) : -1;
+  
+      List<TrailedRow> trails;
+      TrailedRow nextTrail;
+      long nextTrailedRn;
+      
+      if (trailIndex == -1) {
+        trails = null;
+        nextTrail = null;
+        nextTrailedRn = Long.MAX_VALUE;
+      } else {
+        trails = pack.getTrailedRows();
+        nextTrail = trails.get(trailIndex);
+        nextTrailedRn = nextTrail.rowNumber();
+        trails = pack.getTrailedRows();
+      }
+      
+      DateFormat dateFormat = getDateFormat(pack);
+      final int fsi = includeRns ? 1 : 0;
+      
+      for (long rn : entryRns) {
+        var srcRow = pack.getSourceByRowNumber(rn);
+        var cols = srcRow.getColumns();
+        Object[] colValues = new Object[cols.size() + fsi];
+        for (int index = cols.size(); index-- > 0; ) {
+          var col = cols.get(index);
+          
+          Object value;
+          
+          switch (col.getType()) {
+          case BYTES:
+            value = "(" + nOf(((BytesValue) col).size(), "byte") + ")";
+            break;
+          case HASH:
+            value = RED_TOKEN;
+            break;
+          case DATE:
+            {
+              Date date = new Date(((DateValue) col).getUtc());
+              value = dateFormat == null ? date : dateFormat.format(date);
+            }
+            break;
+          case NULL:
+            value = "NULL";
+            break;
+          default:
+            value = col.getValue();
+          }
+          
+          colValues[index + fsi] = value;
+        }
+        
+        if (includeRns)
+          colValues[0] = saving ? rn : "[" + rn + "]";
+        
+        final boolean advanceTrail;
+        if (rn > nextTrailedRn) {
+          advanceTrail = true;
+          printNextTrail(nextTrail, table, dateFormat, includeRns);
+        } else
+          advanceTrail = rn == nextTrailedRn;
+        
+        table.printRow(colValues);
+        
+        if (rn == nextTrailedRn)
+          printNextTrail(nextTrail, table, dateFormat, includeRns);
+        
+        if (advanceTrail) {
+          if (++trailIndex >= trails.size()) {
+            nextTrail = null;
+            nextTrailedRn = Long.MAX_VALUE;
+          } else {
+            nextTrail = trails.get(trailIndex);
+            nextTrailedRn = nextTrail.rowNumber();
+          }
+        }
+      }
+      
+      if (nextTrail != null)
+        printNextTrail(nextTrail, table, dateFormat, includeRns);
+      
+      if (this.saveFile != null)
+        table.println();
+    
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on writing to " + saveFile + " :: " + iox.getMessage(), iox);
     }
-    
-    boolean didFirst = false;
-    for (long entryRn : entryRns) {
-      if (entryRn > nextWitRn && didFirst)
-        printTrail(nextWitRn, pack, table);
-      
-      if (entryRn >= nextWitRn)
-        nextWitRn = ++tindex == trailRns.size() ? Long.MAX_VALUE : trailRns.get(tindex);
-      
-      printSourceRowAsText(entryRn, pack, table);
-      
-      didFirst = true;
-    }
-    
-    if (tindex < trailRns.size())
-      printTrail(trailRns.get(tindex++), pack, table);
-    
-    table.println();
-    int count = entryRns.size();
-    int trails = tindex - tindexStart;
-    table.println(
-        count + pluralize(" entry", count) + ", " +
-        trails + pluralize(" crumtrail", trails));
   }
-
   
-  private final static String ROOT_HASH = " ref hash:";
   
-  private void printTrail(long witRn, MorselPack pack, TablePrint table) {
-    
-    var trail = pack.crumTrail(witRn);
-    
-    Date date = new Date(trail.crum().utc());
-    
-    table.printRow(witRn, "created before " + date + "  (crumtrail)");
-    table.printRow(ROOT_HASH,  IntegralStrings.toHex(trail.rootHash()) );
-    table.printRow(" ref URL:",  trail.getRefUrl() );
+  
+  private void printNextTrail(TrailedRow nextTrail, TablePrint table, DateFormat dateFormat, boolean includeRn) {
+    Date date = new Date(nextTrail.utc());
+    String msg = "<< Witnessed " + (dateFormat == null ? date : dateFormat.format(date)) + " >>";
+    if (includeRn)
+      table.printRow("[" + nextTrail.rowNumber() + "]", msg);
+    else
+      table.println(msg);
   }
-
-
-  private final static char PRINT_SEP = '-';
   
-  private void printSourceRowAsText(long srcRn, MorselPack pack, TablePrint table) {
-    
-    SourceRow srcRow = pack.getSourceByRowNumber(srcRn);
-
-    StringWriter string = new StringWriter();
-    
-    List<ColumnValue> columns = srcRow.getColumns();
-    writeColumn(string, columns.get(0));
-    
-    for (int index = 1; index < columns.size(); ++index)
-      writeColumn(string.append(' '), columns.get(index));
-    
-    table.printRow(srcRn, "source-row as text:");
-    table.printHorizontalTableEdge(PRINT_SEP);
-    table.println(string.toString());
-    table.printHorizontalTableEdge(PRINT_SEP);
-  }
+  
   
 
   private final static String RED_TOKEN = "[X]";
-  private final static String NULL_TOKEN = "null";
   
-  private void writeColumn(StringWriter writer, ColumnValue col) {
-    switch (col.getType()) {
-    case NULL:
-      writer.append(NULL_TOKEN);
-      break;
-    case BYTES:
-      writer.append(IntegralStrings.toHex(((BytesValue) col).getBytes()));
-      break;
-    case HASH:
-      writer.append(RED_TOKEN);
-      break;
-    case LONG:
-      writer.append(String.valueOf(((LongValue) col).getNumber()));
-      break;
-    case STRING:
-      writer.append(((StringValue) col).getString());
-      break;
-    case DOUBLE:
-      writer.append(String.valueOf(((DoubleValue) col).getNumber()));
-      break;
-    case DATE:
-      writer.append(new Date(((DateValue) col).getUtc()).toString());
-      break;
-    }
-  }
+  
 
 
 
@@ -612,7 +655,7 @@ public class Mrsl extends MainTemplate {
     printer.println();
     paragraph =
         "Morsel files that contain no source rows are called \"state-morsels\". These represent the state of " +
-        "the ledger (how many rows and maybe some history). Because they're small (measured in kilo bytes) they're " +
+        "the ledger (how many rows and maybe some history). Because they're small (measured in kB's) they're " +
         "used as a richer fingerprint of state than just a single SHA-256 hash: their internal structure allows " +
         "an evolving ledger's fingerprint to be verified for consistency with its previous version.";
     printer.printParagraph(paragraph);
@@ -628,7 +671,7 @@ public class Mrsl extends MainTemplate {
   }
 
 
-  private final static int LEFT_TBL_COL_WIDTH = 15;
+  private final static int LEFT_TBL_COL_WIDTH = 13;
   private final static int RIGHT_TBAL_COL_WIDTH =
       RM - INDENT - LEFT_TBL_COL_WIDTH;
 
@@ -676,16 +719,35 @@ public class Mrsl extends MainTemplate {
     table.printRow(null,  "If provided, then source-rows are saved to the given file path");
     table.printRow(null,  "in the order given; otherwise they are printed to the console.");
     table.println();
+    table.printRow(null, NO_ROWNUM_OPT + "  (or -" + NO_ROWNUM_OPT.getSym() + ")");
+    table.printRow(null,  "Excludes row numbers when saving (" + SAVE + "=<path/to/file>)");
+    table.printRow(null,  "in text format (i.e. not JSON).");
+    table.println();
     table.printRow(null, SEP + "=<separator>     (optional)");
     table.println();
-    table.printRow(null,  "If provided with " + SAVE + "=<path/to/file>, then column values");
-    table.printRow(null,  "are separated with the given string. To set with no separator,");
-    table.printRow(null,  "leave its value empty.");
+    table.printRow(null,  "In text format (i.e. not JSON) column values are separated with");
+    table.printRow(null,  "with the given string. Character aliases:");
+    table.printRow(null,  "  " + SEP_S + " -> ' '  (space)");
+    table.printRow(null,  "  " + SEP_T + " -> '\\t' (tab)");
+    table.printRow(null,  "To set with no separator, leave its value empty.");
     table.printRow(null,  "DEFAULT: ' '        (single whitespace)");
     table.println();
-    table.printRow(null, JSON_OPT + "  (or -" + JSON_OPT.getSym() + ")");
+    table.printRow(null, COL_SIZES + "=<comma-separated-numbers>     (optional)");
     table.println();
+    table.printRow(null,  "In text format (i.e. not JSON) column display widths are the");
+    table.printRow(null,  "given comma-separated list of numbers.");
+    table.println();
+    table.printRow(null, JSON_OPT + "  (or -" + JSON_OPT.getSym() + ")");
     table.printRow(null,  "If set, then the output is in JSON format");
+    table.println();
+    table.printRow(null, SLIM_OPT + "  (or -" + SLIM_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then the JSON is in skinny form");
+    table.println();
+    table.printRow(null, TIME_OPT + "  (or -" + TIME_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then crumtrails (witness records) are included");
+    table.println();
+    table.printRow(null, PACK_OPT + "  (or -" + PACK_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then JSON whitespace is removed");
     table.println();
 
     table.printRow(MERGE, "merges the given morsel files to a new morsel file. The morsels");
@@ -858,9 +920,18 @@ public class Mrsl extends MainTemplate {
   
   private final static String SAVE = "save";
   private final static String SEP = "sep";
+  private final static String SEP_S = "%s";
+  private final static String SEP_T = "%t";
+  
+  private final static String COL_SIZES = "col-sizes";
   
   private final static Option JSON_OPT = new Option("json");
   private final static Option SLIM_OPT = new Option("slim");
+  private final static Option TIME_OPT = new Option("time");
+  private final static Option PACK_OPT = new Option("pack");
+  
+  
+  private final static Option NO_ROWNUM_OPT = new Option("no-rownum");
 
 }
 

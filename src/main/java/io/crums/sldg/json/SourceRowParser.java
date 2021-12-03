@@ -39,6 +39,8 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
   private final ColumnValueParser columnParser;
   
   private final DateFormat witDateFormat;
+  
+  private final String redactSymbol;
 
 
   
@@ -47,7 +49,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
    * represented in UTC millis).
    */
   public SourceRowParser() {
-    this(null, null);
+    this(null, null, null);
   }
 
   /**
@@ -58,8 +60,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
    * @param dateFormatter optional formating for date values
    */
   public SourceRowParser(DateFormat dateFormatter) {
-    this.columnParser = new ColumnValueParser(dateFormatter);
-    this.witDateFormat = dateFormatter;
+    this(dateFormatter, dateFormatter, null);
   }
   
   /**
@@ -69,9 +70,20 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
    * @param colDateFormat used when a column's type is {@linkplain ColumnType#DATE DATE} 
    * @param witDateFormat used to display the witness time
    */
-  public SourceRowParser(DateFormat colDateFormat, DateFormat witDateFormat) {
+  public SourceRowParser(DateFormat colDateFormat, DateFormat witDateFormat, String redactSymbol) {
     this.columnParser = new ColumnValueParser(colDateFormat);
     this.witDateFormat = witDateFormat;
+    this.redactSymbol = redactSymbol == null ? DEFAULT_REDACT_SYM : redactSymbol;
+  }
+  
+  
+  /**
+   * Instances are generally not thread safe, so copy constructor is private.
+   */
+  private SourceRowParser(SourceRowParser copy) {
+    this.columnParser = copy.columnParser;
+    this.witDateFormat = copy.witDateFormat;
+    this.redactSymbol = copy.redactSymbol;
   }
   
 
@@ -123,19 +135,16 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
         trail, jObj, witDateFormat);
   }
   
-  
-  
-  
-  
 
+  
+  
   public JSONObject toSlimJsonObject(SourceRow srcRow) {
-    return toSlimJsonObject(srcRow, DEFAULT_REDACT_SYM);
+    return injectSlimJson(srcRow, new JSONObject());
   }
   
-  
+
   @SuppressWarnings("unchecked")
-  public JSONObject toSlimJsonObject(SourceRow srcRow, String redactSymbol) {
-    var jObj = new JSONObject();
+  public JSONObject injectSlimJson(SourceRow srcRow, JSONObject jObj) {
     jObj.put(RN, srcRow.rowNumber());
     
     var jArray = new JSONArray();
@@ -149,6 +158,25 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
       }
     }
     jObj.put(COLS, jArray);
+    return jObj;
+  }
+  
+  
+  
+  public JsonEntityWriter<SourceRow> toSlim() {
+    return new JsonEntityWriter<SourceRow>() {
+      @Override
+      public JSONObject injectEntity(SourceRow srcRow, JSONObject jObj) {
+        return injectSlimJson(srcRow, jObj);
+      }
+    };
+  }
+  
+  
+  
+  public JSONObject toSlimJsonObject(SourceRow srcRow, TrailedRow trail) {
+    var jObj = toSlimJsonObject(srcRow);
+    TrailedRowWriter.DEFAULT_INSTANCE.injectSlim(trail, jObj, witDateFormat);
     return jObj;
   }
   

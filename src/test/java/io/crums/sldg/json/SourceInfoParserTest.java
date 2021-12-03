@@ -10,14 +10,17 @@ import java.util.List;
 
 import org.junit.Test;
 
+import com.gnahraf.test.SelfAwareTestCase;
+
 import io.crums.sldg.src.ColumnInfo;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.util.Lists;
 import io.crums.util.json.JsonPrinter;
+
 /**
  * 
  */
-public class SourceInfoParserTest {
+public class SourceInfoParserTest extends SelfAwareTestCase {
 
   
   @Test
@@ -88,18 +91,25 @@ public class SourceInfoParserTest {
       
       columns = Lists.asReadOnlyList(cols);
     }
-    var expected = new SourceInfo(name, desc, columns);
-    testRoundtrip(expected);
+    String dateFormat = "EEE, d MMM yyyy HH:mm:ss Z z";
+    var expected = new SourceInfo(name, desc, columns, dateFormat);
+    testRoundtrip(expected, new Object() { });
   }
   
   
-  
   private void testRoundtrip(SourceInfo expected) {
+    testRoundtrip(expected, null);
+  }
+  
+  private void testRoundtrip(SourceInfo expected, Object label) {
     var parser = SourceInfoParser.INSTANCE;
     var jObj = parser.toJsonObject(expected);
     String json = JsonPrinter.toJson(jObj);
-//    System.out.println(json);
-//    System.out.println();
+    if (label != null) {
+      System.out.println("=== " + method(label) + " ===");
+      System.out.println(json);
+      System.out.println();
+    }
     SourceInfo readBack = parser.toEntity(json);
     assertEquals(expected.getName(), readBack.getName());
     assertEquals(expected.getDescription(), readBack.getDescription());
@@ -109,6 +119,8 @@ public class SourceInfoParserTest {
     for (int index = expectedCols.size(); index-- > 0; )
       ColumnInfoParserTest.assertEqual(
           expectedCols.get(index), actualCols.get(index));
+    
+    assertEquals(expected.getDateFormatPattern(), readBack.getDateFormatPattern());
   }
 
 }
