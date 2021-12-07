@@ -232,7 +232,14 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   }
   
   
-  
+  /**
+   * Returns the row numbers the given bag of row numbers reference
+   * and which are <em>not</em> already in the bag.
+   * 
+   * @param rowNumbers bag or row numbers, each &ge; 1. May contain duplicates.
+   * @return a set of referenced row numbers not already in the bag. May include
+   *         zero (the sentinel row).
+   */
   public static SortedSet<Long> refOnlyCoverage(Collection<Long> rowNumbers) {
     TreeSet<Long> fullSet = new TreeSet<>(rowNumbers);  // not changed hereafter
     TreeSet<Long> refOnly = new TreeSet<>();
