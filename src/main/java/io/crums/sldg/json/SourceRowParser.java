@@ -7,6 +7,10 @@ package io.crums.sldg.json;
 import java.text.DateFormat;
 import java.util.List;
 
+import io.crums.util.json.JsonEntityParser;
+import io.crums.util.json.JsonEntityWriter;
+import io.crums.util.json.JsonParsingException;
+import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONArray;
 import io.crums.util.json.simple.JSONObject;
 
@@ -21,6 +25,11 @@ import io.crums.util.Lists;
  * 
  */
 public class SourceRowParser implements JsonEntityParser<SourceRow> {
+  
+  /**
+   * Default instance. Thread safe, since it uses no date formatter.
+   */
+  public final static SourceRowParser INSTANCE = new SourceRowParser();
   
   public final static String RN = RowHashWriter.RN;
   public final static String COLS = "cols";
@@ -76,16 +85,6 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
     this.redactSymbol = redactSymbol == null ? DEFAULT_REDACT_SYM : redactSymbol;
   }
   
-  
-  /**
-   * Instances are generally not thread safe, so copy constructor is private.
-   */
-  private SourceRowParser(SourceRowParser copy) {
-    this.columnParser = copy.columnParser;
-    this.witDateFormat = copy.witDateFormat;
-    this.redactSymbol = copy.redactSymbol;
-  }
-  
 
   
   
@@ -95,7 +94,6 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
   
   
   
-  @SuppressWarnings("unchecked")
   @Override
   public JSONObject injectEntity(SourceRow srcRow, JSONObject jObj) {
     jObj.put(RN, srcRow.rowNumber());

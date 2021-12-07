@@ -7,6 +7,7 @@ package io.crums.sldg.json;
 import java.text.DateFormat;
 import java.util.Date;
 
+import io.crums.util.json.JsonEntityWriter;
 import io.crums.util.json.simple.JSONObject;
 import io.crums.model.json.CrumParser;
 import io.crums.model.json.CrumTrailParser;

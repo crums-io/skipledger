@@ -4,10 +4,12 @@
 package io.crums.sldg.json;
 
 
-import static io.crums.sldg.json.JsonUtils.*;
+import static io.crums.util.json.JsonUtils.*;
 
 import java.util.Objects;
 
+import io.crums.util.json.JsonEntityParser;
+import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.simple.JSONObject;
 
 import io.crums.sldg.src.SourceInfo;

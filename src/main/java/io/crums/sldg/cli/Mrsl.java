@@ -22,17 +22,22 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import io.crums.io.IoBridges;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.MorselFile;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.json.MorselDumpWriter;
+import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.json.SourceRowParser;
 import io.crums.sldg.json.TrailedRowWriter;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.DateValue;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.IntegralStrings;
@@ -82,16 +87,27 @@ public class Mrsl extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, IOException {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(SUM, STATE, LIST, HISTORY, ENTRY, MERGE);
+    this.command = argList.removeCommand(SUM, INFO, STATE, LIST, HISTORY, ENTRY, MERGE, DUMP);
+    
+    if (!MERGE.equals(command))
+      this.morselFile = argList.removeExistingFile();
+      
+    
     switch (command) {
     case SUM:
     case STATE:
     case LIST:
     case HISTORY:
-      this.morselFile = argList.removeExistingFile();
       break;
+      
+    case INFO:
+      options = OptionGroup.remove(argList, JSON_OPT, PACK_OPT);
+      setSaveFile(argList);
+      if (saveFile != null && options.isEmpty())
+        options = Collections.singleton(JSON_OPT);
+      break;
+      
     case ENTRY:
-      this.morselFile = argList.removeExistingFile();
       this.rowNumbers = argList.removeNumbers(true);
       if (rowNumbers.isEmpty())
         throw new IllegalArgumentException("missing entry row numbers");
@@ -141,6 +157,7 @@ public class Mrsl extends MainTemplate {
         
       }
       break;
+      
     case MERGE:
       this.morselFiles = argList.removeExistingFiles();
       
@@ -153,11 +170,14 @@ public class Mrsl extends MainTemplate {
       setSaveFile(argList);
       break;
       
+    case DUMP:
+      setSaveFile(argList);
+      this.options = PACK_OPT.removeOption(argList);
+      break;
+      
     default:
       throw new RuntimeException("assertion failed. command=" + command);
     }
-    if (morselFile == null && morselFiles == null)
-      throw new IllegalArgumentException("required path/to/morsel file missing");
     
     
     argList.enforceNoRemaining();
@@ -225,6 +245,9 @@ public class Mrsl extends MainTemplate {
     case SUM:
       sum();
       break;
+    case INFO:
+      info();
+      break;
     case STATE:
       state();
       break;
@@ -240,6 +263,9 @@ public class Mrsl extends MainTemplate {
       break;
     case MERGE:
       merge();
+      break;
+    case DUMP:
+      dump();
       break;
     default:
       throw new RuntimeException("assertion failure. command=" + command);
@@ -369,7 +395,6 @@ public class Mrsl extends MainTemplate {
   }
   
   
-  @SuppressWarnings("unchecked")
   void entryJson() throws IOException {
     MorselPack pack = new MorselFile(morselFile).getMorselPack();
     
@@ -452,13 +477,14 @@ public class Mrsl extends MainTemplate {
         
         printer.print(jArray);
       } else {  // not indenting
-        String json = jArray.toJSONString();
         if (save) {
           var out = new FileWriter(saveFile);
           closer.pushClose(out);
-          out.append(json);
-        } else
-          System.out.println(json);
+          jArray.writeJSONString(out);
+        } else {
+          jArray.writeJSONString(IoBridges.toWriter(System.out));
+          System.out.println();
+        }
       }
       
       if (save)
@@ -507,6 +533,8 @@ public class Mrsl extends MainTemplate {
       TablePrint table;
       {
         var out = saving ? System.out : new PrintStream(saveFile);
+        if (saving)
+          closer.pushClose(out);
         if (this.colWidths == null) {
           // w/ possible exception of the first column,
           // columns are simply appended
@@ -696,6 +724,15 @@ public class Mrsl extends MainTemplate {
     table.printRow(SUM, "prints a summary of the morsel's contents");
     table.println();
     
+    table.printRow(INFO, "prints meta information about the ledger, if any.");
+    table.println();
+    table.printRow(null, JSON_OPT + "  (or -" + JSON_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then the output is in JSON format");
+    table.println();
+    table.printRow(null, PACK_OPT + "  (or -" + PACK_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then JSON whitespace is removed");
+    table.println();
+    
     table.printRow(STATE, "prints the highest row number and that row's hash");
     table.println();
     
@@ -762,6 +799,16 @@ public class Mrsl extends MainTemplate {
     table.printRow(null,  "created there; if the path is an existing directory, then a");
     table.printRow(null,  "file with a merge-generated name is created in that directory.");
     table.printRow(null,  "DEFAULT: '.'        (current directory)");
+    table.println();
+    table.println();
+
+    table.printRow(DUMP,  "dumps a JSON representation of the entire morsel file");
+    table.printRow(null,  "Arguments:");
+    table.println();
+    table.printRow(null, SAVE + "=<path/to/file> (optional)");
+    table.println();
+    table.printRow(null, PACK_OPT + "  (or -" + PACK_OPT.getSym() + ")");
+    table.printRow(null,  "If set, then JSON whitespace is removed");
     table.println();
     
     
@@ -878,7 +925,7 @@ public class Mrsl extends MainTemplate {
           int spaceAvail = postFlagsSpace;
           if (srcDesc.length() > spaceAvail)
             srcDesc = srcDesc.substring(0, spaceAvail - 2) + "..";
-          table.printRow(rn, null, e, t, srcDesc);
+          table.printRow("[" + rn + "]", null, e, t, srcDesc);
 
         } else  {
 
@@ -886,13 +933,13 @@ public class Mrsl extends MainTemplate {
           if (srcDesc.length() > spaceAvail)
             srcDesc = srcDesc.substring(0, spaceAvail - 2) + "..";
           
-          table.printRow(rn, null, e, t, date, srcDesc);
+          table.printRow("[" + rn + "]", null, e, t, date, srcDesc);
 
         }
 
 
       } else  // e == null
-        table.printRow(rn, null, e, t, date);
+        table.printRow("[" + rn + "]", null, e, t, date);
     }
 
     table.println();
@@ -907,14 +954,159 @@ public class Mrsl extends MainTemplate {
   
   
   
+  void info() {
+    var pack = new MorselFile(morselFile).getMorselPack();
+    var info = pack.getMetaPack().getSourceInfo();
+    if (info.isEmpty()) {
+      System.out.println();
+      System.out.println("Morsel contains no meta information.");
+      return;
+    }
+    if (isJson())
+      infoJson(info.get());
+    else
+      infoText(info.get());
+  }
+  
+  
+  
+  void infoJson(SourceInfo info) {
+    var jObj = SourceInfoParser.INSTANCE.toJsonObject(info);
+    boolean saving = saveFile != null;
+    boolean compact = options.contains(PACK_OPT);
+    
+    try (var closer = new TaskStack()) {
+      var out = saving ? new FileWriter(saveFile) : System.out;
+      if (compact)
+        jObj.writeJSONString((FileWriter) out);
+      else
+        new JsonPrinter(out).print(jObj);
+        
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on writing " + saveFile + ": " + iox.getMessage(), iox);
+    }
+    
+    if (saving) {
+      String msg =
+          "Meta info for ledger named <" + info.getName() + "> with " +
+          nOf(info.getColumnInfoCount(), "named column") + " written to file";
+      System.out.println(msg);
+      System.out.println();
+    }
+  }
+  
+  private final static int INF_TXT_INDENT = 4;
+  
+  void infoText(SourceInfo info) {
+    var table = new TablePrint(INF_TXT_INDENT, INF_TXT_INDENT);
+    table.println();
+    table.printRow("Name:");
+    table.printRow(null, info.getName());
+    
+    if (isPresent(info.getDescription())) {
+      table.println();
+      table.printRow("Description:");
+      table.incrIndentation(INF_TXT_INDENT);
+      table.printParagraph(info.getDescription());
+      table.decrIndentation(INF_TXT_INDENT);
+    }
+    
+    var columnInfos = info.getColumnInfos();
+    if (!columnInfos.isEmpty()) {
+      table.println();
+      table.println("Named Columns:");
+      table.setIndentation(INF_TXT_INDENT);
+      for (var colInfo : columnInfos) {
+        table.println();
+        table.printRow("[" + colInfo.getColumnNumber() + "]", colInfo.getName());
+        if (colInfo.getDescription() != null) {
+          table.println("Description:");
+          table.incrIndentation(INF_TXT_INDENT);
+          table.printParagraph(colInfo.getDescription());
+          table.decrIndentation(INF_TXT_INDENT);
+        }
+        if (isPresent(colInfo.getUnits())) {
+          table.printRow("Units:", colInfo.getUnits());
+        }
+      }
+      table.setIndentation(0);
+    }
+    
+    if (info.getDateFormat().isPresent()) {
+      table.println();
+      table.println("Date Format:");
+      table.incrIndentation(INF_TXT_INDENT);
+      table.printRow("Pattern:", info.getDateFormatPattern());
+      table.printRow("Example:", info.getDateFormat().get().format(new Date()));
+      table.decrIndentation(INF_TXT_INDENT);
+    }
+    table.println();
+  }
+  
+  
+  private boolean isPresent(String value) {
+    return value != null && !value.isBlank();
+  }
+  
+  void dump() {
+    var pack = new MorselFile(morselFile).getMorselPack();
+    var morselObj = MorselDumpWriter.INSTANCE.toJsonObject(pack);
+    
+    final boolean saving = saveFile != null;
+    final boolean compact = options.contains(PACK_OPT);
+    
+    
+    try (var closer = new TaskStack()) {
+      if (saving) {                     // saving
+        var writer = new FileWriter(saveFile);
+        closer.pushClose(writer);
+        if (compact)
+          morselObj.writeJSONString(writer);
+        else
+          new JsonPrinter(writer).print(morselObj);
+        
+      } else if (compact)               // not saving
+        morselObj.writeJSONString(IoBridges.toWriter(System.out));
+      else
+        new JsonPrinter(System.out).print(morselObj);
+      
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on saving to " + saveFile + ": " + iox.getMessage(), iox);
+    }
+    
+    var out = System.out;
+    out.println();
+    
+    if (saving) {
+      boolean meta = pack.getMetaPack().getSourceInfo().isPresent();
+      int srcRows = pack.sourceRowNumbers().size();
+      int trails = pack.getTrailedRows().size();
+      int fullRns = pack.getFullRowNumbers().size();
+      int allRns = SkipLedger.coverage(pack.getFullRowNumbers()).tailSet(1L).size();
+      
+      out.print(allRns + " rows dumped to file; ");
+      out.print(nOf(srcRows, "with source") + ", ");
+      out.print(nOf(trails, "with crumtrail") + " (" + pluralize("witness record", trails) + "), ");
+      out.print(fullRns + " fully linked");
+      if (meta)
+        out.print(", meta info included");
+      out.println(".");
+      out.println();
+    }
+      
+  }
   
   
   private final static String SUM = "sum";
+  private final static String INFO = "info";
   private final static String STATE = "state";
   private final static String LIST = "list";
   private final static String HISTORY = "history";
   private final static String ENTRY = "entry";
   private final static String MERGE = "merge";
+  private final static String DUMP = "dump";
   
   // named values (name=value)
   
