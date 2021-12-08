@@ -26,6 +26,7 @@ import io.crums.util.Sets;
 public class MorselPackBuilder implements MorselBag, Serial {
   
   
+  
   protected final RowPackBuilder rowPackBuilder = new RowPackBuilder();
   protected final TrailPackBuilder trailPackBuilder = new TrailPackBuilder();
   protected final SourcePackBuilder sourcePackBuilder = new SourcePackBuilder();
@@ -45,7 +46,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
       int trailsAdded = trailPackBuilder.addAll(pack.getTrailPack());
       int srcsAdded = sourcePackBuilder.addAll(pack.getSourcePack());
       int infosAdded = pathPackBuilder.addPathPack(pack.getPathPack());
-      return rowsAdded + trailsAdded + srcsAdded + infosAdded;
+      int metaAdded = addMetaPack(pack.getMetaPack());
+      return rowsAdded + trailsAdded + srcsAdded + infosAdded + metaAdded;
     }
   }
   
@@ -74,6 +76,10 @@ public class MorselPackBuilder implements MorselBag, Serial {
     this.metaPack = new MetaPack(sourceInfo);
   }
   
+  public void setMetaPack(MetaPack meta) {
+    this.metaPack = Objects.requireNonNull(meta, "null meta");
+  }
+  
   
   public MetaPack getMetaPack() {
     return metaPack;
@@ -92,6 +98,17 @@ public class MorselPackBuilder implements MorselBag, Serial {
       return count;
     }
   }
+  
+  
+  public int addMetaPack(MetaPack meta) {
+    if (meta.isEmpty() || metaPack.isPresent())
+      return 0;
+    this.metaPack = meta;
+    return 1;
+  }
+  
+  
+  
   
   
   

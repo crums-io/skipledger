@@ -34,7 +34,6 @@ public class MorselDumpWriter implements JsonEntityWriter<MorselPack> {
   
   
 
-  @SuppressWarnings("unchecked")
   @Override
   public JSONObject injectEntity(MorselPack pack, JSONObject jObj) {
     var info = pack.getMetaPack().getSourceInfo();

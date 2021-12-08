@@ -6,6 +6,7 @@ package io.crums.sldg.packs;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
@@ -16,6 +17,7 @@ import io.crums.sldg.HashConflictException;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
 import io.crums.sldg.bags.MorselBag;
+import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.Sets;
 
@@ -170,6 +172,11 @@ public final class MorselPack implements MorselBag {
   
   public MetaPack getMetaPack() {
     return metaPack;
+  }
+  
+  
+  public Optional<SourceInfo> getSourceInfo() {
+    return metaPack.getSourceInfo();
   }
   
   

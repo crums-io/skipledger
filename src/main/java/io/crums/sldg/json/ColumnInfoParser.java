@@ -37,11 +37,10 @@ public class ColumnInfoParser implements JsonEntityParser<ColumnInfo> {
   protected ColumnInfoParser() {  }
   
 
-  @SuppressWarnings("unchecked")
   @Override
   public JSONObject injectEntity(ColumnInfo column, JSONObject jObj) {
-    jObj.put(NAME, column.getName());
     jObj.put(CN, column.getColumnNumber());
+    jObj.put(NAME, column.getName());
     addIfPresent(jObj, DESC, column.getDescription());
     addIfPresent(jObj, UNITS, column.getUnits());
     return jObj;

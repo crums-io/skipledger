@@ -16,7 +16,6 @@ import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.model.Constants;
 import io.crums.util.BigShort;
-import io.crums.util.hash.Digest;
 
 /**
  * A table-cell value. Since we usually speak of rows and columns (as when we

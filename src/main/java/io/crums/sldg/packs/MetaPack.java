@@ -71,7 +71,7 @@ public class MetaPack implements Serial {
   private volatile byte[] jsonBytes;
 
   /**
-   * 
+   * @param metaInfo optional (may be null)
    */
   public MetaPack(SourceInfo metaInfo) {
     this.metaInfo = metaInfo;
@@ -86,10 +86,22 @@ public class MetaPack implements Serial {
   }
   
   
+  /**
+   * (Woulda been nice if {@code Optional} were an interface instead of a class.)
+   * 
+   * @return {@code getSourceInfo().isEmpty()}
+   */
+  public boolean isEmpty() {
+    return metaInfo == null;
+  }
   
   
-  
-  
+  /**
+   * @return <em>!</em> {@linkplain #isEmpty()}
+   */
+  public boolean isPresent() {
+    return !isEmpty();
+  }
   
   
   

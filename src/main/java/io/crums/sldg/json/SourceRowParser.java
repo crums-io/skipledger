@@ -141,7 +141,6 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
   }
   
 
-  @SuppressWarnings("unchecked")
   public JSONObject injectSlimJson(SourceRow srcRow, JSONObject jObj) {
     jObj.put(RN, srcRow.rowNumber());
     
@@ -179,7 +178,6 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
   }
   
 
-  @SuppressWarnings("unchecked")
   @Override
   public SourceRow toEntity(JSONObject jObj) throws JsonParsingException {
     long rowNumber = JsonUtils.getNumber(jObj, RN, true).longValue();

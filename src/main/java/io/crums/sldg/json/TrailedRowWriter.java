@@ -89,7 +89,6 @@ public class TrailedRowWriter implements JsonEntityWriter<TrailedRow> {
   
   
   
-  @SuppressWarnings("unchecked")
   public JSONObject injectEntity(TrailedRow trailedRow, JSONObject jObj, DateFormat witDateFormat) {
     RowHashWriter.INSTANCE.injectEntity(trailedRow, jObj);
     if (witDateFormat != null)
@@ -107,7 +106,6 @@ public class TrailedRowWriter implements JsonEntityWriter<TrailedRow> {
   }
   
 
-  @SuppressWarnings("unchecked")
   public JSONObject injectSlim(
       TrailedRow trailedRow, JSONObject jObj, DateFormat witDateFormat) {
 

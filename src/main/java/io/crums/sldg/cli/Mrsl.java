@@ -327,7 +327,7 @@ public class Mrsl extends MainTemplate {
   }
 
 
-  private void merge() throws IOException {
+  void merge() throws IOException {
     
     final int count = this.morselFiles.size();
     
@@ -357,7 +357,7 @@ public class Mrsl extends MainTemplate {
     MorselPackBuilder builder = new MorselPackBuilder();
     int objects = builder.init(auth.getMorselPack());
     out.println();
-    out.println("init " + objects + pluralize(" object", objects) + " (hi row " + auth.getMorselPack().hi() + ")");
+    out.println("init " + nOf(objects, "object") + " (hi row " + auth.getMorselPack().hi() + ")");
     
     
     for (var morsel : sources) {
@@ -365,13 +365,13 @@ public class Mrsl extends MainTemplate {
       out.print(" " + morsel.getFile() + " ..");
       int added = builder.addAll(morsel.getMorselPack());
       objects += added;
-      out.println(". " + added + pluralize(" object", added) + " added");
+      out.println(". " + nOf(added, "object") + " added");
     }
     
     File dest = MorselFile.createMorselFile(saveFile, builder);
     
     out.println();
-    out.println(objects + pluralize(" object", objects) + " merged to " + dest);
+    out.println(objects + " objects merged to " + dest);
   }
   
   private int compareMorsels(MorselFile a, MorselFile b) {
@@ -532,7 +532,7 @@ public class Mrsl extends MainTemplate {
       
       TablePrint table;
       {
-        var out = saving ? System.out : new PrintStream(saveFile);
+        var out = saving ? new PrintStream(saveFile) : System.out;
         if (saving)
           closer.pushClose(out);
         if (this.colWidths == null) {
@@ -632,7 +632,7 @@ public class Mrsl extends MainTemplate {
       if (nextTrail != null)
         printNextTrail(nextTrail, table, dateFormat, includeRns);
       
-      if (this.saveFile != null)
+      if (!saving)
         table.println();
     
     } catch (IOException iox) {
@@ -699,7 +699,7 @@ public class Mrsl extends MainTemplate {
   }
 
 
-  private final static int LEFT_TBL_COL_WIDTH = 13;
+  private final static int LEFT_TBL_COL_WIDTH = 11;
   private final static int RIGHT_TBAL_COL_WIDTH =
       RM - INDENT - LEFT_TBL_COL_WIDTH;
 
@@ -828,6 +828,11 @@ public class Mrsl extends MainTemplate {
     PrintStream out = System.out;
     out.println();
     out.println("<" + morsel.getFile().getName() + ">");
+    
+    if (pack.getSourceInfo().isPresent()) {
+      var info = pack.getSourceInfo().get();
+      out.println(" -- " + info.getName() + " -- ");
+    }
     out.println();
     
     TablePrint table = new TablePrint(LEFT_SUM_COL_WIDTH, MID_SUM_COL_WIDTH, RIGHT_SUM_COL_WIDTH);
@@ -844,17 +849,14 @@ public class Mrsl extends MainTemplate {
     table.printRow(" with sources:", entries.size());
     out.println();
     
-    // !beacons.isEmpty() || !trails.isEmpty() == !(beacons.isEmpty() && trails.isEmpty())
     if (!trails.isEmpty()) {
       out.println("History:");
-      
-      if (!trails.isEmpty()) {
-        long witRn = trails.get(trails.size() - 1);
-        var trail = pack.crumTrail(witRn);
-        table.printRow(" created before:", new Date(trail.crum().utc()), "(row " + witRn + ")");
-      }
+      long witRn = trails.get(trails.size() - 1);
+      var trail = pack.crumTrail(witRn);
+      table.printRow(" witnessed:", new Date(trail.crum().utc()), "(row " + witRn + ")");
       out.println();
     }
+    
     
     out.println("<" + stateString(pack) + ">");
   }
@@ -947,8 +949,7 @@ public class Mrsl extends MainTemplate {
     int ents = entryRns.size();
     int trails = trailRns.size();
     table.println(
-        rows + pluralize(" row", rows) + "; " + trails + pluralize(" crumtrail", trails) + "; " +
-        ents + pluralize(" source-row", ents) + ".");
+        nOf(rows, "row") + ", " + nOf(trails, "crumtrail") + ", " + nOf(ents, "source-row") + ".");
     table.println();
   }
   
@@ -978,7 +979,7 @@ public class Mrsl extends MainTemplate {
     try (var closer = new TaskStack()) {
       var out = saving ? new FileWriter(saveFile) : System.out;
       if (compact)
-        jObj.writeJSONString((FileWriter) out);
+        jObj.writeJSONString(out);
       else
         new JsonPrinter(out).print(jObj);
         
@@ -992,14 +993,15 @@ public class Mrsl extends MainTemplate {
           "Meta info for ledger named <" + info.getName() + "> with " +
           nOf(info.getColumnInfoCount(), "named column") + " written to file";
       System.out.println(msg);
-      System.out.println();
     }
+    System.out.println();
   }
   
-  private final static int INF_TXT_INDENT = 4;
+  private final static int FIRST_TXT_INDENT = 4;
+  private final static int INF_TXT_COL = FIRST_TXT_INDENT + 1;
   
   void infoText(SourceInfo info) {
-    var table = new TablePrint(INF_TXT_INDENT, INF_TXT_INDENT);
+    var table = new TablePrint(INF_TXT_COL, INF_TXT_COL);
     table.println();
     table.printRow("Name:");
     table.printRow(null, info.getName());
@@ -1007,28 +1009,30 @@ public class Mrsl extends MainTemplate {
     if (isPresent(info.getDescription())) {
       table.println();
       table.printRow("Description:");
-      table.incrIndentation(INF_TXT_INDENT);
+      table.setIndentation(FIRST_TXT_INDENT);
       table.printParagraph(info.getDescription());
-      table.decrIndentation(INF_TXT_INDENT);
+      table.setIndentation(0);
     }
     
     var columnInfos = info.getColumnInfos();
     if (!columnInfos.isEmpty()) {
       table.println();
       table.println("Named Columns:");
-      table.setIndentation(INF_TXT_INDENT);
+      table.setIndentation(FIRST_TXT_INDENT);
       for (var colInfo : columnInfos) {
         table.println();
         table.printRow("[" + colInfo.getColumnNumber() + "]", colInfo.getName());
+        table.incrIndentation(INF_TXT_COL);
         if (colInfo.getDescription() != null) {
-          table.println("Description:");
-          table.incrIndentation(INF_TXT_INDENT);
+          table.printRow("Description:");
+          table.incrIndentation(INF_TXT_COL);
           table.printParagraph(colInfo.getDescription());
-          table.decrIndentation(INF_TXT_INDENT);
+          table.decrIndentation(INF_TXT_COL);
         }
         if (isPresent(colInfo.getUnits())) {
           table.printRow("Units:", colInfo.getUnits());
         }
+        table.decrIndentation(INF_TXT_COL);
       }
       table.setIndentation(0);
     }
@@ -1036,10 +1040,10 @@ public class Mrsl extends MainTemplate {
     if (info.getDateFormat().isPresent()) {
       table.println();
       table.println("Date Format:");
-      table.incrIndentation(INF_TXT_INDENT);
+      table.setIndentation(FIRST_TXT_INDENT);
       table.printRow("Pattern:", info.getDateFormatPattern());
       table.printRow("Example:", info.getDateFormat().get().format(new Date()));
-      table.decrIndentation(INF_TXT_INDENT);
+      table.setIndentation(0);
     }
     table.println();
   }

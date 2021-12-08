@@ -44,7 +44,6 @@ public class SourceInfoParser implements JsonEntityParser<SourceInfo> {
 
   
 
-  @SuppressWarnings("unchecked")
   @Override
   public JSONObject injectEntity(SourceInfo sourceInfo, JSONObject jObj) {
     jObj.put(NAME, sourceInfo.getName());

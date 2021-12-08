@@ -84,7 +84,7 @@ public class ColumnValueParser implements JsonEntityParser<ColumnValue> {
     return injectEntity(columnValue, jObj, dateFormatter);
   }
 
-  @SuppressWarnings("unchecked")
+
   public JSONObject injectEntity(ColumnValue entity, JSONObject jObj, DateFormat dateFormatter) {
     var type = entity.getType();
     jObj.put(TYPE, type.symbol());

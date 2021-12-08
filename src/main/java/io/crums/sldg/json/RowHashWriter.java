@@ -35,7 +35,6 @@ public class RowHashWriter implements JsonEntityWriter<RowHash> {
   }
   
   
-  @SuppressWarnings("unchecked")
   private JSONObject injectImpl(long rn, ByteBuffer rowHash, JSONObject jObj) {
     jObj.put(RN, rn);
     jObj.put(RH, IntegralStrings.toHex(rowHash));
