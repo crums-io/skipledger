@@ -5,6 +5,7 @@ package io.crums.sldg.fs;
 
 
 import static io.crums.sldg.SldgConstants.JSON_EXT;
+import static io.crums.sldg.SldgConstants.MRSL_EXT;
 import static io.crums.sldg.SldgConstants.SPATH_EXT;
 import static io.crums.sldg.SldgConstants.SPATH_JSON_EXT;
 
@@ -46,10 +47,21 @@ public class Filenaming {
   
   public String morselFilename(String name, MorselBag bag) {
     Objects.requireNonNull(name, "null name");
-    Objects.requireNonNull(bag, "null builder");
-    
+    Objects.requireNonNull(bag, "null morsel bag");
+    checkName(name);
+    return morselFilePrefix(name, bag) + MRSL_EXT;
+  }
+  
+  
+  private void checkName(String name) {
     if (name == null || name.isEmpty() || !name.equals(name.trim()))
-        throw new IllegalArgumentException("name '" + name + "'");
+      throw new IllegalArgumentException("name '" + name + "'");
+  }
+  
+  
+  
+  
+  protected String morselFilePrefix(String name, MorselBag bag) {
 
     List<SourceRow> srcs = bag.sources();
     String filename = name;
@@ -62,9 +74,37 @@ public class Filenaming {
       if (srcs.size() > MAX_ECOUNT_IN_NAME)
         filename += "-";
     }
-    
-    filename += SldgConstants.MRSL_EXT;
     return filename;
+  }
+  
+  
+  public File newMorselFile(File dir, MorselBag bag) {
+    Objects.requireNonNull(dir, "null dir");
+    
+    String name = dir.getName();
+    if (name.length() <= 3 && !dir.isAbsolute())
+      name = dir.getAbsoluteFile().getName();
+    if (File.separator.equals(name))
+      name = "root";
+    
+    return newMorselFile(dir, name, bag);
+  }
+  
+  
+  public File newMorselFile(File dir, String name, MorselBag bag) {
+    Objects.requireNonNull(dir, "null dir");
+    Objects.requireNonNull(name, "null name");
+    Objects.requireNonNull(bag, "null morsel bag");
+    checkName(name);
+    if (!dir.isDirectory())
+      throw new IllegalArgumentException("not a directory: " + dir);
+    
+    final String prefix = morselFilePrefix(name, bag);
+    File out = new File(dir, prefix + MRSL_EXT);
+    for (int i = 2; out.exists(); ++i) {
+      out = new File(dir, prefix + "." + i + MRSL_EXT);
+    }
+    return out;
   }
   
   

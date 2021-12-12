@@ -21,7 +21,6 @@ import java.util.function.Consumer;
 import io.crums.client.ClientException;
 import io.crums.sldg.Ledger.State;
 import io.crums.sldg.SourceLedger;
-import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.sql.Config;
 import io.crums.sldg.sql.ConfigFileBuilder;
 import io.crums.sldg.sql.ConnectionInfo;
@@ -31,13 +30,9 @@ import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.IntegralStrings;
-import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.cc.ThreadUtils;
-import io.crums.util.json.JsonParsingException;
 import io.crums.util.main.ArgList;
-import io.crums.util.main.MainTemplate;
-import io.crums.util.main.NumbersArg;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import io.crums.util.main.TablePrint;
@@ -47,7 +42,7 @@ import io.crums.util.ticker.Progress;
  * Manages a ledger formed from a relational database table or view that is
  * operationally append-only.
  */
-public class Sldg extends MainTemplate {
+public class Sldg extends BaseMain {
 
   /**
    * @param args
@@ -58,21 +53,14 @@ public class Sldg extends MainTemplate {
   
   
 
-  private static class RowArg {
+  private class RowArg {
 
     List<Long> rowNums = Collections.emptyList();
     
     
     
     void setRowNums(ArgList args) {
-      String match = args.removeSingle(NumbersArg.MATCHER);
-      if (match == null)
-        throw new IllegalArgumentException("missing row-numbers arg");
-      
-      rowNums = NumbersArg.parse(match);
-      if (rowNums.get(0) < 1 || !Lists.isSortedNoDups(rowNums))
-        throw new IllegalArgumentException(
-            "row numbers must be > 0 and strictly ascending. Numbers parsed: " + rowNums);
+      this.rowNums = getRowNums(args);
     }
     
   }
@@ -90,36 +78,11 @@ public class Sldg extends MainTemplate {
       
       if (!state) {
         setRowNums(args);
-        
-        String rCols = args.removeValue(REDACT);
-        if (rCols != null) {
-          List<Integer> parsed = NumbersArg.parseInts(rCols);
-          if (parsed != null && !parsed.isEmpty()) {
-            parsed = new ArrayList<>(parsed);
-            Collections.sort(parsed);
-            if (parsed.get(0) < 1)
-              throw new IllegalArgumentException(
-                  "illegal column number with '" + REDACT + "' option: " + parsed.get(0));
-            redactCols = parsed;
-          } else
-            throw new IllegalArgumentException(
-                "RHS of " + REDACT + "=" + rCols + " must parse to numbers");
-        }
+        redactCols = getRedactColumns(args);
 
-        String metaPath = args.removeValue(META);
-        if (metaPath == null)
-          this.sourceInfo = config.getSourceInfo().orElse(null);
-        else {
-          File metaFile = new File(metaPath);
-          if (!metaFile.isFile())
-            throw new IllegalArgumentException("file not found (" + META + "=): " + metaFile);
-          try {
-            this.sourceInfo = SourceInfoParser.INSTANCE.toEntity(metaFile);
-          } catch (JsonParsingException jpx) {
-            throw new IllegalArgumentException(
-                "failed to load: (" + META + "=" + metaPath + "): " + jpx, jpx);
-          }
-        }
+        this.sourceInfo = getMeta(args);
+        if (sourceInfo == null)
+          sourceInfo = config.getSourceInfo().orElse(null);
       }
 
       
@@ -1377,11 +1340,10 @@ public class Sldg extends MainTemplate {
 
   private final static String MAKE_MORSEL = "make-morsel";
   private final static String STATE_MORSEL = "state-morsel";
-  
-  private final static String REDACT = "redact";
-  
-  private final static String META = "meta";
-  
-  
 
 }
+
+
+
+
+

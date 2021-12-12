@@ -5,7 +5,9 @@ package io.crums.sldg;
 
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
+import java.util.TreeSet;
 
 import io.crums.io.Serial;
 import io.crums.util.Lists;
@@ -99,11 +101,58 @@ public class PathInfo implements Serial {
     
     if (declaration.isEmpty() || declaration.get(0) < 1)
       throw new IllegalArgumentException("declaration " + declaration);
-    else if (declaration.size() > MAX_DECLARATION_SIZE)
-      throw new IllegalArgumentException("declaration size " + declaration.size() + " too large");
     
-    if (meta.length() > MAX_META_SIZE)
-      throw new IllegalArgumentException("meta too large: " + meta.length());
+    checkDeclSize();
+  }
+  
+  
+  private void checkDeclSize() {
+    if (declaration.size() > MAX_DECLARATION_SIZE)
+      throw new IllegalArgumentException("declaration size " + declaration.size() + " too large");
+  }
+  
+  
+  /**
+   * Constructs an instance.
+   * 
+   * @param lo &ge; 1
+   * @param targets the middle row numbers (&ge; lo, &le; hi). May be empty but not null.
+   * @param hi &gt; {@code lo}
+   * @param meta null counts as empty
+   */
+  public PathInfo(long lo, List<Long> targets, long hi, String meta) {
+    if (lo < 1 || hi <= lo)
+      throw new IllegalArgumentException("lo, hi: " + lo + ", " + hi);
+    
+    if (targets.isEmpty()) {
+      
+      Long[] rows = { lo, hi };
+      this.declaration = Lists.asReadOnlyList(rows);
+    
+    } else {
+      
+      var decl = new TreeSet<>(targets);
+      if (targets.size() != decl.size())
+        throw new IllegalArgumentException(
+            "target row numbers contain duplicates");
+      
+      decl.add(lo);
+      decl.add(hi);
+      
+      if (decl.first() < lo)
+        throw new IllegalArgumentException(
+            "targets minimum (" + decl.first() + ") < lo (" + lo + ")");
+      if (decl.last() > hi)
+        throw new IllegalArgumentException(
+            "targets maximum (" + decl.last() + ") > hi (" + hi + ")");
+      
+      Long[] declRn = decl.toArray(new Long[decl.size()]);
+      this.declaration = Lists.asReadOnlyList(declRn);
+      
+      checkDeclSize();
+    }
+    
+    this.meta = dressUpMeta(meta);
   }
   
   
@@ -115,21 +164,18 @@ public class PathInfo implements Serial {
    * @param meta null counts as empty
    */
   public PathInfo(long lo, long hi, String meta) {
-    if (lo < 1 || hi <= lo)
-      throw new IllegalArgumentException("lo, hi: " + lo + ", " + hi);
-    
-    Long[] rows = { lo, hi };
-    this.declaration = Lists.asReadOnlyList(rows);
-    this.meta = dressUpMeta(meta);
-    
-    if (meta.length() > MAX_META_SIZE)
-      throw new IllegalArgumentException("meta too large: " + meta.length());
+    this(lo, Collections.emptyList(), hi, meta);
   }
   
   
   
   protected String dressUpMeta(String meta) {
-    return meta == null ? "" : meta;
+    if (meta == null)
+      return "";
+    if (meta.length() > MAX_META_SIZE)
+      throw new IllegalArgumentException("meta too large: " + meta.length());
+    
+    return meta;
   }
   
   

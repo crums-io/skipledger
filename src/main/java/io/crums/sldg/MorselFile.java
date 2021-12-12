@@ -123,25 +123,7 @@ public class MorselFile {
     else if (!target.isDirectory())
       return target;
     
-    
-    String name;
-    {
-      
-      // TODO: this mess should go in FileUtils.. never want to do this again
-      name = target.getName();
-      if (name.isEmpty() || name.equals("."))
-        name = target.getAbsoluteFile().getParentFile().getName();
-      else if (name.equals(".."))
-        name = target.getAbsoluteFile().getParentFile().getParentFile().getName();
-    }
-    
-    String filename = Filenaming.INSTANCE.morselFilename(name, builder);
-    
-    target = new File(target, filename);
-    if (target.exists())
-      throw new IllegalStateException("file already exists: " + target);
-    
-    return target;
+    return Filenaming.INSTANCE.newMorselFile(target, builder);
   }
   
   

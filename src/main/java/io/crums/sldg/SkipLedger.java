@@ -168,10 +168,10 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       if (rowNumber == 0)
         msg =
             "row 0 is an *abstract row that hashes to a string of zeroes; " +
-            "a maximum of 63 of rows reference it, but its contents (" +
+            "at most 63 of rows reference it, but its contents (" +
             "pointers and input hash) are undefined";
       else
-        msg = "negative rowNumber " + rowNumber;
+        msg = "negative row number " + rowNumber;
       
       throw new IllegalArgumentException(msg);
     }

@@ -4,11 +4,17 @@
 package io.crums.sldg.bags;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
 import io.crums.sldg.BaggedRow;
+import io.crums.sldg.Path;
 import io.crums.sldg.Row;
+import io.crums.sldg.SkipLedger;
+import io.crums.util.Lists;
+import io.crums.util.Sets;
 
 /**
  * <p>A bag of rows. The general contract is that if a row's
@@ -97,6 +103,54 @@ public interface RowBag {
    */
   default Row getRow(long rowNumber) {
     return new BaggedRow(rowNumber, this);
+  }
+  
+  
+  /**
+   * Returns a path connecting the given target row numbers. Note the target row numbers
+   * must be contained in this bag.
+   * 
+   * @param targets 2 or more monotonically increasing row numbers that are to be
+   *                included in the returned path
+   * 
+   * @return a path connecting the above targets.
+   * 
+   * @see #getFullRowNumbers()
+   * @see #hasFullRow(long)
+   * @see #getPath(List)
+   */
+  default Path getPath(long... targets) {
+    return getPath(Lists.longList(targets));
+  }
+  
+
+  /**
+   * Returns a path connecting the given target row numbers. Note the target row numbers
+   * must be contained in this bag.
+   * 
+   * @param targets 2 or more monotonically increasing row numbers that are to be
+   *                included in the returned path
+   * 
+   * @return a path connecting the above targets.
+   * 
+   * @see #getFullRowNumbers()
+   * @see #hasFullRow(long)
+   * @see #getPath(long...)
+   */
+  default Path getPath(List<Long> targets) {
+    if (targets.size() < 2)
+      throw new IllegalArgumentException("at least 2 targets required: " + targets);
+
+    var rns = SkipLedger.stitch(targets);
+    
+    if (!Sets.sortedSetView(getFullRowNumbers()).containsAll(rns)) {
+      var notFound = new ArrayList<>(targets);
+      notFound.removeAll(getFullRowNumbers());
+      throw new IllegalArgumentException(
+          "not found: " + notFound + " in targets " + targets);
+    }
+    
+    return new Path(Lists.map(rns, rn -> getRow(rn)));
   }
   
 

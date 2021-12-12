@@ -47,7 +47,6 @@ import io.crums.util.TaskStack;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONArray;
 import io.crums.util.main.ArgList;
-import io.crums.util.main.MainTemplate;
 import io.crums.util.main.NumbersArg;
 import io.crums.util.main.Option;
 import io.crums.util.main.OptionGroup;
@@ -58,7 +57,7 @@ import io.crums.util.main.TablePrint;
 /**
  * CLI for morsel files.
  */
-public class Mrsl extends MainTemplate {
+public class Mrsl extends BaseMain {
   
   public final static String PROGNAME = Mrsl.class.getSimpleName().toLowerCase();
   
@@ -70,9 +69,16 @@ public class Mrsl extends MainTemplate {
   private String sep = " ";
   private List<Integer> colWidths;
   
+  private List<Integer> redactCols = Collections.emptyList();
+  
   private List<File> morselFiles;
   
   private Set<Option> options = Collections.emptySet();
+  
+  /**
+   * TODO: morsel comment.
+   */
+  private String comment;
   
   
   private Mrsl() {
@@ -87,7 +93,7 @@ public class Mrsl extends MainTemplate {
   protected void init(String[] args) throws IllegalArgumentException, IOException {
     ArgList argList = newArgList(args);
     
-    this.command = argList.removeCommand(SUM, INFO, STATE, LIST, HISTORY, ENTRY, MERGE, DUMP);
+    this.command = argList.removeCommand(SUM, INFO, STATE, LIST, HISTORY, ENTRY, MERGE, SUBMERGE, DUMP);
     
     if (!MERGE.equals(command))
       this.morselFile = argList.removeExistingFile();
@@ -168,6 +174,23 @@ public class Mrsl extends MainTemplate {
       
 
       setSaveFile(argList);
+      break;
+      
+    case SUBMERGE:
+      this.rowNumbers = argList.removeNumbers(true);
+      if (rowNumbers.isEmpty())
+        throw new IllegalArgumentException("missing row numbers");
+      {
+        var set = new TreeSet<>(rowNumbers);
+        if (set.size() < rowNumbers.size())
+          throw new IllegalArgumentException(
+              "duplicate row numbers specified: " + argList.getArgString());
+        this.rowNumbers = new ArrayList<>(set.size());
+        rowNumbers.addAll(set);
+        
+      }
+      setSaveFile(argList);
+      this.redactCols = getRedactColumns(argList);
       break;
       
     case DUMP:
@@ -264,6 +287,9 @@ public class Mrsl extends MainTemplate {
     case MERGE:
       merge();
       break;
+    case SUBMERGE:
+      submerge();
+      break;
     case DUMP:
       dump();
       break;
@@ -324,6 +350,31 @@ public class Mrsl extends MainTemplate {
       table.printRow(null, trail.getRefUrl());
     }
     table.println();
+  }
+  
+  
+  void submerge() throws IOException {
+    MorselPack pack = new MorselFile(morselFile).getMorselPack();
+    
+    // check we have the source rows
+    if (!Sets.sortedSetView(pack.sourceRowNumbers()).containsAll(rowNumbers)) {
+      // identify *which rows are not present
+      // Dirty hack: I know that this.rowNumbers is mutable
+      this.rowNumbers.removeAll(pack.sourceRowNumbers());
+      exitInputError("missing source rows: " + rowNumbers);
+      return; // never reached
+    }
+    
+    var builder = new MorselPackBuilder();
+    
+    int trails = builder.initWithSources(pack, rowNumbers, redactCols, comment);
+
+    File dest = MorselFile.createMorselFile(saveFile, builder);
+    
+    System.out.println();
+    System.out.println(
+        nOf(rowNumbers.size(), "source row") + ", " + nOf(trails, "crumtrail") +
+        " written to " + dest);
   }
 
 
@@ -483,7 +534,6 @@ public class Mrsl extends MainTemplate {
           jArray.writeJSONString(out);
         } else {
           jArray.writeJSONString(IoBridges.toWriter(System.out));
-          System.out.println();
         }
       }
       
@@ -747,7 +797,7 @@ public class Mrsl extends MainTemplate {
     table.println();
     table.printRow(null,   "<row-numbers>       (required)");
     table.println();
-    table.printRow(null,   "Strictly ascending line numbers separated by commas or spaces");
+    table.printRow(null,   "Strictly ascending row numbers separated by commas or spaces");
     table.printRow(null,   "Ranges (incl.) may be substituted for numbers. For example:");
     table.printRow(null,   "308,466,592-598,717");
     table.println();
@@ -793,13 +843,33 @@ public class Mrsl extends MainTemplate {
     table.println();
     table.printRow(null,   "<path/to/morsel_1> <path/to/morsel_2> ..  (2 or more required)");
     table.println();
-    table.printRow(null, SAVE + "=<path/to/file> (optional)");
+    table.printRow(null,   SAVE + "=<path/to/file> (optional)");
+    table.printRow(null,  "DEFAULT: '.'        (current directory)");
     table.println();
     table.printRow(null,  "If path/to/file doesn't exist, then the merged morsel gets");
     table.printRow(null,  "created there; if the path is an existing directory, then a");
     table.printRow(null,  "file with a merge-generated name is created in that directory.");
-    table.printRow(null,  "DEFAULT: '.'        (current directory)");
     table.println();
+
+    table.printRow(SUBMERGE, "creates a new morsel containing less information. Extracts a");
+    table.printRow(null,  "the specified source rows, optionally redacting any of their");
+    table.printRow(null,  "columns.");
+    table.printRow(null,  "Arguments:");
+    table.println();
+    table.printRow(null,   "<row-numbers>       (required)");
+    table.println();
+    table.printRow(null,   "Strictly ascending row numbers separated by commas or spaces");
+    table.printRow(null,   "Ranges (incl.) may be substituted for numbers. For example:");
+    table.printRow(null,   "308,466,592-598,717");
+    table.println();
+    table.printRow(null,   SAVE + "=<path/to/file> (optional)");
+    table.printRow(null,  "DEFAULT: '.'        (current directory)");
+    table.printRow(null,  "(Same semantics as specified in '" + MERGE + "')");
+    table.println();
+    table.printRow(null, REDACT + "=<comma-separated-numbers>     (optional)");
+    table.println();
+    table.printRow(null,   "If provided, then values in the the given columns are redacted.");
+    table.printRow(null,   "Column numbers are 1-based: the first is numbered 1.");
     table.println();
 
     table.printRow(DUMP,  "dumps a JSON representation of the entire morsel file");
@@ -1110,6 +1180,7 @@ public class Mrsl extends MainTemplate {
   private final static String HISTORY = "history";
   private final static String ENTRY = "entry";
   private final static String MERGE = "merge";
+  private final static String SUBMERGE = "submerge";
   private final static String DUMP = "dump";
   
   // named values (name=value)
@@ -1119,7 +1190,12 @@ public class Mrsl extends MainTemplate {
   private final static String SEP_S = "%s";
   private final static String SEP_T = "%t";
   
+
+  
   private final static String COL_SIZES = "col-sizes";
+  
+  
+  // O P T I O N S
   
   private final static Option JSON_OPT = new Option("json");
   private final static Option SLIM_OPT = new Option("slim");

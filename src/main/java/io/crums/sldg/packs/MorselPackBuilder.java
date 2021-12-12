@@ -18,6 +18,8 @@ import io.crums.sldg.SkipLedger;
 import io.crums.sldg.bags.MorselBag;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.util.Lists;
 import io.crums.util.Sets;
 
 /**
@@ -48,6 +50,93 @@ public class MorselPackBuilder implements MorselBag, Serial {
       int infosAdded = pathPackBuilder.addPathPack(pack.getPathPack());
       int metaAdded = addMetaPack(pack.getMetaPack());
       return rowsAdded + trailsAdded + srcsAdded + infosAdded + metaAdded;
+    }
+  }
+  
+  
+  
+  public int init(MorselPack pack, List<Long> rows, String comment) {
+    if (!pack.getFullRowNumbers().containsAll(rows))
+      throw new IllegalArgumentException(
+          "morsel does not contain (full) information about rows " + rows);
+    
+    var pathInfo = new PathInfo(pack.lo(), rows, pack.hi(), comment);
+    
+    Path path = new Path(
+        Lists.map(pathInfo.rowNumbers(), rn -> pack.getRow(rn)));
+    
+    
+    synchronized (lock()) {
+      int count = rowPackBuilder.init(path);
+      pathPackBuilder.addDeclaredPath(pathInfo);
+      return count + 1;
+    }
+  }
+  
+  
+  /**
+   * Initializes the builder with the specified source rows, optionally redacting 
+   * @param pack
+   * @param rows
+   * @param redactCols
+   * @param comment
+   * @return
+   */
+  public int initWithSources(MorselPack pack, List<Long> rows, List<Integer> redactCols, String comment) {
+
+    // validate --some deferred to init(pack,rows,comment) below
+    if (!Lists.isSortedNoDups(rows))
+      throw new IllegalArgumentException("rows must be sorted with no dups: " + rows);
+    if (!Lists.isSortedNoDups(redactCols))
+      throw new IllegalArgumentException("redact-columns must be sorted with no dups: " + redactCols);
+    if (!redactCols.isEmpty() && redactCols.get(0) < 1)
+      throw new IllegalArgumentException("redact-columns are 1-based (> 0): " + redactCols);
+    
+    synchronized (lock()) {
+
+      int trailsAdded = 0;  // (return value)
+      init(pack, rows, comment);
+      
+      int trailIndex = pack.indexOfNearestTrail(rows.get(0));
+      long nextTrailedRn =
+          trailIndex == -1 ?
+              Long.MAX_VALUE : pack.getTrailedRows().get(trailIndex).rowNumber();
+      long prevRn = 0;
+      long lastTrailRn = 0;
+      for (long rn : rows) {
+        var srcRow = pack.getSourceByRowNumber(rn);
+        srcRow = srcRow.redactColumns(redactCols);
+        addSourceRow(srcRow);
+        if (nextTrailedRn <= rn) {
+          ++trailsAdded;
+          var trailedRows = pack.getTrailedRows();
+          var trailedRow = trailedRows.get(trailIndex);
+          if (nextTrailedRn < rn) {
+            Path path = pack.getPath(prevRn, nextTrailedRn, pack.hi());
+            addPath(path);
+          }
+          addTrail(trailedRow);
+          nextTrailedRn =
+              ++trailIndex == trailedRows.size() ?
+                  Long.MAX_VALUE :
+                    trailedRows.get(trailIndex).rowNumber();
+          lastTrailRn = trailedRow.rowNumber();
+        }
+        prevRn = rn;
+      }
+      
+      // if we don't have a trail for the last row,
+      // and if one exists for a row after it, add it..
+      if (trailIndex >= 0 && trailIndex < pack.getTrailedRows().size()
+          && prevRn > lastTrailRn) {
+        Path path = pack.getPath(prevRn, nextTrailedRn, pack.hi());
+        addPath(path);
+        var trail = pack.getTrailedRows().get(trailIndex);
+        addTrail(trail);
+        ++trailsAdded;
+      }
+      
+      return trailsAdded;
     }
   }
   
@@ -95,6 +184,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
       count += addTrails(pack);
       count += addSourceRows(pack);
       count += addDeclaredPaths(pack);
+      count += addMetaPack(pack.getMetaPack());
       return count;
     }
   }
@@ -223,7 +313,6 @@ public class MorselPackBuilder implements MorselBag, Serial {
   /**
    * Adds the trail for the given row, but only if a full row at the given number exists
    * in this morsel.
-   * <p>FIXME: this should just take a TrailedRow</p>
    * 
    * @throws HashConflictException if the witnessed hash in the crumtrail conflicts
    *          with the hash of the given row number
@@ -244,6 +333,17 @@ public class MorselPackBuilder implements MorselBag, Serial {
       
       return trailPackBuilder.addTrail(rowNumber, trail);
     }
+  }
+  
+  /**
+   * Adds the trail for the given row, but only if a full row at the given number exists
+   * in this morsel.
+   * 
+   * @throws HashConflictException if the witnessed hash in the crumtrail conflicts
+   *          with the hash of the given row number
+   */
+  public boolean addTrail(TrailedRow trailedRow) throws  HashConflictException {
+    return addTrail(trailedRow.rowNumber(), trailedRow.trail());
   }
   
   
