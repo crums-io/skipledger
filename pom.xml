@@ -3,7 +3,7 @@
   
   <groupId>io.crums</groupId>
   <artifactId>skipledger</artifactId>
-  <version>0.0.4-SNAPSHOT</version>
+  <version>0.0.4</version>
   
   
   <name>SkipLedger</name>
@@ -18,7 +18,7 @@
     <maven.compiler.target>1.11</maven.compiler.target>
   </properties>
 
-<build>
+  <build>
     <plugins>
 
       <!--  Works, but doesn't fit my needs. See comment in appassembler-maven-plugin below.. -->
@@ -169,14 +169,9 @@
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>crums-core</artifactId>
-      <version>[0.0.3,)</version>
+      <version>[0.0.4,)</version>
     </dependency>
     
-    <dependency>
-      <groupId>io.crums</groupId>
-      <artifactId>io-util</artifactId>
-      <version>0.0.8-SNAPSHOT</version>
-    </dependency>
     
     
     
