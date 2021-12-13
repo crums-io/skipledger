@@ -1306,6 +1306,11 @@ public class Sldg extends BaseMain {
     table.printRow(null,   "If provided, then the given comma-separated column numbers will");
     table.printRow(null,   "be redacted. The first column is numbered 1.");
     table.println();
+    table.printRow(null,   META + "=<path/to/meta_file>  (optional)");
+    table.println();
+    table.printRow(null,   "If provided, then the given JSON meta file is used. Overrides");
+    table.printRow(null,   "any value set for this property in the ledger config file.");
+    table.println();
     
     table.printRow(STATE_MORSEL, "creates an empty morsel file containing only the ledger's");
     table.printRow(null,   "opaque state-path: the shortest list of rows connecting the last");

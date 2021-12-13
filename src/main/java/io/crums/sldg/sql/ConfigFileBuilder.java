@@ -68,7 +68,14 @@ public class ConfigFileBuilder {
       HASH_SCHEMA_CHAIN + ":\n " +
       " SQL schema (CREATE TABLE statement) for the chain table (defaulted)\n\n " +
       HASH_SCHEMA_TRAIL + ":\n " +
-      " SQL schema (CREATE TABLE statement) for the trail table (defaulted)\n\n";
+      " SQL schema (CREATE TABLE statement) for the trail table (defaulted)\n\n " +
+      
+      META_PATH + ":\n " +
+      " Relative (to this file) or absolute path to JSON meta file (optional)\n " +
+      " If present (and in the correct format), then emitted morsels with sources also\n " +
+      " include this JSON.\n\n";
+      
+      ;
   
   private final Properties aux = new Properties();
   

@@ -56,6 +56,12 @@ import io.crums.util.main.TablePrint;
 
 /**
  * CLI for morsel files.
+ * 
+ * <h3>TODO</h3>
+ * <pre>
+ *  - merge/submerge option: meta=path/to/meta_file
+ *  - morsel user-comment string
+ * </pre>
  */
 public class Mrsl extends BaseMain {
   
@@ -76,7 +82,7 @@ public class Mrsl extends BaseMain {
   private Set<Option> options = Collections.emptySet();
   
   /**
-   * TODO: morsel comment.
+   * morsel comment.
    */
   private String comment;
   
@@ -368,6 +374,8 @@ public class Mrsl extends BaseMain {
     var builder = new MorselPackBuilder();
     
     int trails = builder.initWithSources(pack, rowNumbers, redactCols, comment);
+    
+    builder.setMetaPack(pack.getMetaPack());
 
     File dest = MorselFile.createMorselFile(saveFile, builder);
     
