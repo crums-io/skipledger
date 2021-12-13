@@ -172,7 +172,7 @@ the same seed.)
 
 Without this salting, it would not be possible to safely redact column values in morsels.
 
- *Note the random seed salt is must be kept secret! * Failing to do so might leak your ledger's secrets. Also, don't lose it: the ledger's hashes
+_Note the random seed salt is must be kept secret!_ Failing to do so might leak your ledger's secrets. Also, don't lose it: the ledger's hashes
 are useless without it.
 
 ### Hash Ledger
