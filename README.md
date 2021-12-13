@@ -61,7 +61,7 @@ columns defined in the SQL query above.
 Besides commands for updating the hash ledger as the source table grows (as new rows are appended as a result of
 some business activity), *sldg* can also emit (output) morsels of the ledger's state and its contents in a tamper proof way.
 
-More information is avaliable in the [manual](./docs/sldg_manual.md).
+More information is avaliable in the [sldg manual](./docs/sldg_manual.md).
 
 ### Morsels
 
@@ -82,13 +82,13 @@ the hash of a particular row in the ledger (identified by its row number) was wi
 the hash of every row in the ledger [also] depends on the hash of every row before it, a crumtrail for a given row number
 establishes the minimum age of that row and *every row before that row number*.
 
-Morsels files (`.mrsl` extension) originate as outputs of the *sldg* program. Since they're in binary format, we need another
+Morsel files (`.mrsl` extension) originate as outputs of the *sldg* program. Since they're in binary format, we need another
 tool to independently validate and read these..
 
 ### mrsl
 
 The *mrsl* tool works independently of the *sldg* program: it only deals with `.mrsl` files. Besides its ability validate and
-display the information in an existing morsel file, it can also be used to:
+display the information (in either *text* or JSON) from an existing morsel file, it can also be used to:
  
 1. *merge morsels*. In most cases, two or more morsels from a same ledger can be merged into a single morsel. In fact, one
 way to verify that 2 morsels indeed come from the same ledger is to attempt to merge them. (More precisely, the terms "same ledger"
@@ -100,7 +100,8 @@ morsel with others. Instead of sharing morsels whole, a user can redact any colu
 given morsel file.
 
 
-More information is avaliable in the [manual](./docs/mrsl_manual.md).
+
+More information is avaliable in the [mrsl manual](./docs/mrsl_manual.md).
 
 ## Library
 
@@ -213,7 +214,7 @@ The file format is documented [here](./docs/morsel_file_format.txt).
 
 ## Building
 
-Project dependencies are listed in the maven `pom.xml` file. A few of these have no publicly distributed artifacts, and must be installed manually:
+Project dependencies are listed in the maven `pom.xml` file. A number of these have no publicly distributed artifacts, and must be installed manually:
 
 * [junit-io](https://github.com/gnahraf/junit-io)
 * [merkle-tree](https://github.com/crums-io/merkle-tree)
@@ -229,29 +230,20 @@ in each of their directories. Omit the last argument above, to include unit test
 
 ## Changes
 
-Following feedback after the first release (thank you!), the project's focus turned to relational databases (where many ledgers already reside).
-Here's what changed under the hood since the last release:
+Version `0.0.4` brought a number of usability improvements. 
 
-- Hash ledger (the skip ledger data structure with annotated crumtrails) implemented on RDBMS.
-- The special beacon rows of the previous version were dropped. (Users can still embed beacon values in their own business records
- in order to the establish *maximum age* of their rows.)
-- Modeled the *source ledger* (the source of the ledger's data). This supports rows composed of columns in the usual way.
-    - Simplified column types (strings, fixed / floating precision integral types, null, etc.)
-    - Salted hashing in order to resist decoding values from their hashes via rainbow attacks or frequency analysis. 
-    - SQL column value type mappings to those modeled in the source ledger.
-- The source ledger is now encoded in morsel files; source rows in these files are now automatically validated against their
-  hashes (since we've now defined what the parsing rules for generating those hashes are).
-- Support for individual column value (table cell) redactions in morsel files added.
+- JSON representation of morsel data. Exposes type information about column values, as well as providing programmatic access from other enviroments than Java.
+- submerge command: slices out of pieces of data out of a morsel file into a new morsel file. (The owner of
+ a morsel may not want to share all the information in it).
+- Support for customized meta-info for morsels. This info is not validated but helps with usability. For eg, column titles/headings.
 
 
 ## Roadmap
 
-The following features are slated for version `0.0.4`:
+The following is planned for version `0.0.5`:
 
-- JSON representation of morsel data. Can expose existing type information about column values this way, as well as provide programmatic access from other enviroments than Java.
-- Submerge command: slice out of pieces of data out of one or more morsel files from a same ledger into a new morsel file. (The owner of
- a morsel may not want to share every row in it).
-- Support for customized meta-info for morsels. This info needn't be necessarily validated but can help with usability. For eg, column titles/headings.
+- jpackage release. Installs executables with bundled Java runtimes.
+- Open / close issues. Note to Babak: leave open some not-big, first-time-contributor issues.
 - ?
 
 ## Thank you

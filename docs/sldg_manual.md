@@ -2,7 +2,7 @@ sldg Manual
 =========
 
 This is a manual / tutorial about using the *sldg* tool.  
-Version 0.0.3
+Version 0.0.4
 
 ## Contents
 
@@ -14,6 +14,7 @@ Version 0.0.3
     - [Source Queries](#source-queries)
     - [Salt Seed](#salt-seed)
     - [Hash Ledger](#hash-ledger)
+    - [Meta Info](#meta-info)
 - [Commands](#commands)
     - [setup](#setup)
     - [create](#create)
@@ -43,7 +44,7 @@ Ledgers are both *public* and *private*. You keep good books, you might pay audi
 and you might share parts or summaries of them with a select few, or the public.
 
 The goal of *sldg* then is to make tracking an already private, evolving historical ledger easy
-and allow a ledger's owner to later share [only] any slice of the ledger's rows in unimpeachable, tamper proof records called *morsel*s. 
+and allow a ledger's owner to later share any slices of the ledger's rows in unimpeachable, tamper proof packages called *morsel*s. 
 
 ## Configuration
 
@@ -200,6 +201,18 @@ they may be overridden.
     sldg.hash.schema.chain=CREATE TABLE invoice_items_sldg_ch (  chn_id INT NOT NULL,  n_hash CHAR(43) NOT NULL,  PRIMARY KEY (chn_id)  )
 
 This also helps you see the schema. Hopefully, there will be little occassion for overriding these.
+
+### Meta Info
+
+You may optionally include a path to a file containing meta information about the ledger. For example, it may be set as follows:
+
+>
+    sldg.meta.path=meta/chinook_info.json
+
+This setting directs *sldg* to look into the `meta/` subdirectory (relative to the config file) to find and load the info file. Here's a [chinook_info.json](./chinook_info.json) example. (Note this meta info actually corresponds not to the source query setting `sldg.source.query.row` above, but to the one derived from it in the [ledger design](#source-ledger-query-design) section below.)
+
+If the referenced file parses correctly, it gets included in every morsel created by the [make-morsel](#make-morsel) command. This information is not validated, nor does it otherwise figure in the operation of the ledger.
+
 
 ## Commands
 

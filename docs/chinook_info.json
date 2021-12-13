@@ -1,0 +1,74 @@
+{
+  "name": "Chinook Invoices",
+  "desc": "Chinook invoice items ledger example. Each invoice contains a list of line-items: each of those line-items is a row in this ledger. Address fields are the customer's billing address when the invoice was filled. See also: https://crums-io.github.io/skipledger/mrsl_manual.html",
+  "columns": [
+    {
+      "cn": 1,
+      "name": "Invoice Line ID",
+      "desc": "Line-item ID. (PRIMARY KEY)"
+    },
+    {
+      "cn": 2,
+      "name": "Invoice ID",
+      "desc": "The invoice ID this line-item occurs in (one-to-many relationship)."
+    },
+    {
+      "cn": 3,
+      "name": "Track ID",
+      "desc": "Album Track ID"
+    },
+    {
+      "cn": 4,
+      "name": "Unit Price",
+      "desc": "1 bit = 100 sats",
+      "units": "bits"
+    },
+    {
+      "cn": 5,
+      "name": "Quantity"
+    },
+    {
+      "cn": 6,
+      "name": "Customer ID"
+    },
+    {
+      "cn": 7,
+      "name": "Invoice Date"
+    },
+    {
+      "cn": 8,
+      "name": "Address"
+    },
+    {
+      "cn": 9,
+      "name": "City"
+    },
+    {
+      "cn": 10,
+      "name": "State"
+    },
+    {
+      "cn": 11,
+      "name": "Country"
+    },
+    {
+      "cn": 12,
+      "name": "Postal Code"
+    },
+    {
+      "cn": 13,
+      "name": "Total",
+      "desc": "Total in invoice. (Includes this line-item and may include other line-items.)",
+      "units": "bits"
+    }
+  ],
+  "date_format": "EEE, d MMM yyyy HH:mm:ss Z z"
+}
+
+
+
+
+
+
+
+
