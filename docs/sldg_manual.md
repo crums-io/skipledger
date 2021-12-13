@@ -113,14 +113,14 @@ in the configuration fle, then the same connection used to read the source table
 To keep things simple, our example has the hash ledger live in the same database the source table/view does.
 
 Specifying separate JDBC connection settings for the hash ledger is done the same way as with the [source connection](#source-connection),
-except that the proptery names prefixed with `sldg.source.` our now prefixed with `sldg.hash.`.
+except that the proptery names prefixed with `sldg.source.` are now prefixed with `sldg.hash.`.
 
 ### Source Queries
 
 Two parameters (SQL queries) control the definition of the *source ledger*:
 
 1. `sldg.source.query.size` determines how many rows are in the ledger, and
-2. `sldg.source.query.row` determines what each of those rows are.
+2. `sldg.source.query.row` determines what's in each of those rows.
 
 The choice which table or view we use to construct this query is obviously dependent on our existing DB schema. In our example, we are using the table named "invoice_items" as our source ledger. The table's role in the larger schema is depicted below.
 
@@ -149,7 +149,7 @@ The *row* query has few constraints on how it must be constucted.
 3. The first, the row number column is followed by one or more columns. These may be most any SQL type (large BLOBs can be problematic, but most other types
  should be okay).
  
-The query here was generated using the sldg's *setup* command. That command interacts with the user and takes a list column values and assumes
+The query here was generated using the sldg's *setup* command. That command interacts with the user and takes a list of column values and assumes
 the first column is a constantly incrementing PRIMARY KEY.
  
 Note the use of the SQL *ROW_NUMBER()* function here. You might have noticed on inspection that as it
@@ -172,7 +172,7 @@ the same seed.)
 
 Without this salting, it would not be possible to safely redact column values in morsels.
 
-*Note the random seed salt is must be kept secret! * Failing to do so might leak your ledger's secrets. Also, don't lose it: the ledger's hashes
+ *Note the random seed salt is must be kept secret! * Failing to do so might leak your ledger's secrets. Also, don't lose it: the ledger's hashes
 are useless without it.
 
 ### Hash Ledger
