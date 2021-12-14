@@ -232,9 +232,9 @@ in each of their directories. Omit the last argument above, to include unit test
 
 Version `0.0.4` brought a number of usability improvements. 
 
-- JSON representation of morsel data. Exposes type information about column values, as well as providing programmatic access from other enviroments than Java.
-- submerge command: slices out of pieces of data out of a morsel file into a new morsel file. (The owner of
- a morsel may not want to share all the information in it).
+- JSON representation of morsel data. Exposes type information about column values, as well as providing programmatic access from other environments than Java.
+- `mrsl submerge`: slices out of pieces of data from a morsel file into a new morsel file. (The owner of
+ a morsel may wish to share only a *subset* of the data gathered in their morsel.)
 - Support for customized meta-info for morsels. This info is not validated but helps with usability. For eg, column titles/headings.
 
 
