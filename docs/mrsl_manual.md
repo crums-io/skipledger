@@ -81,8 +81,8 @@ Here's a summary of a *state* morsel:
     <1230-7fc6df1188a478f650bbc51475351c0d3d0a63afa3f56d0c368709f7a5ffeea0>
 
 There's no ceremony: it says there are zero rows with source attachments. The highest row number in the morsel
-is 900: so this morsel captures the state of the ledger when it had 900 rows. The hash of row [900], or equivalently the
-hash of the ledger when it had exactly 900 rows, is displayed on the last line.
+is 1230: so this morsel captures the state of the ledger when it had 1230 rows. The hash of row [1230], or equivalently the
+hash of the ledger when it had exactly 1230 rows, is displayed on the last line.
 
 And here's a summary of a morsel (from the same ledger) with more stuff in it:
 
@@ -256,6 +256,8 @@ Example:
 
 >
     $ mrsl chinook/chinook-260-259-258-257-.mrsl list
+
+>
     [1]                                        
     [2]                                        
     [4]                                        
@@ -342,6 +344,8 @@ text format. Example:
 
 >
     $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260
+
+>
     [253]  253 47 1518 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [254]  254 47 1527 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [255]  255 47 1536 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
@@ -352,10 +356,12 @@ text format. Example:
     [260]  260 47 1581 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     
 
-By default, column values are separated by a single whitespace character. Redacted column values are marked with an ` [X] `. To include history, let's add the `--time` option. We'll also set the column separator so we can better make out the columns:
+By default, column values are separated by a single whitespace character. Redacted column values are marked with an `[X]`. To include history, let's add the `--time` option. We'll also set the column separator so we can better make out the columns:
 
 >
     $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260 -t sep=%s\|%s
+
+>
     [253]  | 253 | 47 | 1518 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
     [254]  | 254 | 47 | 1527 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
     [255]  | 255 | 47 | 1536 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
@@ -459,7 +465,7 @@ This contains the necessary information to independently compute the *input*-has
 | H      | hash   | 32-bytes, prehashed (a redacted column value)          | verbatim: it *is* the hash |
 | NUL    | null   | a null value (SQL NULLs are mapped to this)            | salt |
 
-The last column in the above table indicates what byte-string is hashed for each type of column value type.
+The last column in the above table indicates what byte-string is hashed for each type of column value.
 
 Now on to the simpler `--slim` version of JSON. As previously mentioned, most of the time you won't need the full detail:
 
@@ -558,8 +564,8 @@ When 2 or more morsels are merged together, the morsel containing [the hash of] 
 *authority*. (If there's a tie, one is chosen at random.) Above, `chinook/chinook-613-458-457-456-.mrsl` was the authority since
 it had (or tied at) the highest row number.
 
-The newly written morsel `chinook-merged-778-777-776-775-.mrsl` now contains all the source rows in both original morsels, and runs
-to row [1230]. In this example, one of the morsels was a state morsel (with no source rows). The number of *objects added* includes an accounting of full skip ledger rows, source-rows, crumtrails, path- and meta info.
+The newly written morsel `chinook-merged-778-777-776-775-.mrsl` now contains all the source rows in 4 original morsels (5, if you count the state-morsel that didn't contribute anything), and runs
+to row [1230]. In this example, one of the morsels was a state morsel (with no source rows). The reported number of *objects added* is just informational: it includes an accounting of full skip ledger rows, source-rows, crumtrails, path- and meta info.
 
 
 ### submerge
