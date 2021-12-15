@@ -37,7 +37,7 @@ This then is a modern take on those markings on a stick. It uses cryptographic h
 way (the project's namesake) to construct those markings, as it were. But before drilling down into the details
 of the data structure, it helps to first illustrate what we can do with it.
 
-Version `0.0.3` ships with 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
+Version `0.0.4` ships with 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
 update the history of an *operationally append-only* table or view in a relational database. It supports tear outs
 of the table (specific rows) in the form morsel files (`.mrsl` extension). *mrsl*, in turn, is a tool for both reading morsel
 files and manipulating (merging/redacting) them.
