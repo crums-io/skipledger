@@ -547,7 +547,7 @@ public class Jurno extends MainTemplate {
   protected void printLegend(PrintStream out) {
     out.println();
     out.println("For additional info on morsels try");
-    out.println("  " + Mrsl.PROGNAME + " -help");
+    out.println("  mrsl -help");
     out.println("from the console.");
     out.println();
   }

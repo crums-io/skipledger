@@ -44,7 +44,7 @@ public class HashLedgerDir implements HashLedger {
   public HashLedgerDir(File dir, Opening mode, boolean lazy) throws IOException {
     this.dir = Objects.requireNonNull(dir, "null directory");
     
-    try (TaskStack onFail = new TaskStack(this)) {
+    try (TaskStack onFail = new TaskStack()) {
       
       this.skipLedger = new SkipLedgerFile(new File(dir, DB_LEDGER), mode, lazy);
       onFail.pushClose(skipLedger);
@@ -57,7 +57,7 @@ public class HashLedgerDir implements HashLedger {
   
   @Override
   public void close() {
-    try (TaskStack closer = new TaskStack(this)) {
+    try (TaskStack closer = new TaskStack()) {
       closer.pushClose(skipLedger).pushClose(witnessRepo);
     }
   }

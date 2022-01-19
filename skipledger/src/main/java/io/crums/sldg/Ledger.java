@@ -807,7 +807,7 @@ public class Ledger implements AutoCloseable {
    * Closes the instance by closing the underlying source- and hash-ledgers.
    */
   public void close() {
-    try (TaskStack closer = new TaskStack(this)) {
+    try (TaskStack closer = new TaskStack()) {
       closer.pushClose(srcLedger).pushClose(hashLedger);
    }
   }

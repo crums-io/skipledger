@@ -1,0 +1,51 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <parent>
+    <groupId>io.crums</groupId>
+    <artifactId>ledgers</artifactId>
+    <version>${revision}</version>
+  </parent>
+  
+  <artifactId>mrsl</artifactId>
+  
+  <name>mrsl CLI</name>
+  
+  <description>
+    Command line tool for working with morsel files. Verification, output, merges, redactions,
+    as well as some minimal presentation capabilites.
+  </description>
+  
+  <dependencies>
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger</artifactId>
+      <version>${revision}</version>
+    </dependency>
+  </dependencies>
+  
+  
+  
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>appassembler-maven-plugin</artifactId>
+        <version>2.1.0</version>
+        <configuration> 
+          <repositoryLayout>flat</repositoryLayout>
+          <binFolder>bin</binFolder>
+          <repositoryName>lib</repositoryName>
+        
+          <programs>
+            <program>
+              <mainClass>io.crums.sldg.cli.Mrsl</mainClass>
+              <id>mrsl</id>
+            </program>
+          </programs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  
+</project>

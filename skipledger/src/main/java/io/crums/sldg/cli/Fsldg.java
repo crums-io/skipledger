@@ -282,7 +282,7 @@ public class Fsldg extends MainTemplate {
   
   private void doIngest() throws IOException {
     
-    try (TaskStack closer = new TaskStack(this)) {
+    try (TaskStack closer = new TaskStack()) {
       Reader reader;
       File file = writeCommand.ingest.file;
       if (file == null)

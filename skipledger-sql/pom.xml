@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <parent>
+    <groupId>io.crums</groupId>
+    <artifactId>ledgers</artifactId>
+    <version>${revision}</version>
+  </parent>
+  
+  <groupId>io.crums</groupId>
+  <artifactId>skipledger-sql</artifactId>
+  
+  <name>Skip Ledger (SQL)</name>
+  
+  
+  <dependencies>
+  
+    <dependency>
+    <groupId>io.crums</groupId>
+      <artifactId>skipledger</artifactId>
+      <version>${revision}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>1.4.200</version>
+      <scope>test</scope>
+    </dependency>
+    
+  </dependencies>
+  
+  
+</project>

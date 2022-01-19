@@ -25,7 +25,6 @@ import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
 import io.crums.sldg.bags.MorselBag;
-import io.crums.sldg.json.ColumnInfoParserTest;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.ColumnInfo;
@@ -491,11 +490,17 @@ public class MorselPackTest extends IoTestCase {
     assertEquals(srcInfo.getColumnInfoCount(), outSrcInfo.getColumnInfoCount());
     assertEquals(expectedCols.size(), outSrcInfo.getColumnInfoCount());
     for (int index = expectedCols.size(); index-- > 0; )
-      ColumnInfoParserTest.assertEqual(expectedCols.get(index), outCols.get(index));
+      assertEqual(expectedCols.get(index), outCols.get(index));
   }
   
   
-  
+
+  public static void assertEqual(ColumnInfo expected, ColumnInfo readBack) {
+    assertEquals(expected.getName(), readBack.getName());
+    assertEquals(expected.getColumnNumber(), readBack.getColumnNumber());
+    assertEquals(expected.getDescription(), readBack.getDescription());
+    assertEquals(expected.getUnits(), readBack.getUnits());
+  }
   
 
   
