@@ -16,6 +16,11 @@
     as well as some minimal presentation capabilites.
   </description>
   
+  
+  <properties>
+    <main.class>io.crums.sldg.cli.Mrsl</main.class>
+  </properties>
+  
   <dependencies>
     <dependency>
       <groupId>io.crums</groupId>
@@ -25,9 +30,25 @@
   </dependencies>
   
   
-  
   <build>
     <plugins>
+    
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.2</version>
+        
+        <configuration>
+          <archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+        
+      </plugin>
+      
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>appassembler-maven-plugin</artifactId>
@@ -39,11 +60,12 @@
         
           <programs>
             <program>
-              <mainClass>io.crums.sldg.cli.Mrsl</mainClass>
+              <mainClass>${main.class}</mainClass>
               <id>mrsl</id>
             </program>
           </programs>
         </configuration>
+        
       </plugin>
     </plugins>
   </build>

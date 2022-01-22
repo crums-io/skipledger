@@ -16,11 +16,12 @@
     Command line tool for maintaining ledgers and emitting ledger morsels on relational database.
   </description>
   
-  <!--properties>
-    <revision>0.5.0-SNAPSHOT</revision>
-  </properties-->
+  <properties>
+    <main.class>io.crums.sldg.cli.Sldg</main.class>
+  </properties>
   
   <dependencies>
+  
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>skipledger-sql</artifactId>
@@ -30,9 +31,27 @@
   
   <build>
     <plugins>
+    
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.2</version>
+        
+        <configuration>
+          <archive>
+            <manifest>
+              <addClasspath>true</addClasspath>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+        
+      </plugin>
+    
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>appassembler-maven-plugin</artifactId>
+        
         <version>2.1.0</version>
         <configuration> 
           <repositoryLayout>flat</repositoryLayout>
@@ -41,10 +60,11 @@
         
           <programs>
             <program>
-              <mainClass>io.crums.sldg.cli.Sldg</mainClass>
+              <mainClass>${main.class}</mainClass>
               <id>sldg</id>
             </program>
           </programs>
+          
         </configuration>
       </plugin>
     </plugins>
