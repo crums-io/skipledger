@@ -226,6 +226,16 @@ To build to these, clone the above repos (in the suggested order) and invoke
 > mvn clean install -DskipTests=true
 
 in each of their directories. Omit the last argument above, to include unit tests.
+You are now ready to build this project. In this project's root directory:
+
+> mvn clean install -DskipTests=true
+
+To build the *sldg* and *mrsl* tools:
+
+> cd sldg
+> mvn package appassembler:assemble -DskipTests=true
+> cd ../mrsl
+> mvn package appassembler:assemble -DskipTests=true
 
 
 ## Changes
@@ -240,20 +250,16 @@ Version `0.0.4` brought a number of usability improvements.
 
 ## Roadmap
 
-The following is planned for version `0.0.5`:
+The following is planned for the next version `0.5.0`:
 
-- jpackage release. Installs executables with bundled Java runtimes.
-- Open / close issues. Note to Babak: leave open some not-big, first-time-contributor issues.
-- ?
+- Modularization/maintenance
+- Executable for *mrsl* tool (native binary)
+- Prototype embedding branded customizations in `.mrsl` files that will allow the *mrsl* tool to generate branded PDF reports from them. This is a bit ambitious to achieve in one release cycle. Design requirements are discovered on dog fooding.
 
-## Thank you
+Longer term..
 
-Thanks for reading this far, and if you did, for trying out these tools. I hope this concept of ledgers and morsels has piqued your interest
-and lights bright ideas about how you might use them. Feel free to drop suggestions, thoughts, feedback, and yes, code.
-Let's build this together.
+- Allow adding other optional appendages to morsel files: pub key + signatures, and user (ledger owner) defined legalese docs.
 
-<br/><br/>
-Babak Farhang<br/>
 
 
 

@@ -41,8 +41,8 @@ public class ColumnInfoParser implements JsonEntityParser<ColumnInfo> {
   public JSONObject injectEntity(ColumnInfo column, JSONObject jObj) {
     jObj.put(CN, column.getColumnNumber());
     jObj.put(NAME, column.getName());
-    addIfPresent(jObj, DESC, column.getDescription());
-    addIfPresent(jObj, UNITS, column.getUnits());
+    putNotNull(jObj, DESC, column.getDescription());
+    putNotNull(jObj, UNITS, column.getUnits());
     return jObj;
   }
 

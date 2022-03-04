@@ -1,0 +1,32 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.crums</groupId>
+    <artifactId>ledgers</artifactId>
+    <version>${revision}</version>
+  </parent>
+  <artifactId>reports</artifactId>
+
+  <name>Reports</name>
+  <description>
+    An lightweight JSON template format for generating PDF reports. 
+    The goal is to embed customizable, branded templates in morsel files,
+    so that one can output PDF reports from them.
+  </description>
+  
+  <dependencies>
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger</artifactId>
+      <version>${revision}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>1.3.26</version>
+    </dependency>
+  </dependencies>
+  
+  
+</project>

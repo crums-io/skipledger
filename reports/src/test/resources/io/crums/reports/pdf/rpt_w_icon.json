@@ -1,0 +1,83 @@
+{
+  "pageSpec": {
+    "w": 595.0,
+    "h": 842.0,
+    "margins": 24.0
+  },
+  "headTable": {
+    "rc": 3,
+    "cc": 3,
+    "cdef": {
+      "font": {
+        "name": "Helvetica",
+        "size": 9.0
+      }
+    },
+    "colWidths": [
+      0.25,
+      0.5,
+      0.25
+    ],
+    "defaultCell": {
+      "text": " "
+    },
+    "cells": [
+      {
+        "index": 3,
+        "imageRef": "icon.png",
+        "w": 50.0,
+        "h": 50.0
+      }
+    ]
+  },
+  "mainTable": {
+    "cols": [
+      {
+        "font": {
+          "name": "Helvetica",
+          "size": 10.0,
+          "style": "italic"
+        },
+        "lead": 1.5,
+        "pad": 10.0
+      },
+      {
+        "font": {
+          "name": "Helvetica",
+          "size": 10.0
+        },
+        "pad": 10.0,
+        "alignH": "right"
+      }
+    ],
+    "colWidths": [
+      0.8,
+      0.2
+    ],
+    "borders": {
+      "width": 1.5,
+      "color": {
+        "r": 0
+      }
+    },
+    "lines": {
+      "width": 1.0,
+      "color": {
+        "r": 0
+      }
+    }
+  },
+  "footer": {
+    "text": "© 2020-2022 crums.io",
+    "font": {
+      "name": "Helvetica",
+      "size": 8.0,
+      "color": {
+        "r": 128,
+        "g": 128,
+        "b": 128
+      }
+    },
+    "alignH": "right"
+  }
+}

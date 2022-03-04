@@ -1,0 +1,37 @@
+{
+  "cols": [
+    {
+      "font": {
+        "name": "Helvetica",
+        "size": 10.0,
+        "style": "italic"
+      },
+      "lead": 1.5,
+      "pad": 10.0
+    },
+    {
+      "font": {
+        "name": "Helvetica",
+        "size": 10.0
+      },
+      "pad": 10.0,
+      "alignH": "right"
+    }
+  ],
+  "colWidths": [
+    0.8,
+    0.2
+  ],
+  "borders": {
+    "width": 1.5,
+    "color": {
+      "r": 0
+    }
+  },
+  "lines": {
+    "width": 1.0,
+    "color": {
+      "r": 0
+    }
+  }
+}

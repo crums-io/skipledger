@@ -47,12 +47,12 @@ public class SourceInfoParser implements JsonEntityParser<SourceInfo> {
   @Override
   public JSONObject injectEntity(SourceInfo sourceInfo, JSONObject jObj) {
     jObj.put(NAME, sourceInfo.getName());
-    addIfPresent(jObj, DESC, sourceInfo.getDescription());
+    putNotNull(jObj, DESC, sourceInfo.getDescription());
     if (sourceInfo.hasFixedColumns())
       jObj.put(
           COLS,
           ColumnInfoParser.INSTANCE.toJsonArray(sourceInfo.getColumnInfos()));
-    addIfPresent(jObj, DATE_FORMAT, sourceInfo.getDateFormatPattern());
+    putNotNull(jObj, DATE_FORMAT, sourceInfo.getDateFormatPattern());
     return jObj;
   }
 
