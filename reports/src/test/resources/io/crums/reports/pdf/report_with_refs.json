@@ -1,0 +1,122 @@
+{
+  "objRefs": {
+    "colors": {
+      "gray": {
+        "r": 128,
+        "g": 128,
+        "b": 128
+      },
+      "hdrTheme": {
+        "r": 24,
+        "g": 24,
+        "b": 128
+      }
+    },
+    "fonts": {
+      "ftrTheme": {
+        "name": "Helvetica",
+        "size": 8.0,
+        "color": {
+          "cRef": "gray"
+        }
+      },
+      "hdrTheme": {
+        "name": "Helvetica",
+        "size": 9.0
+      },
+      "mainDesc": {
+        "name": "Helvetica",
+        "size": 10.0,
+        "style": "italic"
+      },
+      "mainFig": {
+        "name": "Helvetica",
+        "size": 10.0
+      }
+    },
+    "cellFormats": {
+      "mainColLeft": {
+        "font": {
+          "fontRef": "mainDesc"
+        },
+        "lead": 1.5,
+        "pad": 10.0
+      },
+      "mainColRight": {
+        "font": {
+          "fontRef": "mainFig"
+        },
+        "pad": 10.0,
+        "alignH": "right"
+      }
+    },
+    "cells": {
+      "example_icon.png": {
+        "imageRef": "example_icon.png",
+        "w": 50.0,
+        "h": 50.0
+      }
+    }
+  },
+  "pageSpec": {
+    "w": 595.0,
+    "h": 842.0,
+    "margins": 24.0
+  },
+  "headTable": {
+    "rc": 3,
+    "cc": 3,
+    "cdef": {
+      "font": {
+        "fontRef": "hdrTheme"
+      }
+    },
+    "colWidths": [
+      0.25,
+      0.5,
+      0.25
+    ],
+    "defaultCell": {
+      "text": " "
+    },
+    "cells": [
+      {
+        "index": 3,
+        "cellRef": "example_icon.png"
+      }
+    ]
+  },
+  "mainTable": {
+    "cols": [
+      {
+        "cfRef": "mainColLeft"
+      },
+      {
+        "cfRef": "mainColRight"
+      }
+    ],
+    "colWidths": [
+      0.8,
+      0.2
+    ],
+    "borders": {
+      "width": 1.5,
+      "color": {
+        "cRef": "hdrTheme"
+      }
+    },
+    "lines": {
+      "width": 1.0,
+      "color": {
+        "cRef": "hdrTheme"
+      }
+    }
+  },
+  "footer": {
+    "text": "© 2022 example.com",
+    "font": {
+      "fontRef": "ftrTheme"
+    },
+    "alignH": "right"
+  }
+}

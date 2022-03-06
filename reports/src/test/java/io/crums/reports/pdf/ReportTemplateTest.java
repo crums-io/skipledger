@@ -29,11 +29,11 @@ import io.crums.reports.pdf.json.TableTemplateParser;
 public class ReportTemplateTest extends IoTestCase {
   
   
-  public final static String RPT_W_ICON = "rpt_w_icon.json";
+  public final static String RPT_W_ICON = "report_with_refs.json";
 
   public final static String MAIN_TABLE_DEF = "tt_rpt.json";
   
-  public final static String ICON = "icon.png";
+  public final static String ICON = "example_icon.png";
   
   @Test
   public void test00() throws IOException {
@@ -79,6 +79,11 @@ public class ReportTemplateTest extends IoTestCase {
     List<CellData> cells = CellData.forText(List.of(inputs));
     report.writePdfFile(file, cells);
   }
+  
+  
+  
+  
+  
   
   
   

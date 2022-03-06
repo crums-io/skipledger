@@ -107,7 +107,7 @@ public class CellDataParser extends RefedImageParser<CellData>{
   public JSONObject injectCellData(CellData cell, JSONObject jObj, RefContext context) {
     var ref = context.findRef(cell);
     if (ref.isPresent())
-      jObj.put(CELL_REF, ref);
+      jObj.put(CELL_REF, ref.get());
     else {
       if (cell instanceof TextCell txtCell)
         jObj.put(TEXT, txtCell.getText());
