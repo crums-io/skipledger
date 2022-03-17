@@ -4,16 +4,16 @@
 package io.crums.reports.pdf.json;
 
 
-import static io.crums.util.json.JsonUtils.*;
-
+import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.function.Consumer;
 
+import io.crums.reports.pdf.CellData;
 import io.crums.reports.pdf.CellFormat;
 import io.crums.reports.pdf.LineSpec;
 import io.crums.reports.pdf.TableTemplate;
 import io.crums.util.Lists;
-import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONArray;
@@ -22,7 +22,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
+public class TableTemplateParser implements RefContextedParser<TableTemplate> {
 
   public final static TableTemplateParser INSTANCE = new TableTemplateParser();
 
@@ -46,19 +46,14 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
   public final static String LINE_H = "lineH";
   public final static String LINE_V = "lineV";
 
+
+  public final static String INDEX = "index";
+  public final static String CELLS = "cells";
   
   
   
-  @Override
-  public JSONObject injectEntity(TableTemplate table, JSONObject jObj) {
-    return injectTableTemplate(table, jObj, RefContext.EMPTY);
-  }
   
   
-  
-  public JSONObject toJsonObject(TableTemplate table, RefContext context) {
-    return injectTableTemplate(table, new JSONObject(), context);
-  }
   
   
   public JSONObject injectTableTemplate(TableTemplate table, JSONObject jObj, RefContext context) {
@@ -87,6 +82,7 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
       jObj.put(COL_WIDTHS, jWidths);
     }
     
+    
     // set grid lines
     if (table.sameGridLines()) {
       putLine(GRID_LINES, table.getVerticalBorder(), jObj, context);
@@ -105,7 +101,24 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
         putLine(LINE_V, table.getDefaultVerticalLine(), jObj, context);
       }
     }
+    
+    // set the cells last, our json is in insertion-order (just for clarity)
+    var fixedCells = table.getNonDefaultFixedCells();
+    if (!fixedCells.isEmpty()) {
+      var jCells = new JSONArray();
+      fixedCells.entrySet().forEach(e -> jCells.add(toJsonObject(e, context)));
+      jObj.put(CELLS, jCells);
+    }
+    
+    
     return jObj;
+  }
+  
+
+  private JSONObject  toJsonObject(Entry<Integer, CellData> e, RefContext context) {
+    var cObj = new JSONObject();
+    cObj.put(INDEX, e.getKey());
+    return CellDataParser.SANS_REF_INSTANCE.injectCellData(e.getValue(), cObj, context);
   }
   
   
@@ -114,11 +127,6 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
       return;
     jObj.put(name, LineSpecParser.INSTANCE.toJsonObject(line, context));
   }
-
-  @Override
-  public TableTemplate toEntity(JSONObject jObj) throws JsonParsingException {
-    return toTableTemplate(jObj, RefContext.EMPTY);
-  }
   
   
   
@@ -126,12 +134,12 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
     TableTemplate table;
     {
       List<CellFormat> columns;
-      var jCols = getJsonArray(jObj, COLS, false);
+      var jCols = JsonUtils.getJsonArray(jObj, COLS, false);
       if (jCols == null) {
-        int count = getInt(jObj, CC);
+        int count = JsonUtils.getInt(jObj, CC);
         if (count < 1)
           throw new JsonParsingException("illegal '" + CC + "': " + count);
-        var jColumn = getJsonObject(jObj, CDEF, true);
+        var jColumn = JsonUtils.getJsonObject(jObj, CDEF, true);
         var column = CellFormatParser.INSTANCE.toCellFormat(jColumn, context);
         columns = Lists.repeatedList(column, count);
       } else if (jCols.isEmpty()) {
@@ -142,10 +150,10 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
       table = new TableTemplate(columns);
     }
     
-    var jWidths = getJsonArray(jObj, COL_WIDTHS, false);
-    
+    var jWidths = JsonUtils.getJsonArray(jObj, COL_WIDTHS, false);
     if (jWidths != null)
       table.setColumnWidths(JsonUtils.toNumbers(jWidths));
+    
     setLine(table::setGridLines, GRID_LINES, jObj, context);
     setLine(table::setTableBorders, BORDERS, jObj, context);
     setLine(table::setHorizontalBorder, BORDER_H, jObj, context);
@@ -153,14 +161,42 @@ public class TableTemplateParser implements JsonEntityParser<TableTemplate> {
     setLine(table::setDefaultLines, LINES, jObj, context);
     setLine(table::setDefaultHorizontalLine, LINE_H, jObj, context);
     setLine(table::setDefaultVerticalLine, LINE_V, jObj, context);
+
+    var jCells = JsonUtils.getJsonArray(jObj, CELLS, false);
+    if (jCells != null) try {
+      for (var o : jCells) {
+        var jCell = (JSONObject) o;
+        int index = JsonUtils.getInt(jCell, INDEX);
+        var fixedCell = CellDataParser.SANS_REF_INSTANCE.toCellData(jCell, context);
+        table.setFixedCell(index, fixedCell);
+      }
+    } catch (IllegalArgumentException | IndexOutOfBoundsException | UncheckedIOException x) {
+      throw new JsonParsingException("on parsing '" + CELLS + "': " + x.getMessage(), x);
+    } catch (ClassCastException ccx) {
+      throw new JsonParsingException("type mismatch in JSON array: " + ccx.getMessage(), ccx);
+    }
     
     return table;
   }
   
   private void setLine(Consumer<LineSpec> setter, String jName, JSONObject jObj, RefContext context) {
-    var jLine = getJsonObject(jObj, jName, false);
+    var jLine = JsonUtils.getJsonObject(jObj, jName, false);
     if (jLine != null)
       setter.accept(LineSpecParser.INSTANCE.toLineSpec(jLine, context));
+  }
+
+
+
+  @Override
+  public TableTemplate toEntity(JSONObject jObj, RefContext context) throws JsonParsingException {
+    return toTableTemplate(jObj, context);
+  }
+
+
+
+  @Override
+  public JSONObject injectEntity(TableTemplate entity, JSONObject jObj, RefContext context) {
+    return injectTableTemplate(entity, jObj, context);
   }
 
 }

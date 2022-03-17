@@ -4,7 +4,7 @@
 package io.crums.reports.pdf.json;
 
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.simple.JSONObject;

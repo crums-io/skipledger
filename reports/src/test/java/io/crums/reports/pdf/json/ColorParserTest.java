@@ -4,11 +4,11 @@
 package io.crums.reports.pdf.json;
 
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Color;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.crums.util.json.simple.JSONObject;
 

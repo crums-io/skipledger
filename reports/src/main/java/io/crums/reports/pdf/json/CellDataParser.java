@@ -118,7 +118,8 @@ public class CellDataParser extends RefedImageParser<CellData>{
       } else
         throw new IllegalArgumentException("cell type not supported: " + cell);
       
-      cell.getFormat().ifPresent(f -> jObj.put(FORMAT, CellFormatParser.INSTANCE.toJsonObject(f)));
+      cell.getFormat().ifPresent(
+          cf -> jObj.put(FORMAT, CellFormatParser.INSTANCE.toJsonObject(cf, context)));
     }
     return jObj;
   }

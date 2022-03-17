@@ -32,7 +32,7 @@
           <programs>
             
             <program>
-              <mainClass>io.crums.sldg.cli.Jurno</mainClass>
+              <mainClass>io.crums.sldg.demo.jurno.Jurno</mainClass>
               <id>jurno</id>
             </program>
             
@@ -43,26 +43,6 @@
 
     </plugins>
   </build>
-
-
-
-  <dependencies>
-    
-    <!-- T E S T    S C O P E  -->
-    
-    
-    
-    <!-- dependency>
-	    <groupId>org.xerial</groupId>
-	    <artifactId>sqlite-jdbc</artifactId>
-	    <version>3.36.0.2</version>
-      <scope>test</scope>
-		</dependency -->
-		
-  </dependencies>
-
-
-
 
 
 

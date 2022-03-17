@@ -1,9 +1,10 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.out_of_box_test;
 
 
+import io.crums.sldg.SkipTable;
 import io.crums.sldg.mem.VolatileTable;
 
 /**

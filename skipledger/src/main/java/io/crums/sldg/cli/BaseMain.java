@@ -22,11 +22,11 @@ import io.crums.util.main.NumbersArg;
  * Common functions in {@linkplain Sldg} and {@linkplain Mrsl} gathered here.
  * (Dups are adding up => more work + maintenance.)
  */
-abstract class BaseMain extends MainTemplate {
+public abstract class BaseMain extends MainTemplate {
 
-  final static String REDACT = "redact";
+  public final static String REDACT = "redact";
   
-  final static String META = "meta";
+  public final static String META = "meta";
   
   
   

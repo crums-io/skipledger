@@ -4,8 +4,7 @@
 package io.crums.reports.pdf;
 
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Color;
 import java.io.File;
@@ -14,7 +13,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import com.gnahraf.test.IoTestCase;
 import com.lowagie.text.Document;
 import com.lowagie.text.Font;
@@ -142,7 +141,7 @@ public class TableTemplateTest extends IoTestCase {
   
   private TableTemplate loadFromResource(String resourceName) {
     var in = getClass().getResourceAsStream(resourceName);
-    assertNotNull(resourceName, in);
+    assertNotNull(in, resourceName);
     try (var reader = new InputStreamReader(in)) {
       return TableTemplateParser.INSTANCE.toEntity(reader);
     } catch (IOException iox) {

@@ -4,7 +4,7 @@
 package io.crums.sldg.demo.jurno;
 
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
 import java.io.InputStream;
@@ -14,7 +14,7 @@ import java.util.StringTokenizer;
 
 import com.gnahraf.test.IoTestCase;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.crums.io.FileUtils;
 import io.crums.sldg.SldgConstants;
@@ -111,7 +111,7 @@ public class TextFileSourceTest extends IoTestCase {
     
     try (TaskStack closer = new TaskStack()) {
       InputStream resource = getClass().getResourceAsStream(filename);
-      assertNotNull("no such resource: " + filename, resource);
+      assertNotNull(resource, "no such resource: " + filename);
       closer.pushClose(resource);
       
       FileUtils.writeNewFile(file, resource);

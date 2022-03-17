@@ -4,17 +4,18 @@
 package io.crums.reports.pdf;
 
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.gnahraf.test.IoTestCase;
 import com.lowagie.text.Font;
@@ -81,6 +82,34 @@ public class ReportTemplateTest extends IoTestCase {
   }
   
   
+  @Test
+  public void customInputExperiment() throws IOException {
+    var label = new Object() {  };
+    var refedImages = getRefedImages(ICON);
+    var report =
+        new ReportTemplateParser(refedImages).toEntity(
+            getClass().getResourceAsStream(RPT_W_ICON));
+    String[] inputs = {
+        "Acme Widget Model A", "$38.29",
+        "Zorborg Cayote Adapter", "$16.70"
+    };
+    
+    var bgColor = new Color(100, 183, 222);
+    var cellFormat = new CellFormat(new FontSpec("Helvetica", 14, 0, bgColor));
+    cellFormat.setBackgroundColor(bgColor);
+    var borderCell = new CellData.TextCell(" ", cellFormat);
+
+    var fancyInputs = new ArrayList<CellData>();
+    fancyInputs.add(borderCell);
+    fancyInputs.add(borderCell);
+    fancyInputs.addAll(CellData.forText(List.of(inputs)));
+    
+    var file = newPdfPath(label);
+    
+    report.writePdfFile(file, fancyInputs);
+  }
+  
+  
   
   
   
@@ -89,7 +118,7 @@ public class ReportTemplateTest extends IoTestCase {
   
   public static TableTemplate newTableTemplate(String resourceName) {
     var in = ReportTemplateTest.class.getResourceAsStream(resourceName);
-    assertNotNull(resourceName, in);
+    assertNotNull(in, resourceName);
     return TableTemplateParser.INSTANCE.toEntity(in);
   }
   
@@ -97,7 +126,7 @@ public class ReportTemplateTest extends IoTestCase {
   
   public static ByteBuffer loadResourceBytes(String resourceName) throws IOException {
     var in = ReportTemplateTest.class.getResourceAsStream(resourceName);
-    assertNotNull(resourceName, in);
+    assertNotNull(in, resourceName);
     ByteArrayOutputStream collector = new ByteArrayOutputStream(8192);
     byte[] buffer = new byte[4096];
     for (int bytesRead = in.read(buffer); bytesRead != -1; bytesRead = in.read(buffer))

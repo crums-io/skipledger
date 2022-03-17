@@ -6,7 +6,7 @@ package io.crums.reports.pdf.json;
 
 import java.awt.Color;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.crums.reports.pdf.LineSpec;
 import io.crums.util.json.JsonEntityParser;

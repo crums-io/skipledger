@@ -52,7 +52,7 @@
       }
     },
     "cells": {
-      "example_icon.png": {
+      "icon": {
         "imageRef": "example_icon.png",
         "w": 50.0,
         "h": 50.0
@@ -83,7 +83,7 @@
     "cells": [
       {
         "index": 3,
-        "cellRef": "example_icon.png"
+        "cellRef": "icon"
       },
       {
         "index": 9,

@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.demo.jurno;
 
 
 import static io.crums.util.Strings.nTh;
@@ -19,7 +19,6 @@ import java.util.List;
 import io.crums.client.ClientException;
 import io.crums.io.Opening;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.demo.jurno.Journal;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessReport;
 import io.crums.util.IntegralStrings;

@@ -4,12 +4,12 @@
 package io.crums.sldg;
 
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.ByteBuffer;
 import java.util.Random;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.gnahraf.test.SelfAwareTestCase;
 

@@ -7,9 +7,9 @@ package io.crums.sldg.sql;
 import java.io.File;
 import java.sql.Connection;
 
-import org.junit.Assert;
+import org.junit.jupiter.api.Assertions;
 
-import io.crums.sldg.AbstractSkipLedgerTest;
+import io.crums.out_of_box_test.AbstractSkipLedgerTest;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SkipTable;
 
@@ -30,7 +30,7 @@ public class SqlSkipLedgerTest extends AbstractSkipLedgerTest {
 
   @Override
   protected SkipTable newTable(Object methodLabel) throws Exception {
-    Assert.fail();
+    Assertions.fail();
     return null;
   }
 

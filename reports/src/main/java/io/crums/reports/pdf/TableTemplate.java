@@ -3,23 +3,33 @@
  */
 package io.crums.reports.pdf;
 
+
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.Map.Entry;
 import java.util.function.Consumer;
 
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPTable;
 
+
 /**
  * A template for creating a PDF table from a sequence (list) of values.
+ * Some table cells may be pre-populated (fixed).
+ * 
+ * @see #setFixedCell(int, int, CellData)
+ * @see #setFixedCell(int, CellData)
+ * 
+ * @see #createTable(List)
  */
 public class TableTemplate {
   
@@ -45,10 +55,16 @@ public class TableTemplate {
   
   private final List<CellFormat> columns;
   
+  
+  // pushed down from FixedTable
+  protected final TreeMap<Integer, CellData> fixedCells;
+  
+  
+  
+  
   private float[] columnWidths;
 
   
-  private final Map<String,LineSpec> namedLines = new HashMap<>();
   
   private LineSpec tableBorderH;
   private LineSpec tableBorderV;
@@ -72,6 +88,7 @@ public class TableTemplate {
     this.columns = List.copyOf(Objects.requireNonNull(columns, "null columns"));
     if (columns.isEmpty())  // how about MAX_COLUMNS ?
       throw new IllegalArgumentException("instance has no columns");
+    fixedCells = new TreeMap<>();
     defaultLineV = defaultLineH = tableBorderV = tableBorderH = LineSpec.BLANK;
   }
   
@@ -91,6 +108,7 @@ public class TableTemplate {
     for (int index = 0; index < columns; ++index)
       colArray[index] = new CellFormat(font);
     this.columns = List.of(colArray);
+    fixedCells = new TreeMap<>();
     defaultLineV = defaultLineH = tableBorderV = tableBorderH = LineSpec.BLANK;
   }
   
@@ -100,11 +118,13 @@ public class TableTemplate {
    */
   protected TableTemplate(TableTemplate copy) {
     this.columns = Objects.requireNonNull(copy, "null table").columns;
+    this.fixedCells = copy.fixedCells;
+    this.columnWidths = copy.columnWidths;
     this.tableBorderH = copy.tableBorderH;
     this.tableBorderV = copy.tableBorderV;
     this.defaultLineH = copy.defaultLineH;
     this.defaultLineV = copy.defaultLineV;
-    this.columnWidths = copy.columnWidths;
+    this.docPercentage = copy.docPercentage;
   }
   
   
@@ -222,13 +242,6 @@ public class TableTemplate {
   }
   
   
-  public void addNamedLine(String name, LineSpec line) {
-    Objects.requireNonNull(name, "null name");
-    Objects.requireNonNull(line, "null line");
-    namedLines.put(name, line);
-  }
-  
-  
   public void setDocPercentage(float docPercentage) {
     if (docPercentage > 100)
       docPercentage = 100;
@@ -300,15 +313,19 @@ public class TableTemplate {
   /**
    * Creates and returns a new PDF table.
    * 
-   * @param cells with size multiple of {@linkplain #getColumnCount()}
+   * @param cells with size adding up to a multiple of {@linkplain #getColumnCount()} (after
+   *              accounting for fixed cells)
    * 
    * @return the new PDF table
    * @throws IllegalArgumentException
-   *         if {@code cells} is not a multiple of {@linkplain #getColumnCount()}
+   *         if the size of {@code cells} leaves a row only partially defined
+   * 
+   * @see #interlaceFixed(List)
    */
   public PdfPTable createTable(List<CellData> cells) throws IllegalArgumentException {
     var table = initPdfTable();
-    return appendRows(cells, table);
+    var ic = interlaceFixed(cells);
+    return appendRows(ic, table);
   }
 
   
@@ -320,6 +337,59 @@ public class TableTemplate {
       table.setWidths(columnWidths);
     return table;
   }
+  
+  
+  /**
+   * Interlaces and returns the given list of cells as a new list with the fixed cells
+   * injected. The interlacing algorithm is such that the given {@code cells} fill in
+   * the gaps in the instance's fixed cells.
+   * <p>
+   * <em>However</em>, the algorithm is lenient in the following way: the
+   * interlacing stops at the first gap (in fixed cells) that fail to be filled
+   * with the given argument; the remaining fixed cells, if any, are not returned.
+   * </p>
+   */
+  protected List<CellData> interlaceFixed(List<CellData> cells) {
+    Objects.requireNonNull(cells, "null cells");
+    if (fixedCells.isEmpty())
+      return cells;
+
+    var cellsPlusFixed = new ArrayList<CellData>();
+    var inputIter = cells.iterator();
+    var fixedIter = fixedCells.entrySet().iterator();
+    
+    var nextFixedEntry = nextFixedEntry(fixedIter);
+    int nextFixedIndex = nextFixedIndex(nextFixedEntry);
+    
+    while (inputIter.hasNext()) {
+      while (cellsPlusFixed.size() == nextFixedIndex) {
+        cellsPlusFixed.add(nextFixedEntry.getValue());
+        nextFixedEntry = nextFixedEntry(fixedIter);
+        nextFixedIndex = nextFixedIndex(nextFixedEntry);
+      }
+      cellsPlusFixed.add(inputIter.next());
+    }
+    
+    while (cellsPlusFixed.size() == nextFixedIndex) {
+      cellsPlusFixed.add(nextFixedEntry.getValue());
+      nextFixedEntry = nextFixedEntry(fixedIter);
+      nextFixedIndex = nextFixedIndex(nextFixedEntry);
+    }
+    
+    return cellsPlusFixed;
+  }
+  
+  
+
+  private int nextFixedIndex(Entry<Integer, CellData> fixedEntry) {
+    return fixedEntry == null ? Integer.MAX_VALUE : fixedEntry.getKey();
+  }
+  
+  
+  private Entry<Integer, CellData> nextFixedEntry(Iterator<Entry<Integer, CellData>> fixedIter) {
+    return fixedIter.hasNext() ? fixedIter.next() : null;
+  }
+  
   
   
   
@@ -499,6 +569,62 @@ public class TableTemplate {
   public LineSpec getDefaultVerticalLine() {
     return defaultLineV;
   }
+  
+  
+  
+
+  
+  
+  /**
+   * Returns a read-only view of the fixed cells, keyed by serial index.
+   * 
+   * @see #toSerialIndex(int, int)
+   */
+  public final SortedMap<Integer, CellData> getFixedCells() {
+    return Collections.unmodifiableSortedMap(fixedCells);
+  }
+  
+  
+  /**
+   * Returns the non-default fixed cells. (This base class knows nothing about
+   * <em>default</em> cells: it's here for the benefit of the JSON parsers.)
+   */
+  public SortedMap<Integer, CellData> getNonDefaultFixedCells() {
+    return getFixedCells();
+  }
+
+  
+  /**
+   * Sets a fixed value at the cell with the given <em>serial</em> index.
+   * 
+   * @see #toSerialIndex(int, int)
+   * @see #setFixedCell(int, int, CellData)
+   */
+  public CellData setFixedCell(
+      int serialIndex, CellData cell) throws IndexOutOfBoundsException {
+    
+    Objects.requireNonNull(cell, "null cell");
+    if (serialIndex < 0)
+      throw new IllegalArgumentException(
+          "negative serial index: " + serialIndex);
+    return fixedCells.put(serialIndex, cell);
+  }
+
+
+  /**
+   * Set the fixed value at the cell with the given (zero-based) column
+   * and row coordinates. Equivalent to
+   * {@code setFixedCell(toSerialIndex(col, row), cell)}.
+   * 
+   * @see #toSerialIndex(int, int)
+   * @see #setFixedCell(int, CellData)
+   */
+  public void setFixedCell(
+      int col, int row, CellData cell) throws IndexOutOfBoundsException {
+    
+    setFixedCell(toSerialIndex(col, row), cell);
+  }
+  
   
 }
 

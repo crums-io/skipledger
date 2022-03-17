@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.cli.sldg;
 
 import static io.crums.util.Strings.*;
 
@@ -19,6 +19,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import io.crums.client.ClientException;
+import io.crums.sldg.cli.BaseMain;
 import io.crums.sldg.Ledger.State;
 import io.crums.sldg.SourceLedger;
 import io.crums.sldg.sql.Config;

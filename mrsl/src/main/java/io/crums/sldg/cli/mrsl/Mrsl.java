@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.cli;
+package io.crums.sldg.cli.mrsl;
 
 
 import static io.crums.sldg.SldgConstants.MRSL_EXT;
@@ -29,6 +29,7 @@ import io.crums.sldg.HashConflictException;
 import io.crums.sldg.MorselFile;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.cli.BaseMain;
 import io.crums.sldg.json.MorselDumpWriter;
 import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.json.SourceRowParser;

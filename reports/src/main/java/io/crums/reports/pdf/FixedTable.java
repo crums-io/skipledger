@@ -4,26 +4,19 @@
 package io.crums.reports.pdf;
 
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.Map.Entry;
 
 import com.lowagie.text.pdf.PdfPTable;
 
 import io.crums.reports.pdf.CellData.TextCell;
 
 /**
- * A table with a fixed number of rows and possibly pre-populated
- * (i.e. fixed) cell values.
- * 
- * @see #setFixedCell(int, int, CellData)
- * @see #setFixedCell(int, CellData)
+ * A table with a fixed number of rows.
  */
 public class FixedTable extends TableTemplate {
   
@@ -42,11 +35,16 @@ public class FixedTable extends TableTemplate {
   
   public final static int MAX_ROWS = 0xffff;
   
-  private final TreeMap<Integer, CellData> fixedCells = new TreeMap<>();
   
-  private TextCell defaultCell;
+  
+  
+  
+  
+  
   
   private final int rows;
+
+  private TextCell defaultCell;
   
   
   
@@ -103,20 +101,20 @@ public class FixedTable extends TableTemplate {
   public final int getRowCount() {
     return rows;
   }
-
-
+  
+  
   /**
-   * Set the fixed value at the cell with the given (zero-based) column
-   * and row coordinates. Equivalent to
-   * {@code setFixedCell(toSerialIndex(col, row), cell)}.
-   * 
-   * @see #toSerialIndex(int, int)
-   * @see #setFixedCell(int, CellData)
+   * <p>Overridden to bounds check {@code serialIndex} against
+   * {@linkplain #getCellCount()}.
+   * </p>
+   * {@inheritDoc}
    */
-  public void setFixedCell(
-      int col, int row, CellData cell) throws IndexOutOfBoundsException {
-    
-    setFixedCell(toSerialIndex(col, row), cell);
+  public CellData setFixedCell(
+      int serialIndex, CellData cell) throws IndexOutOfBoundsException {
+    if (serialIndex >= getCellCount())
+      throw new IndexOutOfBoundsException(
+          "serial index " + serialIndex + " > fixed cell count " + getCellCount());
+    return super.setFixedCell(serialIndex, cell);
   }
   
   
@@ -165,34 +163,6 @@ public class FixedTable extends TableTemplate {
    */
   public final boolean isEmpty() {
     return fixedCells.isEmpty();
-  }
-
-  
-  /**
-   * Sets a fixed value at the cell with the given <em>serial</em> index.
-   * 
-   * @see #toSerialIndex(int, int)
-   * @see #setFixedCell(int, int, CellData)
-   */
-  public CellData setFixedCell(
-      int serialIndex, CellData cell) throws IndexOutOfBoundsException {
-    
-    Objects.requireNonNull(cell, "null cell");
-    if (serialIndex < 0 || serialIndex >= getCellCount())
-      throw new IllegalArgumentException(
-          "illegal coordinates: serial index " + serialIndex + " with fixed dimensions " +
-          getColumnCount() + "x" + rows);
-    return fixedCells.put(serialIndex, cell);
-  }
-  
-  
-  /**
-   * Returns a read-only view of the fixed cells, keyed by serial index.
-   * 
-   * @see #toSerialIndex(int, int)
-   */
-  public final SortedMap<Integer, CellData> getFixedCells() {
-    return Collections.unmodifiableSortedMap(fixedCells);
   }
   
   
@@ -253,41 +223,7 @@ public class FixedTable extends TableTemplate {
     if (Objects.requireNonNull(cells, "null cells").size() != getDynamicCellCount())
       throw new IllegalArgumentException(
           "input size " + cells.size() + " must be " + getDynamicCellCount());
-    
-    var pdfTable = initPdfTable();
-    
-    if (cells.isEmpty())
-      return appendRows(fixedCells.values(), pdfTable);
-
-    final int cc = getCellCount();
-    
-    var cellsPlusFixed = new ArrayList<CellData>(cc);
-    var inputIter = cells.iterator();
-    var fixedIter = fixedCells.entrySet().iterator();
-    var nextFixedEntry = nextFixedEntry(fixedIter);
-    int nextFixedIndex = nextFixedIndex(nextFixedEntry);
-    for (int index = 0; index < cc; ++index) {
-      if (index == nextFixedIndex) {
-        cellsPlusFixed.add(nextFixedEntry.getValue());
-        nextFixedEntry = nextFixedEntry(fixedIter);
-        nextFixedIndex = nextFixedIndex(nextFixedEntry);
-      } else {
-        cellsPlusFixed.add(inputIter.next());
-      } 
-    }
-    return appendRows(cellsPlusFixed, pdfTable);
-  }
-
-
-
-  private int nextFixedIndex(Entry<Integer, CellData> fixedEntry) {
-    return fixedEntry == null ? Integer.MAX_VALUE : fixedEntry.getKey();
-  }
-  
-  
-  private Entry<Integer, CellData> nextFixedEntry(
-      Iterator<Entry<Integer, CellData>> fixedIter) {
-    return fixedIter.hasNext() ? fixedIter.next() : null;
+    return super.createTable(cells);
   }
 
 

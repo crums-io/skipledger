@@ -5,14 +5,14 @@ package io.crums.sldg.sql;
 
 
 import static io.crums.sldg.sql.SqlTestHarness.*;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.Random;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.gnahraf.test.IoTestCase;
 

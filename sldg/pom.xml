@@ -17,7 +17,7 @@
   </description>
   
   <properties>
-    <main.class>io.crums.sldg.cli.Sldg</main.class>
+    <main.class>io.crums.sldg.cli.sldg.Sldg</main.class>
   </properties>
   
   <dependencies>
