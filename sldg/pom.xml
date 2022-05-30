@@ -27,7 +27,15 @@
       <artifactId>skipledger-sql</artifactId>
       <version>${revision}</version>
     </dependency>
+    
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
+      <version>4.6.3</version>
+    </dependency>
+    
   </dependencies>
+
   
   <build>
     <plugins>
@@ -67,6 +75,27 @@
           
         </configuration>
       </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <!-- annotationProcessorPaths requires maven-compiler-plugin version 3.5 or higher -->
+        <version>${maven.compiler.plugin}</version>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>info.picocli</groupId>
+              <artifactId>picocli-codegen</artifactId>
+              <version>4.6.3</version>
+            </path>
+          </annotationProcessorPaths>
+          <compilerArgs>
+            <arg>-Aproject=io.crums/sldg</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      
+      
     </plugins>
   </build>
   
