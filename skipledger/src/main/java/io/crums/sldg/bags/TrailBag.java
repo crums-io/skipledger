@@ -3,10 +3,12 @@
  */
 package io.crums.sldg.bags;
 
+
 import java.util.Collections;
 import java.util.List;
 
 import io.crums.model.CrumTrail;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.Lists;
 
@@ -20,18 +22,80 @@ public interface TrailBag {
   /**
    * Returns the rows with annotated crumtrails.
    * 
-   * @return non-null list of positive, strictly ascending row numbers
+   * @return non-null, possibly empty list of positive, strictly ascending row numbers
    */
   List<Long> trailedRowNumbers();
+  
+  
+  /**
+   * Returns the {@linkplain #trailedRowNumbers() trailed row numbers} starting from
+   * the given row number.
+   * 
+   * @return non-null, possibly empty list of positive, strictly ascending row numbers
+   */
+  default List<Long> trailedRowNumbers(long fromRn) {
+    var trailedRns = trailedRowNumbers();
+    if (trailedRns.isEmpty())
+      return List.of();
+    int searchIndex = Collections.binarySearch(trailedRns, fromRn);
+    if (searchIndex >= 0)
+      return trailedRns.subList(searchIndex, trailedRns.size());
+    int insertIndex = -1 - searchIndex;
+    return insertIndex == trailedRns.size() ?
+        List.of() :
+          trailedRns.subList(insertIndex, trailedRns.size());
+  }
+  
+  
+  /**
+   * Returns the {@linkplain #trailedRowNumbers() trailed row numbers} evidencing the
+   * minimum ages of the rows in the given range.
+   * 
+   * @param fromRn 
+   * @param toRn
+   * @return
+   */
+  default List<Long> trailedRowNumbers(long fromRn, long toRn) {
+    if (fromRn < 1 || toRn < fromRn)
+      throw new IllegalArgumentException("fromRn: %d, toRn: %d".formatted(fromRn, toRn));
+    var trailedRns = trailedRowNumbers();
+    if (trailedRns.isEmpty())
+      return List.of();
+    int headIndex = Collections.binarySearch(trailedRns, fromRn);
+    if (headIndex < 0) {
+      headIndex = -1 - headIndex;
+      if (headIndex == trailedRns.size())
+        return List.of();
+    }
+
+    // (exclusive)..
+    int tailIndex = Collections.binarySearch(trailedRns, toRn);
+    if (tailIndex < 0) {
+      tailIndex = -1 - tailIndex;
+    } else
+      tailIndex++;
+    
+    return trailedRns.subList(headIndex, tailIndex);
+  }
   
   
   /**
    * Returns the crumtrail for the given {@code rowNumber}. The given
    * row number is one of the {@linkplain #trailedRowNumbers()}.
    */
-  CrumTrail crumTrail(long rowNumber);
+  CrumTrail crumTrail(long rowNumber) throws IllegalArgumentException;
   
   
+  /**
+   * Returns the trailed row at the given {@code rowNumber}.
+   * 
+   * @param rowNumber one of {@linkplain #trailedRowNumbers()}
+   * 
+   * @return not null
+   */
+  default TrailedRow getTrailedRow(long rowNumber) throws IllegalArgumentException {
+    return new TrailedRow(rowNumber, crumTrail(rowNumber));
+  }
   
   /**
    * Returns the trailed rows. The default implementation is a composition
@@ -41,7 +105,7 @@ public interface TrailBag {
    *         empty
    */
   default List<TrailedRow> getTrailedRows() {
-    return Lists.map(trailedRowNumbers(), rn -> new TrailedRow(rn, crumTrail(rn)));
+    return Lists.map(trailedRowNumbers(), rn -> getTrailedRow(rn));
   }
   
   
@@ -62,5 +126,35 @@ public interface TrailBag {
     int insertIndex = -1 - searchIndex;
     return insertIndex == trailedRns.size() ? -1 : insertIndex;
   }
+  
+  
+  /**
+   * Returns a list of trailed rows starting from the given row number.
+   * 
+   * @return possibly empty list of ordered trailed rows
+   */
+  default List<TrailedRow> getTrailRows(long fromRn) {
+    
+    return Lists.map(
+        trailedRowNumbers(fromRn),
+        rn -> getTrailedRow(rn));
+  }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

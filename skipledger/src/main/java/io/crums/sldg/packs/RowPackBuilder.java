@@ -189,7 +189,8 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    * 
    * @param path a path whose lowest row number is &le; {@linkplain #hi()}
    * 
-   * @return the number of rows added (possibly zero)
+   * @return the number of rows from the given {@code path} added or already existence
+   *         in this instance (possibly zero)
    */
   public synchronized int addPath(Path path) {
     final long hi = hi();
@@ -221,7 +222,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    * 
    * @param row with row-number &le; {@linkplain #hi()}
    * 
-   * @return {@code true} <b>iff</b> the row was added
+   * @return {@code true} <b>iff</b> on return the given (full) row exists in the morsel
    * 
    * @throws HashConflictException
    *         if the {@code row}'s hash conflicts with existing hashes. If this happens, then
@@ -235,12 +236,12 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     
     
     // check the input hashes first; if we get a hit here
-    // return no.. but before returning, check their hashes
+    // return yes (got it already).. but before returning, check their hashes
     // and nag if they confict
     
     if (inputHashes.get(rn) != null) {
       if (row.hash().equals(rowHash(rn)))
-        return false;
+        return true;
       throw new HashConflictException("attempt to add row [" + rn + "] with conflicting hash");
     }
 

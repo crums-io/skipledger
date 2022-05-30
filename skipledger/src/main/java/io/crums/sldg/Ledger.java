@@ -56,6 +56,10 @@ import io.crums.util.ticker.Ticker;
  * Furthermore, since instances update their {@linkplain HashLedger}s, it's a bad idea
  * to run 2 or the same instance concurrently against the same backing data.
  * </p>
+ * <p>
+ * TODO: Since the whitepaper uses the term <em>microchain</em> to describe what this class
+ * essentially does..
+ * </p>
  * 
  * @see SourceLedger
  * @see HashLedger

@@ -64,7 +64,8 @@ public interface RowBag {
   
 
   /**
-   * The lowest (full) row number in the bag, or 0 if empty.
+   * The lowest (full) row number in the bag, or 0 if empty. In the context of morsels,
+   * (i.e. non-empty instances) this is set to 1L.
    * 
    * @return &ge; 0
    */
@@ -127,10 +128,10 @@ public interface RowBag {
    * Returns a path connecting the given target row numbers. Note the target row numbers
    * must be contained in this bag.
    * 
-   * @param targets 2 or more monotonically increasing row numbers that are to be
+   * @param targets 2 or more ascending row numbers that are to be
    *                included in the returned path
    * 
-   * @return a path connecting the above targets.
+   * @return a path connecting the {@code targets}.
    * 
    * @see #getFullRowNumbers()
    * @see #hasFullRow(long)
@@ -150,6 +151,45 @@ public interface RowBag {
     }
     
     return new Path(Lists.map(rns, rn -> getRow(rn)));
+  }
+  
+  
+  
+  /**
+   * Returns a path connecting the first row (numbered 1), the given {@code targets},
+   * and the last row (numbered {@linkplain #hi()}. 
+   * 
+   * @param targets <em>zero</em> or more ascending row numbers that are to be
+   *                included in the returned path
+   * @return a path connecting the first row, the given {@code targets}, and the last row
+   */
+  default Path getFullPath(List<Long> targets) {
+    if (targets.isEmpty())
+      getPath(lo(), hi());
+    
+    // make a mutable copy of the argument
+    var original = targets;
+    {
+      var copy = new ArrayList<Long>(targets.size() + 2);
+      copy.addAll(targets);
+      targets = copy;
+    }
+    
+    long firstRn = targets.get(0);
+    final long lo = lo(); // (it's always 1: should prolly hardcode it)
+    if (firstRn < lo)
+      throw new IllegalArgumentException("targets < " + lo + ": " + original);
+    if (firstRn > lo)
+      targets.add(0, lo);
+    
+    long lastRn = targets.get(targets.size() - 1);
+    final long hi = hi();
+    if (lastRn > hi)
+      throw new IllegalArgumentException("targets > " + hi + ": " + original);
+    if (lastRn < hi)
+      targets.add(hi);
+    
+    return getPath(targets);
   }
   
 

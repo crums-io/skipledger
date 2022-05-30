@@ -258,10 +258,49 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     return Collections.unmodifiableSortedSet(refOnly);
   }
   
+  /**
+   * Stitches and returns a sorted list of row numbers that is
+   * composed of the given collection interleaved with linking row numbers as necessary.
+   * 
+   * @param rowNumbers collection of positive row numbers (dups OK)
+   * 
+   * @return a new, not empty, read-only list of unique, sorted numbers
+   * @see #stitch(List)
+   */
+  public static List<Long> stitchCollection(Collection<Long> rowNumbers) {
+    {
+      var trivial = checkTrivial(rowNumbers);
+      if (trivial != null)
+        return trivial;
+    }
+    
+    SortedSet<Long> orderedRns = rowNumbers instanceof SortedSet<Long> sorted ?
+        sorted : new TreeSet<>(rowNumbers);
+    checkRealRowNumber(orderedRns.first());
+    return stitch(
+        Lists.asReadOnlyList(
+            orderedRns.toArray(new Long[orderedRns.size()])));
+  }
+  
+  
+  private static List<Long> checkTrivial(Collection<Long> rowNumbers) {
+    final int count = Objects.requireNonNull(rowNumbers, "null rowNumbers").size();
+    
+    switch (count) {
+    case 0:
+      throw new IllegalArgumentException("empty rowNumbers");
+    case 1:
+      var rn = rowNumbers.iterator().next();
+      checkRealRowNumber(rn);
+      return List.of(rn);
+    default:
+      return null;
+    }
+  }
   
   /**
    * Stitches and returns a copy of the given (sorted) list of row numbers that is
-   * composed of the given list interleaved with linking row numbers as necessary.
+   * interleaved with linking row numbers as necessary.
    * If {@code rowNumbers} is already stitched, a new copy is still returned.
    * <p>
    * This method supports an abbreviated path specification.
@@ -269,17 +308,13 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * 
    * @param rowNumbers not empty, monotonically increasing, positive row numbers
    * 
-   * @return a new read-only list of unique, sorted numbers
+   * @return a new, not empty, read-only list of unique, sorted numbers
    */
   public static List<Long> stitch(List<Long> rowNumbers) {
-    
-    final int count = Objects.requireNonNull(rowNumbers, "null rowNumbers").size();
-    
-    switch (count) {
-    case 0:
-      throw new IllegalArgumentException("empty rowNumbers");
-    case 1:
-      return Collections.singletonList(rowNumbers.get(0));
+    {
+      var trivial = checkTrivial(rowNumbers);
+      if (trivial != null)
+        return trivial;
     }
     
     Long prev = rowNumbers.get(0);
@@ -288,6 +323,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       throw new IllegalArgumentException(
           "illegal rowNumber " + prev + " at index 0 in list " + rowNumbers);
     
+    final int count = rowNumbers.size();
     ArrayList<Long> stitch = new ArrayList<>(count + 16);
     stitch.add(prev);
     

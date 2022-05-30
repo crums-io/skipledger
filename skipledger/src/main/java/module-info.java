@@ -6,7 +6,6 @@ module io.crums.sldg.base {
   
   exports io.crums.sldg;
   exports io.crums.sldg.bags;
-  exports io.crums.sldg.cli;
   exports io.crums.sldg.cache;
   exports io.crums.sldg.fs;
   exports io.crums.sldg.json;

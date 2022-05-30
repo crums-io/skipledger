@@ -3,6 +3,7 @@
  */
 package io.crums.sldg.bags;
 
+import io.crums.sldg.packs.MorselPackBuilder;
 
 /**
  * The other bags unified in one, along with "reasonable" business rules.
@@ -10,6 +11,11 @@ package io.crums.sldg.bags;
  * ({@linkplain RowBag#getFullRowNumbers()} is a superset of rows with
  * information in the other bags.
  * 
+ * <h3>TODO</h3>
+ * <p>
+ * Iterators for traversing trails and such (in lieu of the getXyzIndex methods:
+ * see {@linkplain MorselPackBuilder} for use cases).
+ * </p>
  */
 public interface MorselBag extends RowBag, TrailBag, SourceBag, PathBag {
 

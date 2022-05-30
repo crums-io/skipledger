@@ -5,8 +5,11 @@ package io.crums.sldg.packs;
 
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import io.crums.io.Serial;
 import io.crums.model.CrumTrail;
@@ -73,14 +76,31 @@ public class MorselPackBuilder implements MorselBag, Serial {
     }
   }
   
+
+  
+  
+  public void initWithSources(MorselPack pack) {
+    initWithSources(pack, List.of(), null);
+  }
+  
+  
+  public void initWithSources(MorselPack pack, List<Integer> redactCols, String comment) {
+    initWithSources(pack, pack.sourceRowNumbers(), redactCols, comment);
+  }
+  
+  
   
   /**
-   * Initializes the builder with the specified source rows, optionally redacting 
+   * Initializes the builder with the specified source rows, optionally redacting.
+   * If there are no source rows, then this constructs a morsel with the minimal
+   * (skip) path (from {@code pack.hi()} to 1).
+   * 
    * @param pack
    * @param rows
-   * @param redactCols
-   * @param comment
-   * @return
+   * @param redactCols 1-based, sorted
+   * @param comment nullable
+   * 
+   * @return the number of trails added (note-to-self: why?)
    */
   public int initWithSources(MorselPack pack, List<Long> rows, List<Integer> redactCols, String comment) {
 
@@ -96,6 +116,9 @@ public class MorselPackBuilder implements MorselBag, Serial {
 
       int trailsAdded = 0;  // (return value)
       init(pack, rows, comment);
+      
+      if (rows.isEmpty())
+        return 0;
       
       int trailIndex = pack.indexOfNearestTrail(rows.get(0));
       long nextTrailedRn =
@@ -139,7 +162,229 @@ public class MorselPackBuilder implements MorselBag, Serial {
       return trailsAdded;
     }
   }
+
+  /**
+   * Merges source rows from the given morsel {@code pack} with this instance
+   * with no redactions and returns the result.
+   * 
+   * @see #mergeSources(MorselPack, List)
+   */
+  public MergeResult mergeSources(MorselPack pack) {
+    return mergeSources(pack, List.of());
+  }
   
+  /**
+   * Merges source rows from the given morsel {@code pack} with this instance and
+   * returns the result. A merge will not always succeed, or may only partially
+   * succeed. For this reason, the result of the merge is encapsulated in the
+   * returned object. Note the return value does not reprsent hash conflicts:
+   * those fail uncermoniously with a {@linkplain HashConflictException}.
+   * <p>
+   * PS. Historical note: this method was introduced so that merges are efficient
+   * in space. The old (ATM current) way accumulated needless hash data a user
+   * would typically not be interested in.
+   * </p><p>
+   * PPS. <em>merge</em> here really means <em>add</em>. It's use case is driven
+   * by the CLI's merge command. I might rename things later.
+   * </p>
+   * 
+   * @param pack
+   * @param redactCols 1-based, ordered list of redacted columns
+   * @return the merge result
+   * 
+   * @see MergeResult
+   */
+  public MergeResult mergeSources(MorselPack pack, List<Integer> redactCols) {
+    Objects.requireNonNull(redactCols, "null redactCols");
+    final var srcRns = pack.sourceRowNumbers();
+    if (srcRns.isEmpty())
+      return new MergeResult(hi(), pack);
+    
+    final int srcRowsBefore = sourceRowNumbers().size();
+    final int trailsBefore = trailedRowNumbers().size();
+    final long lastSrcRn = srcRns.get(srcRns.size() - 1);
+    final long hi = hi();
+    if (lastSrcRn > hi)
+      throw new IllegalArgumentException(
+          lastSrcRn + " (last source row #) > hi (" + hi + ")");
+    
+    final var trailedRns = pack.trailedRowNumbers(srcRns.get(0), srcRns.get(srcRns.size() - 1));
+    
+    
+    
+    final List<Long> pathRns = sourceEvidencePath(hi, srcRns, trailedRns);
+    
+    
+    var failedRows = new ArrayList<Long>();
+    for (int index = pathRns.size(); index-- > 0; ) {
+      long pathRn = pathRns.get(index);
+      if (!hasFullRow(pathRn) &&
+          (!pack.hasFullRow(pathRn) || !addRow(pack.getRow(pathRn)))) {
+        failedRows.add(pathRn);
+      }
+    }
+    
+    for (long srcRn : srcRns) {
+      var srcRow = pack.getSourceByRowNumber(srcRn).redactColumns(redactCols);
+      addSourceRow(srcRow);
+    }
+    
+    for (long trailedrn : trailedRns)
+      addTrail(trailedrn, pack.crumTrail(trailedrn));
+    
+    int sourcesAdded = sourceRowNumbers().size() - srcRowsBefore;
+    int trailsAdded = trailedRowNumbers().size() - trailsBefore;
+    return new MergeResult(hi, pack, Lists.reverse(failedRows), sourcesAdded, trailsAdded);
+  }
+  
+  
+  
+  
+  
+  
+  
+  private static List<Long> sourceEvidencePath(long hi, List<Long> srcRns, List<Long> trailedRns) {
+    List<Long> targetRns = new ArrayList<>();
+    targetRns.add(1L);
+    targetRns.addAll(srcRns);
+    targetRns.addAll(trailedRns);
+    targetRns.add(hi);
+    targetRns = SkipLedger.stitchCollection(targetRns);
+    return targetRns.subList(1, targetRns.size() - 1);
+  }
+  
+  
+  /**
+   * The result of a source merge operation.
+   * <p>
+   * The lists returned by instance methods here are all in ascending order.
+   * </p>
+   * @see #success()
+   */
+  public static class MergeResult {
+    
+    private final long hi;
+    private final MorselBag bag;
+    
+    private final List<Long> failedRns;
+    private final int srcRowsAdded;
+    private final int trailsAdded;
+    
+    /** Creates a nothing-done instance. */
+    private MergeResult(long hi, MorselBag bag) {
+      this(hi, bag, List.of(), 0, 0);
+    }
+    
+    private MergeResult(long hi, MorselBag bag, List<Long> failedRns, int srcRowsAdded, int trailsAdded) {
+      this.hi = hi;
+      this.bag = bag;
+      this.failedRns = failedRns.isEmpty() ? List.of() : failedRns;
+      this.srcRowsAdded = srcRowsAdded;
+      this.trailsAdded = trailsAdded;
+    }
+    
+    
+    /** Signal whether all rows we care about (source and trails) were merged. */
+    public boolean success() {
+      return failedRns.isEmpty() || failedSrcRns().isEmpty() && failedTrailRns().isEmpty();
+    }
+    
+    
+    /** Returns the number of source rows added. */
+    public int srcRowsAdded() {
+      return srcRowsAdded;
+    }
+    
+    
+    /** Returns the number of trails added. */
+    public int trailsAdded() {
+      return trailsAdded;
+    }
+    
+    
+    /**
+     *  Determines whether the merge had no effect.
+     *  @see #hadEffect()
+     */
+    public boolean nothingDone() {
+      return srcRowsAdded + trailsAdded == 0;
+    }
+    
+    
+    /**
+     * Determines whether the merge had <em>any</em> effect.
+     * 
+     * @return {@link #nothingDone() !nothingDone()}
+     */
+    public final boolean hadEffect() {
+      return !nothingDone();
+    }
+    
+    /** Returns the hi row number (of the authority morsel to be merged with). */
+    public long hi() {
+      return hi;
+    }
+    
+    /**
+     *  Returns the list of rows evidencing both the source rows and their trails.
+     *  Includes neither {@linkplain #hi()} nor 1L.
+     */
+    public List<Long> getEvidencePath() {
+      var srcRns = srcRns();
+      var trailRns = trailRns(srcRns);
+      return sourceEvidencePath(hi, srcRns, trailRns);
+    }
+    
+    /** Returns the source row numbers that were to be merged in. */
+    public List<Long> srcRns() {
+      return bag.sourceRowNumbers();
+    }
+
+    /** Returns the trailed row numbers that were merge candidates from the bag. */
+    public List<Long> trailRns() {
+      return trailRns(srcRns());
+    }
+    
+    private List<Long> trailRns(List<Long> srcRns) {
+      return srcRns.isEmpty() ?
+          List.of() :
+            bag.trailedRowNumbers(srcRns.get(0), srcRns.get(srcRns.size() - 1));
+    }
+    
+    /** Returns the source row numbers that didn't get merged. */
+    public List<Long> failedSrcRns() {
+      return filterFailed(srcRns());
+    }
+    
+    private List<Long> filterFailed(List<Long> rowNums) {
+      if (failedRns.isEmpty() || rowNums.isEmpty())
+        return List.of();
+      var rowNumSet = Sets.sortedSetView(rowNums);
+      return failedRns.stream().filter(rowNumSet::contains).collect(Collectors.toList());
+    }
+    
+
+    /** Returns the trailed row numbers that didn't get merged. */
+    public List<Long> failedTrailRns() {
+      return filterFailed(trailRns());
+    }
+    
+    
+    /**
+     * Returns <em>all</em> the row numbers that didn't get merged.
+     * These include linking rows in addition to source and trailed rows.
+     */
+    public List<Long> failedRns() {
+      return failedRns.isEmpty() ? failedRns : Collections.unmodifiableList(failedRns);
+    }
+    
+    /**
+     * Return the bag from which information was merged in.
+     */
+    public MorselBag getBag() {
+      return bag;
+    }
+  } // END MergeResult
   
   
   public int initPath(Path path, String comment) {
@@ -175,6 +420,15 @@ public class MorselPackBuilder implements MorselBag, Serial {
   }
   
   
+  /**
+   * Adds <em>all</em> the information in the given morsel {@code pack}
+   * to this instance. This is not terribly efficient (in space), if the sole purpose
+   * of the morsel is to prove the age and contents of its sources.
+   * (As the ledger accumulates rows, the hash of some older rows no longer figure
+   * directly in such proofs.)
+   * 
+   * @return the number of objects added
+   */
   public int addAll(MorselPack pack) {
     synchronized (lock()) {
       if (isEmpty())

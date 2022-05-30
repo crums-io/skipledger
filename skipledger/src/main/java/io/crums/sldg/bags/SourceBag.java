@@ -48,5 +48,11 @@ public interface SourceBag {
     return Lists.map(sources(), s -> s.rowNumber());
   }
   
+  
+  default boolean containsSourceRow(long rowNumber) {
+    SkipLedger.checkRealRowNumber(rowNumber);
+    return Collections.binarySearch(sourceRowNumbers(), rowNumber) >= 0;
+  }
+  
 
 }
