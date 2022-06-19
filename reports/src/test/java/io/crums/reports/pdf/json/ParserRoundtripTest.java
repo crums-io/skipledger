@@ -17,10 +17,9 @@ interface ParserRoundtripTest<T> {
   
   
   default void testRoundtrip(T expected) throws Exception {
-    var parser = parser();
-    var jObj = parser.toJsonObject(expected);
+    var jObj = writeParser().toJsonObject(expected);
     observeJson(jObj, expected);
-    var actual = parser.toEntity(jObj);
+    var actual = readParser().toEntity(jObj);
     assertTripEquals(expected, actual);
   }
   
@@ -39,6 +38,16 @@ interface ParserRoundtripTest<T> {
    */
   default void assertTripEquals(T expected, T actual) {
     assertEquals(expected, actual);
+  }
+  
+  
+  default JsonEntityParser<T> writeParser() throws Exception {
+    return parser();
+  }
+  
+  
+  default JsonEntityParser<T> readParser() throws Exception {
+    return parser();
   }
 
   /**

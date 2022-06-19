@@ -72,7 +72,7 @@ public class FixedTableParser extends RefedImageParser<FixedTable> {
   public FixedTable toFixedTable(
       JSONObject jObj, Map<String,ByteBuffer> refedImages) throws JsonParsingException {
     
-    return toFixedTable(jObj, RefContext.of(refedImages));
+    return toFixedTable(jObj, RefContext.ofImageRefs(refedImages));
   }
   
 

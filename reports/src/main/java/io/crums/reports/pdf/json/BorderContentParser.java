@@ -15,7 +15,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class BorderContentParser implements RefContextedParser<BorderContent> {
+public class BorderContentParser implements ContextedParser<BorderContent> {
   
   public final static BorderContentParser INSTANCE = new BorderContentParser();
   

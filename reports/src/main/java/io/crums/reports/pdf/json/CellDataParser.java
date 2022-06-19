@@ -74,7 +74,7 @@ public class CellDataParser extends RefedImageParser<CellData>{
   
   @Override
   public CellData toEntity(JSONObject jObj) throws JsonParsingException {
-    return toCellData(jObj, RefContext.of(refedImages));
+    return toCellData(jObj, RefContext.ofImageRefs(refedImages));
   }
 
   protected CellData toCellDataImpl(JSONObject jObj, RefContext context) {

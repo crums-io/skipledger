@@ -1,6 +1,6 @@
 module io.crums.sldg.base {
   
-  requires io.crums.util.xp;
+  requires transitive io.crums.util.xp;
   
   requires transitive io.crums.core;
   

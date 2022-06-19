@@ -21,7 +21,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class CellFormatParser implements RefContextedParser<CellFormat> {
+public class CellFormatParser implements ContextedParser<CellFormat> {
   
   
   public final static CellFormatParser INSTANCE = new CellFormatParser();

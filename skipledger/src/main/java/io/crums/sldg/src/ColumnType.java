@@ -9,7 +9,7 @@ import java.util.Objects;
  * Data type for a column value in a row. The classification is supposed to map a broad
  * range of data types to a smaller subset. The goal here is to convey <em>some</em> semantic
  * context ({@linkplain #DATE}, {@linkplain #DOUBLE}, {@linkplain #LONG}, {@linkplain #STRING},
- * {@linkplain #HASH}, while also spelling out (elsewhere), how they're hashed.
+ * {@linkplain #HASH}), while also spelling out (elsewhere), how they're hashed.
  */
 public enum ColumnType {
   
@@ -123,6 +123,27 @@ public enum ColumnType {
   
   public boolean isDate() {
     return this == DATE;
+  }
+  
+  public boolean isDouble() {
+    return this == DOUBLE;
+  }
+  
+  /**
+   * Determines whether a {@linkplain ColumnValue} with this
+   * {@linkplain ColumnValue#getType() type} returns a
+   * {@code java.lang.Number} for its {@linkplain ColumnValue#getValue()}.
+   * @return
+   */
+  public boolean isNumber() {
+    switch (this) {
+    case LONG:
+    case DOUBLE:
+    case DATE:
+      return true;
+    default:
+      return false;
+    }
   }
 
 }

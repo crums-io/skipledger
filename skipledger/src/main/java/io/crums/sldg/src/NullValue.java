@@ -44,6 +44,9 @@ public final class NullValue extends ColumnValue {
   }
   
   
+  /**
+   * Returns <b>{@code null}</b>.
+   */
   @Override
   public Object getValue() {
     return null;

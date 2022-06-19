@@ -13,7 +13,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class ColorParser implements RefContextedParser<Color> {
+public class ColorParser implements ContextedParser<Color> {
   
   public final static ColorParser INSTANCE = new ColorParser();
   

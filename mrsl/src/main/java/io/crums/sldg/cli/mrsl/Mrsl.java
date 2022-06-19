@@ -118,12 +118,12 @@ public class Mrsl {
   }
   
   
-  public MorselFile getMorselFile() {
+  MorselFile getMorselFile() {
     return getMorselFile(morselFile);
   }
   
 
-  public MorselFile getMorselFile(File file) {
+  MorselFile getMorselFile(File file) {
     try {
       return new MorselFile(file);
     } catch (HashConflictException hcx) {

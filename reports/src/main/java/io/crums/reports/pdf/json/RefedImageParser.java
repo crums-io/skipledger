@@ -13,7 +13,7 @@ import java.util.Objects;
  * Deduplication base-class for JSON parsers that access externally defined
  * named bytes. The use case here is for raw image bytes.
  */
-public abstract class RefedImageParser<T> implements RefContextedParser<T> {
+public abstract class RefedImageParser<T> implements ContextedParser<T> {
 
   protected final Map<String, ByteBuffer> refedImages;
   

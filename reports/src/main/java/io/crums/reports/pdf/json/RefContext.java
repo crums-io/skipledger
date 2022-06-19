@@ -13,6 +13,7 @@ import java.util.Optional;
 import io.crums.reports.pdf.CellData;
 import io.crums.reports.pdf.CellFormat;
 import io.crums.reports.pdf.FontSpec;
+import io.crums.reports.pdf.model.NumberArg;
 import io.crums.util.json.JsonParsingException;
 
 /**
@@ -38,10 +39,12 @@ import io.crums.util.json.JsonParsingException;
  * <li>{@linkplain #fontRefs()}</li>
  * <li>{@linkplain #cellFormatRefs()}</li>
  * <li>{@linkplain #cellDataRefs()}</li>
+ * <li>{@linkplain #numberArgs()}</li>
  * </ul>
  * </p>
  * 
  * @see EditableRefContext
+ * 
  */
 public interface RefContext {
   
@@ -52,7 +55,7 @@ public interface RefContext {
   public final static RefContext EMPTY = new RefContext() {  };
   
   
-  public static RefContext of(Map<String, ByteBuffer> imageRefs) {
+  public static RefContext ofImageRefs(Map<String, ByteBuffer> imageRefs) {
     Objects.requireNonNull(imageRefs, "null imageRefs");
     return new RefContext() {
       @Override
@@ -63,17 +66,35 @@ public interface RefContext {
   }
   
   
-  public static RefContext patch(
+  public static RefContext patchImageRefs(
       Map<String, ByteBuffer> imageRefs, RefContext context) {
     
     Objects.requireNonNull(imageRefs, "null imageRefs");
-    Objects.requireNonNull(context, "null context");
+    if (context == null)
+      context = EMPTY;
     return ofImpl(
         imageRefs,
         context.cellFormatRefs(),
         context.cellDataRefs(),
         context.colorRefs(),
-        context.fontRefs());
+        context.fontRefs(),
+        context.numberArgs());
+  }
+  
+  
+  public static RefContext patchArgs(
+      Map<String, NumberArg>  numberArgs, RefContext context) {
+    
+    Objects.requireNonNull(numberArgs, "null numberArgs");
+    if (context == null)
+      context = EMPTY;
+    return ofImpl(
+        context.imageRefs(),
+        context.cellFormatRefs(),
+        context.cellDataRefs(),
+        context.colorRefs(),
+        context.fontRefs(),
+        numberArgs);
   }
   
   
@@ -83,15 +104,17 @@ public interface RefContext {
       Map<String, CellFormat> cellFormatRefs,
       Map<String, CellData>   cellDataRefs,
       Map<String, Color>      colorRefs,
-      Map<String, FontSpec>   fontRefs) {
+      Map<String, FontSpec>   fontRefs,
+      Map<String, NumberArg>  numberArgs) {
 
     imageRefs = transformNull(imageRefs);
     cellFormatRefs = transformNull(cellFormatRefs);
     cellDataRefs = transformNull(cellDataRefs);
     colorRefs = transformNull(colorRefs);
     fontRefs = transformNull(fontRefs);
+    numberArgs = transformNull(numberArgs);
 
-    return ofImpl(imageRefs, cellFormatRefs, cellDataRefs, colorRefs, fontRefs);
+    return ofImpl(imageRefs, cellFormatRefs, cellDataRefs, colorRefs, fontRefs, numberArgs);
   }
   
   
@@ -105,7 +128,8 @@ public interface RefContext {
       Map<String, CellFormat> cellFormatRefs,
       Map<String, CellData>   cellDataRefs,
       Map<String, Color>      colorRefs,
-      Map<String, FontSpec>   fontRefs) {
+      Map<String, FontSpec>   fontRefs,
+      Map<String, NumberArg>  numberArgs) {
 
     return
         new RefContext() {
@@ -128,6 +152,9 @@ public interface RefContext {
           @Override
           public Map<String, FontSpec> fontRefs() {
             return fontRefs;
+          }
+          public Map<String, NumberArg> numberArgs() {
+            return numberArgs;
           }
         };
   } // ofImpl(..
@@ -166,6 +193,10 @@ public interface RefContext {
   }
   
   default Map<String, FontSpec> fontRefs() {
+    return Map.of();
+  }
+  
+  default Map<String, NumberArg> numberArgs() {
     return Map.of();
   }
   
@@ -234,6 +265,8 @@ public interface RefContext {
   
   
   
+  
+  
   /**
    * @throws JsonParsingException if not found
    */
@@ -267,6 +300,12 @@ public interface RefContext {
    */
   default FontSpec getFont(String ref) throws JsonParsingException {
     return getOrThrow(fontRefs(), ref, "font");
+  }
+  /**
+   * @throws JsonParsingException if not found
+   */
+  default NumberArg getNumberArg(String ref) throws JsonParsingException {
+    return getOrThrow(numberArgs(), ref, "number arg");
   }
 
 }

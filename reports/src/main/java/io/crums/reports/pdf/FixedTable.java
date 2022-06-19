@@ -124,6 +124,7 @@ public class FixedTable extends TableTemplate {
    * @param blank non-null, but usually a blank value.
    */
   public void setRemainingCells(CellData blank) {
+    Objects.requireNonNull(blank);
     final int cc = getCellCount();
     for (int index = 0; fixedCells.size() < cc; ++index)
       fixedCells.putIfAbsent(index, blank);
@@ -201,6 +202,7 @@ public class FixedTable extends TableTemplate {
    * instance {@linkplain #isFixed() is fixed}. 
    * 
    * @throws IllegalStateException if not a fixed instance.
+   * @see #createTable(List)
    */
   public PdfPTable createTable() throws IllegalStateException {
     if (!isFixed())
@@ -216,6 +218,7 @@ public class FixedTable extends TableTemplate {
    * {@inheritDoc}
    * 
    * @param cells of size {@linkplain #getDynamicCellCount()}
+   * @see #createTable()
    */
   @Override
   public PdfPTable createTable(List<CellData> cells) throws IllegalArgumentException {

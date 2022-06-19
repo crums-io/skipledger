@@ -59,13 +59,30 @@ public abstract class CellData {
   
   public static ImageCell forImage(
       String ref, byte[] bytes, float width, float height, CellFormat format) {
-    Image image;
+    var image = toImage(ref, bytes);
+    return new ImageCell(ref, image, width, height, format);
+  }
+  
+  
+  public static ImageCell forImageScaledToMaxHeight(String ref, byte[] bytes, float maxHeight, CellFormat format) {
+    if (maxHeight <= 0)
+      throw new IllegalArgumentException("maxHeight: " + maxHeight);
+    var image = toImage(ref, bytes);
+    float h = image.getPlainHeight();
+    if (h > maxHeight)
+      image.scalePercent(100 * maxHeight / h);
+    return new ImageCell(ref, image, format);
+  }
+  
+  
+  
+  
+  private static Image toImage(String ref, byte[] bytes) {
     try {
-      image = Image.getInstance(bytes);
+      return Image.getInstance(bytes);
     } catch (IOException iox) {
       throw new UncheckedIOException("on loading ref '" + ref + "':" + iox.getMessage(), iox);
     }
-    return new ImageCell(ref, image, width, height, format);
   }
   
   
@@ -129,6 +146,9 @@ public abstract class CellData {
    */
   public final static class TextCell extends CellData {
     
+    /**
+     * Blank cell with a single space.
+     */
     public final static TextCell BLANK = new TextCell(" ");
     
     private final String text;
@@ -192,6 +212,16 @@ public abstract class CellData {
     private final float height;
     
     
+    
+    
+    public ImageCell(String ref, Image image, CellFormat format) {
+      super(format);
+      Objects.requireNonNull(image, "null image");
+      this.ref = ref;
+      this.image = Image.getInstance(image);
+      this.width = image.getWidth();
+      this.height = image.getHeight();
+    }
     
     
     public ImageCell(String ref, Image image, float width, float height, CellFormat format) {

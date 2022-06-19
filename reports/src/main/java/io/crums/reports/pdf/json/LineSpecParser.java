@@ -14,7 +14,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class LineSpecParser implements RefContextedParser<LineSpec> {
+public class LineSpecParser implements ContextedParser<LineSpec> {
   
   
   public final static LineSpecParser INSTANCE = new LineSpecParser();

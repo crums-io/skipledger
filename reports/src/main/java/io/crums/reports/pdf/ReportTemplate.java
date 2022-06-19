@@ -9,18 +9,51 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.lowagie.text.Document;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
+import io.crums.reports.pdf.CellData.TextCell;
 import io.crums.reports.pdf.json.RefContext;
 
 /**
  * 
  */
 public class ReportTemplate {
+  
+  
+  /**
+   * Constructor arguments lumped here.
+   */
+  public record Components(
+      Header header,
+      TableTemplate subHeader,
+      TableTemplate mainTable,
+      BorderContent footer) {
+    
+    // constructors..
+    
+    /**
+     * @param header    (required)
+     * @param subHeader (optional)
+     * @param mainTable (required)
+     * @param footer    (optional)
+     * 
+     * @throws NullPointerException if a required argument is {@code null}
+     */
+    public Components {
+      Objects.requireNonNull(header, "null header");
+      Objects.requireNonNull(mainTable, "null main table");
+    }
+    
+    public Components(Header header, TableTemplate mainTable, BorderContent footer) {
+      this(header, null, mainTable, footer);
+    }
+    
+  }
   
   
   public static boolean equal(ReportTemplate a, ReportTemplate b) {
@@ -47,6 +80,7 @@ public class ReportTemplate {
   
   private final Header header;
   
+  private final TableTemplate subHeader;
   private final TableTemplate mainTable;
   
   
@@ -70,26 +104,59 @@ public class ReportTemplate {
   
   
   /**
-   * Main constructor.
+   * Currently equivalent to the full constructor.
    * 
    * @param header    non-null
    * @param mainTable non-null
    * @param footer    optional (may be null)
+   * 
+   * @see #ReportTemplate(Components)
+   */
+  public ReportTemplate(
+      Header header, TableTemplate subHeader, TableTemplate mainTable, BorderContent footer) {
+    this(new Components(header, subHeader, mainTable, footer));
+  }
+  
+
+  /**
+   * Currently equivalent to the full constructor.
+   * 
+   * @param header    non-null
+   * @param mainTable non-null
+   * @param footer    optional (may be null)
+   * 
+   * @see #ReportTemplate(Components)
    */
   public ReportTemplate(Header header, TableTemplate mainTable, BorderContent footer) {
-    this.header = Objects.requireNonNull(header, "null header");
-    this.mainTable = Objects.requireNonNull(mainTable, "null main table");
-    this.footer = footer;
+    this(new Components(header, mainTable, footer));
   }
   
   
-  public ReportTemplate(FixedTable headerTable, TableTemplate mainTable) {
-    this(new Header(headerTable, null), mainTable, null);
+  /**
+   * Main constructor takes a lumpy argument.
+   */
+  public ReportTemplate(Components args) {
+    this.header = args.header;
+    this.subHeader = args.subHeader;
+    this.mainTable = args.mainTable;
+    this.footer = args.footer;
+    
+    header.getHeaderTable().setDefaultCell(TextCell.BLANK);
   }
+  
+  
   
   
   public final Header getHeader() {
     return header;
+  }
+  
+  
+  /**
+   * Returns the optional subheader table.
+   */
+  public final Optional<TableTemplate> getSubHeader() {
+    return Optional.ofNullable(subHeader);
   }
   
   
@@ -98,13 +165,66 @@ public class ReportTemplate {
   }
   
   
-  public final BorderContent getFooter() {
-    return footer;
+  public final Optional<BorderContent> getFooter() {
+    return Optional.ofNullable(footer);
   }
   
-  public final int getHeaderArgCount() {
-    return header.getHeaderTable().getDynamicCellCount();
+  
+  
+  /**
+   * Write a PDF to the given {@code file} path.
+   * 
+   * @param file          path to new file (must not exist)
+   * @param headCells
+   * @param mainCells
+   * @throws IOException
+   */
+  public void writePdfFile(
+      File file, List<CellData> headCells, List<CellData> mainCells)
+          throws IOException {
+
+    Objects.requireNonNull(file, "null file");
+    if (file.exists())
+      throw new IllegalArgumentException(file + " already exists");
+    if (!file.canWrite())
+      throw new IllegalArgumentException("cannot write to " + file);
+    
+    final boolean headerCellsEmpty = headCells == null || headCells.isEmpty();
+    if (subHeader == null) {
+      if (!headerCellsEmpty)
+        throw new IllegalArgumentException(
+            "headCells must be empty when header table is not set: " + headCells);
+    } else if (headerCellsEmpty)
+      throw new IllegalArgumentException(
+          "head cells empty while header table is set");
+    Objects.requireNonNull(mainCells, "null mainCells");
+    
+    // done checking args..
+    
+    var headerPdfTable = header.getHeaderTable().createTable();
+    var subHeaderPdfTable = subHeader == null ? null : subHeader.createTable(headCells);
+    var mainPdfTable = mainTable.createTable(mainCells);
+    
+    var document = new Document(pageSize, marginLeft, marginRight, marginTop, marginBottom);
+    PdfWriter.getInstance(
+        document,
+        new FileOutputStream(file));
+    header.getHeadContent().ifPresent(border -> document.setHeader(border.newHeaderFooter()));
+    if (footer != null)
+      document.setFooter(footer.newHeaderFooter());
+    
+    
+    document.open();
+    document.add(headerPdfTable);
+    if (subHeaderPdfTable != null)
+      document.add(subHeaderPdfTable);
+    document.add(mainPdfTable);
+    document.close();
   }
+  
+  
+  
+  
   
   
   
@@ -113,7 +233,7 @@ public class ReportTemplate {
     Objects.requireNonNull(cells, "null cells");
     List<CellData> headerCells, mainCells;
     {
-      int headerCount = getHeaderArgCount();
+      int headerCount = header.getHeaderTable().getDynamicCellCount();
       if (cells.size() < headerCount + mainTable.getColumnCount())
         throw new IllegalArgumentException("too few cells (" + cells.size() + ")");
       
@@ -133,6 +253,8 @@ public class ReportTemplate {
     PdfWriter.getInstance(
         document,
         new FileOutputStream(file));
+    
+    document.addHeader("", "");
     
     header.getHeadContent().ifPresent(border -> document.setHeader(border.newHeaderFooter()));
     if (footer != null)

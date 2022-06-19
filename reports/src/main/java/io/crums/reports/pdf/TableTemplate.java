@@ -612,7 +612,7 @@ public class TableTemplate {
 
 
   /**
-   * Set the fixed value at the cell with the given (zero-based) column
+   * Sets the fixed value at the cell with the given (zero-based) column
    * and row coordinates. Equivalent to
    * {@code setFixedCell(toSerialIndex(col, row), cell)}.
    * 
@@ -623,6 +623,17 @@ public class TableTemplate {
       int col, int row, CellData cell) throws IndexOutOfBoundsException {
     
     setFixedCell(toSerialIndex(col, row), cell);
+  }
+  
+  
+  /**
+   * Returns the minimum number arguments this instance requires to
+   * {@linkplain #createTable(List) create a PDF table}.
+   * 
+   * @return &ge; 0
+   */
+  public int getMinArgCount() {
+    return fixedCells.isEmpty() ? 1 : fixedCells.lastKey() + 1 - fixedCells.size();
   }
   
   

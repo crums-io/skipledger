@@ -16,7 +16,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class FontSpecParser implements RefContextedParser<FontSpec> {
+public class FontSpecParser implements ContextedParser<FontSpec> {
   
   public final static FontSpecParser INSTANCE = new FontSpecParser();
   

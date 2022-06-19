@@ -22,7 +22,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class TableTemplateParser implements RefContextedParser<TableTemplate> {
+public class TableTemplateParser implements ContextedParser<TableTemplate> {
 
   public final static TableTemplateParser INSTANCE = new TableTemplateParser();
 

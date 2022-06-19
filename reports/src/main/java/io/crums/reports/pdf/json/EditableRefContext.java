@@ -14,6 +14,7 @@ import java.util.TreeMap;
 import io.crums.reports.pdf.CellData;
 import io.crums.reports.pdf.CellFormat;
 import io.crums.reports.pdf.FontSpec;
+import io.crums.reports.pdf.model.NumberArg;
 
 /**
  * The typed maps returned by this implementation are editable and sorted.
@@ -26,6 +27,7 @@ public class EditableRefContext implements RefContext {
   private final TreeMap<String, CellData> cellDataRefs = new TreeMap<>();
   private final TreeMap<String, Color> colorRefs = new TreeMap<>();
   private final TreeMap<String, FontSpec> fontRefs = new TreeMap<>();
+  private final TreeMap<String, NumberArg> numberArgs = new TreeMap<>();
   
   
   public EditableRefContext() {
@@ -59,6 +61,12 @@ public class EditableRefContext implements RefContext {
   @Override
   public SortedMap<String, FontSpec> fontRefs() {
     return fontRefs;
+  }
+  
+  
+  @Override
+  public SortedMap<String, NumberArg> numberArgs() {
+    return numberArgs;
   }
 
 }

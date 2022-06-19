@@ -11,6 +11,7 @@ import java.util.Objects;
 import io.crums.reports.pdf.BorderContent;
 import io.crums.reports.pdf.Header;
 import io.crums.reports.pdf.ReportTemplate;
+import io.crums.reports.pdf.TableTemplate;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -43,6 +44,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   
   public final static String HEAD_CONTENT = "headContent";
   public final static String HEAD_TABLE = "headTable";
+  public final static String SUBHEAD_TABLE = "subheadTable";
   
   public final static String MAIN_TABLE = "mainTable";
   
@@ -80,18 +82,20 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   public JSONObject injectEntity(ReportTemplate report, JSONObject jObj) {
     injectReferences(report, jObj);
     injectPageSpec(report, jObj);
-    // header is embedded (not a seperate object)
     injectHeader(report, jObj);
+    injectSubheader(report, jObj);
+    var refs = report.getReferences();
     jObj.put(
         MAIN_TABLE,
         TableTemplateParser.INSTANCE.toJsonObject(
-            report.getMainTable(), report.getReferences()));
-    var footer = report.getFooter();
-    if (footer != null)
-      jObj.put(
-          FOOTER,
-          BorderContentParser.INSTANCE.toJsonObject(
-              footer, report.getReferences()));
+            report.getMainTable(), refs)
+        );
+    report.getFooter().ifPresent(
+        footer -> jObj.put(
+            FOOTER,
+            BorderContentParser.INSTANCE.toJsonObject(
+                footer, refs)
+            ) );
     return jObj;
   }
   
@@ -132,6 +136,8 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
       {
         var context = toRefContext(jObj, refedImages);
         var header = toHeader(jObj, context);
+        var subheader = toSubheader(jObj, context);
+        
         var mainTable =
             TableTemplateParser.INSTANCE.toTableTemplate(
                 JsonUtils.getJsonObject(jObj, MAIN_TABLE, true), context);
@@ -142,7 +148,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
               jFooter == null ?
                   null : BorderContentParser.INSTANCE.toEntity(jFooter, context);
         }
-        report = new ReportTemplate(header, mainTable, footer);
+        report = new ReportTemplate(header, subheader, mainTable, footer);
       }
       var jPageSpec = JsonUtils.getJsonObject(jObj, PAGE_SPEC, true);
       float width = JsonUtils.getNumber(jPageSpec, W, true).floatValue();
@@ -169,7 +175,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
     var jRefs = JsonUtils.getJsonObject(jObj, OBJ_REFS, false);
     return
         jRefs == null ?
-            RefContext.of(refedImages) :
+            RefContext.ofImageRefs(refedImages) :
               RefContextParser.INSTANCE.toRefContext(jRefs, refedImages);
   }
   
@@ -186,6 +192,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
         FixedTableParser.INSTANCE.toJsonObject(header.getHeaderTable(), refs));
   }
   
+  
   private Header toHeader(JSONObject jObj, RefContext context) throws JsonParsingException {
     var headTable =
         FixedTableParser.INSTANCE.toFixedTable(
@@ -197,6 +204,23 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
             null : BorderContentParser.INSTANCE.toEntity(jHeadContent, context);
     
     return new Header(headTable, headContent);
+  }
+  
+
+  
+  
+  private void injectSubheader(ReportTemplate report, JSONObject jObj) {
+    var refs = report.getReferences();
+    report.getSubHeader().ifPresent(
+        table -> jObj.put(
+            SUBHEAD_TABLE,
+            TableTemplateParser.INSTANCE.toJsonObject(table, refs)));
+  }
+  
+  
+  private TableTemplate toSubheader(JSONObject jObj, RefContext context) throws JsonParsingException {
+    var jSubheader = JsonUtils.getJsonObject(jObj, SUBHEAD_TABLE, false);
+    return jSubheader == null ? null : TableTemplateParser.INSTANCE.toEntity(jSubheader, context);
   }
 }
 

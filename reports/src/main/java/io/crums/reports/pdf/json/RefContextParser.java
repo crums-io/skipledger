@@ -15,7 +15,7 @@ import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.simple.JSONObject;
 
 /**
- * Parses {@linkplain RefContext}s. This itself is <em>not</em> a {@linkplain RefContextedParser}
+ * Parses {@linkplain RefContext}s. This itself is <em>not</em> a {@linkplain ContextedParser}
  * instance, however it's well aware of that interface: as it builds it's reference dictionary,
  * it allows newly referenced objects to be composed of already defined references.
  * <p>
@@ -30,6 +30,8 @@ import io.crums.util.json.simple.JSONObject;
  * </ol>
  * Image bytes are stored externally and are not represented as JSON.
  * </p>
+ * 
+ * TODO: Implement NumberArgs
  */
 public class RefContextParser implements JsonEntityParser<RefContext> {
   
@@ -89,7 +91,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     if (fontRefs.isEmpty())
       return;
     var jRefs = new JSONObject();
-    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), null);
+    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), null, null);
     for (var e : fontRefs.entrySet())
       jRefs.put(e.getKey(), FontSpecParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(FONTS, jRefs);
@@ -101,7 +103,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     if (formatRefs.isEmpty())
       return;
     var jRefs = new JSONObject();
-    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), context.fontRefs());
+    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), context.fontRefs(), null);
     for (var e : formatRefs.entrySet())
       jRefs.put(e.getKey(), CellFormatParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(CELL_FORMATS, jRefs);
@@ -114,7 +116,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
       return;
     var jRefs = new JSONObject();
     var maskedCtx = RefContext.of(
-        null, context.cellFormatRefs(), null, context.colorRefs(), context.fontRefs());
+        null, context.cellFormatRefs(), null, context.colorRefs(), context.fontRefs(), null);
     for (var e : cellRefs.entrySet())
       jRefs.put(e.getKey(), CellDataParser.SANS_REF_INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(CELLS, jRefs);
@@ -182,7 +184,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
   }
   
   
-  private <T> void buildMap(Map<String,T> map, JSONObject jRefs, RefContextedParser<T> parser, RefContext context) {
+  private <T> void buildMap(Map<String,T> map, JSONObject jRefs, ContextedParser<T> parser, RefContext context) {
     if (jRefs == null)
       return;
     try {
