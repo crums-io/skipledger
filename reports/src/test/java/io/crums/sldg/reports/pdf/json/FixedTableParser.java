@@ -51,7 +51,7 @@ public class FixedTableParser extends RefedImageParser<FixedTable> {
   
   public JSONObject injectFixedTable(FixedTable table, JSONObject jObj, RefContext context) {
     jObj.put(RC, table.getRowCount());
-    TableTemplateParser.INSTANCE.injectTableTemplate(table, jObj, context);
+    LegacyTableTemplateParser.INSTANCE.injectTableTemplate(table, jObj, context);
     table.getDefaultCell().ifPresent(
         tc -> jObj.put(DEFAULT_CELL, CELL_PARSER.toJsonObject(tc, context)));
     return jObj;
@@ -78,7 +78,7 @@ public class FixedTableParser extends RefedImageParser<FixedTable> {
 
   public FixedTable toFixedTable(JSONObject jObj, RefContext context) throws JsonParsingException {
     
-    var protoTable = TableTemplateParser.INSTANCE.toTableTemplate(jObj, context);
+    var protoTable = LegacyTableTemplateParser.INSTANCE.toTableTemplate(jObj, context);
     int rows = JsonUtils.getInt(jObj, RC);
     FixedTable fixedTable;
     try {

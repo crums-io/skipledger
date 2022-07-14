@@ -14,7 +14,7 @@ import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
 import io.crums.sldg.reports.pdf.LegacyTableTemplate;
 import io.crums.sldg.reports.pdf.LineSpec;
-import io.crums.sldg.reports.pdf.json.TableTemplateParser;
+import io.crums.sldg.reports.pdf.json.LegacyTableTemplateParser;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONObject;
@@ -156,7 +156,7 @@ public class TableTemplateParserTest extends SelfAwareTestCase implements Parser
 
   @Override
   public JsonEntityParser<LegacyTableTemplate> parser() {
-    return TableTemplateParser.INSTANCE;
+    return LegacyTableTemplateParser.INSTANCE;
   }
 
   @Override

@@ -16,7 +16,7 @@ import com.lowagie.text.Font;
 import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.FixedTable;
 import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.ReportTemplateTest;
+import io.crums.sldg.reports.pdf.LegacyReportTemplateTest;
 import io.crums.sldg.reports.pdf.json.FixedTableParser;
 import io.crums.util.json.JsonEntityParser;
 
@@ -25,7 +25,7 @@ import io.crums.util.json.JsonEntityParser;
  */
 public class FixedTableParserTest extends RefedImageParserTest<FixedTable> {
   
-  private final static String[] IMAGE_RES = { ReportTemplateTest.ICON };
+  private final static String[] IMAGE_RES = { LegacyReportTemplateTest.ICON };
   
   
   

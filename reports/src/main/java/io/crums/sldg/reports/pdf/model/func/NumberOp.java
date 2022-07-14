@@ -1,14 +1,14 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model;
+package io.crums.sldg.reports.pdf.model.func;
 
 
 import java.util.function.BinaryOperator;
 
 /**
  * Binary operations for boxed number primitives. {@code Short}s and {@code Byte}s
- * are treated as {@code int}s.
+ * are treated as {@code Integer}s.
  * 
  * @see #apply(Number, Number)
  * @see #negate(Number)

@@ -10,7 +10,7 @@ import java.util.TreeMap;
 
 import com.gnahraf.test.SelfAwareTestCase;
 
-import io.crums.sldg.reports.pdf.ReportTemplateTest;
+import io.crums.sldg.reports.pdf.LegacyReportTemplateTest;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONObject;
 
@@ -39,7 +39,7 @@ abstract class RefedImageParserTest<T> extends SelfAwareTestCase implements Pars
    * @throws IOException
    */
   protected TreeMap<String, ByteBuffer> getRefedImages(String... resources) throws IOException {
-    return ReportTemplateTest.getRefedImages(resources);
+    return LegacyReportTemplateTest.getRefedImages(resources);
   }
   
   
@@ -47,7 +47,7 @@ abstract class RefedImageParserTest<T> extends SelfAwareTestCase implements Pars
    * These are loaded the parent package {@code io.crums.reports.pdf}.
    */
   protected ByteBuffer loadResourceBytes(String resourceName) throws IOException {
-    return ReportTemplateTest.loadResourceBytes(resourceName);
+    return LegacyReportTemplateTest.loadResourceBytes(resourceName);
   }
 
 }

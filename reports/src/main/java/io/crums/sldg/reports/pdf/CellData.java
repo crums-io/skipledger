@@ -97,9 +97,9 @@ public abstract class CellData {
   
   
   /**
-   * Subclasses defined only here.
+   * Subclasses defined in this package.
    */
-  private CellData(CellFormat format) {
+  CellData(CellFormat format) {
     this.format = format;
   }
   
@@ -128,26 +128,65 @@ public abstract class CellData {
    * paramaters.
    * 
    * @param borders  border width and color settings (positional info ignored)
-   * @param col      default cell settings (font text, leading, padding, etc.)
+   * @param format   default cell settings (font text, leading, padding, etc.)
    *                 If the instance has its own {@linkplain #getFormat() format},
    *                 then this argument is ignored.
    * @param table    the table the cell is appended to
    */
-  public abstract void appendTable(Rectangle borders, CellFormat col, PdfPTable table);
+  public abstract void appendTable(Rectangle borders, CellFormat format, PdfPTable table);
   
   
-  CellFormat format(CellFormat col) {
-    return format == null ? col : format;
+  CellFormat format(CellFormat fmt) {
+    return format == null ? fmt : format;
   }
   
   
+  static abstract class TextualCell extends CellData {
+    
+    TextualCell(CellFormat format) {
+      super(format);
+    }
+    
+    public abstract String getText();
+
+    @Override
+    public void appendTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
+      fmt = format(fmt);
+      Paragraph p = new Paragraph(getText(), fmt.getFont().getFont());
+      p.setLeading(fmt.getLeading());
+      PdfPCell cell = new PdfPCell(p);
+      cell.setLeading(fmt.getLeading(), 0);
+      cell.setVerticalAlignment(fmt.getAlignV().code);
+      cell.setHorizontalAlignment(fmt.getAlignH().code);
+      cell.cloneNonPositionParameters(borders);
+      cell.setUseBorderPadding(true);
+      cell.setUseAscender(fmt.isAscender());
+      cell.setUseDescender(fmt.isDescender());
+      cell.setPadding(fmt.getPadding());
+      fmt.getBackgroundColor().ifPresent(cell::setBackgroundColor);
+      table.addCell(cell);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return
+         o instanceof TextCell other &&
+         other.getText().equals(getText()) &&
+         formatEquals(other);
+    }
+
+    @Override
+    public final int hashCode() {
+      return getText().hashCode() * 31 + formatHashCode();
+    }
+  }
   
   //    C O N C R E T E    I M P L S ..
   
   /**
    * Text cell data.
    */
-  public static class TextCell extends CellData {
+  public static class TextCell extends TextualCell {
     
     /**
      * Blank cell with a single space.
@@ -166,42 +205,17 @@ public abstract class CellData {
         throw new IllegalArgumentException("empty text");
       this.text = text;
     }
-    
+
+    @Override
     public String getText() {
       return text;
     }
-
-    @Override
-    public void appendTable(Rectangle borders, CellFormat col, PdfPTable table) {
-      col = format(col);
-      Paragraph p = new Paragraph(text, col.getFont().getFont());
-      p.setLeading(col.getLeading());
-      PdfPCell cell = new PdfPCell(p);
-      cell.setLeading(col.getLeading(), 0);
-      cell.setVerticalAlignment(col.getAlignV().code);
-      cell.setHorizontalAlignment(col.getAlignH().code);
-      cell.cloneNonPositionParameters(borders);
-      cell.setUseBorderPadding(true);
-      cell.setUseAscender(col.isAscender());
-      cell.setUseDescender(col.isDescender());
-      cell.setPadding(col.getPadding());
-      col.getBackgroundColor().ifPresent(cell::setBackgroundColor);
-      table.addCell(cell);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      return
-         o instanceof TextCell other &&
-         other.text.equals(text) &&
-         formatEquals(other);
-    }
-
-    @Override
-    public final int hashCode() {
-      return text.hashCode() * 31 + formatHashCode();
-    }
   }
+  
+  
+  
+  
+  
   
   
   
@@ -261,19 +275,19 @@ public abstract class CellData {
     }
 
     @Override
-    public void appendTable(Rectangle borders, CellFormat col, PdfPTable table) {
-      col = format(col);
+    public void appendTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
+      fmt = format(fmt);
       var img = Image.getInstance(image);
       PdfPCell cell = new PdfPCell();
       cell.addElement(new Chunk(img, 0, 0));
-      cell.setVerticalAlignment(col.getAlignV().code);
-      cell.setHorizontalAlignment(col.getAlignH().code);
+      cell.setVerticalAlignment(fmt.getAlignV().code);
+      cell.setHorizontalAlignment(fmt.getAlignH().code);
       cell.cloneNonPositionParameters(borders);
       cell.setUseBorderPadding(true);
-      cell.setUseAscender(col.isAscender());
-      cell.setUseDescender(col.isDescender());
-      cell.setPadding(col.getPadding());
-      col.getBackgroundColor().ifPresent(cell::setBackgroundColor);
+      cell.setUseAscender(fmt.isAscender());
+      cell.setUseDescender(fmt.isDescender());
+      cell.setPadding(fmt.getPadding());
+      fmt.getBackgroundColor().ifPresent(cell::setBackgroundColor);
       table.addCell(cell);
     }
     
@@ -299,23 +313,7 @@ public abstract class CellData {
   }
   
   
-  
-  public static class NestedTableCell extends CellData {
-    
-    private final PdfPTable nestedPdfTable;
-    
-    
-    public NestedTableCell(PdfPTable pdfTable) {
-      super(null);
-      this.nestedPdfTable = Objects.requireNonNull(pdfTable, "null nested table");
-    }
 
-    @Override
-    public void appendTable(Rectangle borders, CellFormat col, PdfPTable table) {
-      table.addCell(nestedPdfTable);
-    }
-    
-  }
 
 }
 

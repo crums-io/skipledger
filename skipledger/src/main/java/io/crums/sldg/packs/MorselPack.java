@@ -3,6 +3,7 @@
  */
 package io.crums.sldg.packs;
 
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import io.crums.io.buffer.Partitioning;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
+import io.crums.sldg.MorselFile;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.Row;
 import io.crums.sldg.bags.MorselBag;
@@ -48,6 +50,25 @@ public final class MorselPack implements MorselBag {
   
   public final static int MIN_PACK_COUNT = 4;
   public final static int VER_PACK_COUNT = 5;
+  
+  
+  /** @return {@linkplain #load(InputStream, boolean) load(in, true)} */
+  public static MorselPack load(InputStream in) {
+    return load(in, true);
+  }
+  
+  
+  /**
+   * Loads an instance from the given stream.
+   * 
+   * @param hasHeader if {@code true} then a morsel file header is first parsed
+   */
+  public static MorselPack load(InputStream in, boolean hasHeader) {
+    var bytes = BufferUtils.readFully(in);
+    if (hasHeader)
+      MorselFile.advanceHeader(bytes, in);
+    return load(bytes);
+  }
   
   
   public static MorselPack load(ByteBuffer in) {

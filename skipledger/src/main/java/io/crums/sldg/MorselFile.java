@@ -179,17 +179,23 @@ public class MorselFile {
     ByteBuffer buffer = direct ? ByteBuffer.allocateDirect(size) : ByteBuffer.allocate(size);
     FileUtils.loadFileToMemory(file, buffer);
     
-    checkHeader(buffer, file);
+    advanceHeader(buffer, file);
     
     this.file = file;
     this.pack = MorselPack.load(buffer);
   }
   
   
+  
+  
   /**
-   * On return {@code buffer}'s position is advanced by {@linkplain #HEADER_SIZE}
+   * Checks the header.
+   * On return the {@code buffer}'s position is advanced by {@linkplain #HEADER_SIZE}
+   * 
+   * @param buffer  buffer containing the file's contents
+   * @param file    used for adding context to error messages
    */
-  private void checkHeader(ByteBuffer buffer, File file) {
+  public static void advanceHeader(ByteBuffer buffer, Object file) {
     ByteBuffer expHeader = header();
     ByteBuffer header = BufferUtils.slice(buffer, expHeader.remaining());
     if (!header.equals(expHeader)) {
@@ -198,6 +204,8 @@ public class MorselFile {
       String headerString = new String(b, Strings.UTF_8);
       if (headerString.startsWith(HEADER_SANS_VER)) {
         // ok, but nag
+        // TODO: check if this must be replaced by system logger
+        // so as to minimize module deps
         Logger log = Logger.getLogger(MorselFile.class.getSimpleName());
         log.warning(
             "Loading " + file + " with header '" + headerString + "'; " +

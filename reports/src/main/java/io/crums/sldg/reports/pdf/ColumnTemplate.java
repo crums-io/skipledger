@@ -3,7 +3,10 @@
  */
 package io.crums.sldg.reports.pdf;
 
+import java.util.Objects;
+
 import io.crums.sldg.reports.pdf.model.CellDataProvider;
+import io.crums.sldg.reports.pdf.model.func.NumberFunc;
 import io.crums.sldg.src.ColumnType;
 
 /**
@@ -11,30 +14,67 @@ import io.crums.sldg.src.ColumnType;
  */
 public class ColumnTemplate {
   
-  private final static int SOURCE_INDEX_NOT_SET = -2;
-  private final static int SOURCE_INDEX_ROWNUM = -1;
+//  private final static int NO_SOURCE_INDEX = -2;
+//  
+//  private final static int SOURCE_INDEX_ROWNUM = -1;
   
   
 
-  private CellFormat format;
+  private final CellFormat format;
+  private final SourcedCell protoSrc;
   
-  /** &ge; -2. -1 means a row's row-number. */
-  private int sourceIndex;
-  
-  private ColumnType columnType;
+//  /** &ge; -1. -1 means a row's row-number. */
+//  private final int sourceIndex;
+//  
+//  
+//  
+//  private ColumnType columnType;
+//  
+//  private NumberFunc func;
   
 //  private CellDataProvider<?> 
 
-  /**
-   * 
-   */
-  public ColumnTemplate() {  }
   
   
-  public ColumnTemplate(CellFormat format, int columnNo) {
+  public ColumnTemplate(CellFormat format, SourcedCell protoSrc) {
     this.format = format;
-    this.sourceIndex = columnNo - 1;
-    if (columnNo < -1)
-      throw new IllegalArgumentException("column number: " + columnNo);
+    this.protoSrc = protoSrc;
   }
+  
+  
+  
+  
+  
+  
+  
+  public boolean usesSource() {
+    return protoSrc != null;
+  }
+  
+  
+  public SourcedCell getProtoSrc() {
+    return protoSrc;
+  }
+  
+  
+  
+  public CellFormat getFormat() {
+    return format;
+  }
+  
+  
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

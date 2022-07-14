@@ -7,6 +7,7 @@ package io.crums.sldg.reports.pdf;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,8 +17,7 @@ import com.lowagie.text.PageSize;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
-import io.crums.sldg.reports.pdf.CellData.TextCell;
-import io.crums.sldg.reports.pdf.json.RefContext;
+import io.crums.sldg.src.SourceRow;
 
 /**
  * 
@@ -25,18 +25,16 @@ import io.crums.sldg.reports.pdf.json.RefContext;
 public class ReportTemplate {
   
   
-  /**
-   * Constructor arguments lumped here.
-   */
   public record Components(
       Header header,
-      LegacyTableTemplate subHeader,
-      LegacyTableTemplate mainTable,
-      BorderContent footer) {
-    
-    // constructors..
+      Optional<TableTemplate> subHeader,
+      TableTemplate mainTable,
+      Optional<BorderContent> footer) {
     
     /**
+     * The {@code header} and {@code mainTable} are required.
+     * No null arguments.
+     * 
      * @param header    (required)
      * @param subHeader (optional)
      * @param mainTable (required)
@@ -46,50 +44,29 @@ public class ReportTemplate {
      */
     public Components {
       Objects.requireNonNull(header, "null header");
+      Objects.requireNonNull(subHeader, "null subHeader opt");
       Objects.requireNonNull(mainTable, "null main table");
+      Objects.requireNonNull(footer, "null footer opt");
     }
     
-    public Components(Header header, LegacyTableTemplate mainTable, BorderContent footer) {
-      this(header, null, mainTable, footer);
+    
+    
+    public Components(Header header,
+      TableTemplate subHeader,
+      TableTemplate mainTable,
+      BorderContent footer) {
+      this(header, Optional.ofNullable(subHeader), mainTable, Optional.ofNullable(footer));
     }
     
   }
   
-  
-  public static boolean equal(ReportTemplate a, ReportTemplate b) {
-    return
-        a == b ||
-        a != null && b != null &&
-        a.marginLeft == b.marginLeft &&
-        a.marginRight == b.marginRight &&
-        a.marginTop == b.marginTop &&
-        a.marginBottom == b.marginBottom &&
-        a.header.equals(b.header) &&
-        Objects.equals(a.footer, b.footer) &&
-        LegacyTableTemplate.equal(a.mainTable, b.mainTable);
-        
-  }
-  
+
   public final static float DEFAULT_MARGIN = 24;
   
   
+  private final Components components;
   
-  
-  // BEGIN INSTANCE STUFF..
-  
-  
-  private final Header header;
-  
-  private final LegacyTableTemplate subHeader;
-  private final LegacyTableTemplate mainTable;
-  
-  
-  private final BorderContent footer;
-  
-  
-  private RefContext references = RefContext.EMPTY;
-  
-  
+
   private Rectangle pageSize = PageSize.A4;
   
   private float marginLeft = DEFAULT_MARGIN;
@@ -101,180 +78,73 @@ public class ReportTemplate {
   private float marginBottom = DEFAULT_MARGIN;
   
   
-  
-  
-  /**
-   * Currently equivalent to the full constructor.
-   * 
-   * @param header    non-null
-   * @param mainTable non-null
-   * @param footer    optional (may be null)
-   * 
-   * @see #ReportTemplate(Components)
-   */
-  public ReportTemplate(
-      Header header, LegacyTableTemplate subHeader, LegacyTableTemplate mainTable, BorderContent footer) {
-    this(new Components(header, subHeader, mainTable, footer));
-  }
-  
-
-  /**
-   * Currently equivalent to the full constructor.
-   * 
-   * @param header    non-null
-   * @param mainTable non-null
-   * @param footer    optional (may be null)
-   * 
-   * @see #ReportTemplate(Components)
-   */
-  public ReportTemplate(Header header, LegacyTableTemplate mainTable, BorderContent footer) {
-    this(new Components(header, mainTable, footer));
-  }
-  
-  
-  /**
-   * Main constructor takes a lumpy argument.
-   */
-  public ReportTemplate(Components args) {
-    this.header = args.header;
-    this.subHeader = args.subHeader;
-    this.mainTable = args.mainTable;
-    this.footer = args.footer;
-    
-    header.getHeaderTable().setDefaultCell(TextCell.BLANK);
+  public ReportTemplate(Components components) {
+    this.components = Objects.requireNonNull(components, "null components");
   }
   
   
   
   
-  public final Header getHeader() {
-    return header;
-  }
   
-  
-  /**
-   * Returns the optional subheader table.
-   */
-  public final Optional<LegacyTableTemplate> getSubHeader() {
-    return Optional.ofNullable(subHeader);
-  }
-  
-  
-  public final LegacyTableTemplate getMainTable() {
-    return mainTable;
-  }
-  
-  
-  public final Optional<BorderContent> getFooter() {
-    return Optional.ofNullable(footer);
-  }
-  
-  
-  
-  /**
-   * Write a PDF to the given {@code file} path.
-   * 
-   * @param file          path to new file (must not exist)
-   * @param headCells
-   * @param mainCells
-   * @throws IOException
-   */
-  public void writePdfFile(
-      File file, List<CellData> headCells, List<CellData> mainCells)
-          throws IOException {
-
+  public void writePdf(File file, List<SourceRow> rowset) throws UncheckedIOException {
     Objects.requireNonNull(file, "null file");
+    Objects.requireNonNull(rowset, "null rowset");
+    if (rowset.isEmpty())
+      throw new IllegalArgumentException("empty rowset");
     if (file.exists())
-      throw new IllegalArgumentException(file + " already exists");
-    if (!file.canWrite())
-      throw new IllegalArgumentException("cannot write to " + file);
-    
-    final boolean headerCellsEmpty = headCells == null || headCells.isEmpty();
-    if (subHeader == null) {
-      if (!headerCellsEmpty)
-        throw new IllegalArgumentException(
-            "headCells must be empty when header table is not set: " + headCells);
-    } else if (headerCellsEmpty)
-      throw new IllegalArgumentException(
-          "head cells empty while header table is set");
-    Objects.requireNonNull(mainCells, "null mainCells");
-    
-    // done checking args..
-    
-    var headerPdfTable = header.getHeaderTable().createTable();
-    var subHeaderPdfTable = subHeader == null ? null : subHeader.createTable(headCells);
-    var mainPdfTable = mainTable.createTable(mainCells);
-    
-    var document = new Document(pageSize, marginLeft, marginRight, marginTop, marginBottom);
-    PdfWriter.getInstance(
-        document,
-        new FileOutputStream(file));
-    header.getHeadContent().ifPresent(border -> document.setHeader(border.newHeaderFooter()));
-    if (footer != null)
-      document.setFooter(footer.newHeaderFooter());
-    
-    
-    document.open();
-    document.add(headerPdfTable);
-    if (subHeaderPdfTable != null)
-      document.add(subHeaderPdfTable);
-    document.add(mainPdfTable);
-    document.close();
-  }
-  
-  
-  
-  
-  
-  
-  
-  public void writePdfFile(File file, List<CellData> cells) throws IOException {
-    Objects.requireNonNull(file, "null file");
-    Objects.requireNonNull(cells, "null cells");
-    List<CellData> headerCells, mainCells;
-    {
-      int headerCount = header.getHeaderTable().getDynamicCellCount();
-      if (cells.size() < headerCount + mainTable.getColumnCount())
-        throw new IllegalArgumentException("too few cells (" + cells.size() + ")");
-      
-      if (headerCount == 0) {
-        headerCells = List.of();
-        mainCells = cells;
-      } else {
-        headerCells = cells.subList(0, headerCount);
-        mainCells = cells.subList(headerCount, cells.size());
-      }
+      throw new IllegalArgumentException("cannot overwrite file: " + file);
+    try {
+      writePdfFile(file, rowset);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
     }
-    
-    var headerPdfTable = header.getHeaderTable().createTable(headerCells);
-    var mainPdfTable = mainTable.createTable(mainCells);
-    
+  }
+  
+  
+  protected void writePdfFile(File file, List<SourceRow> rowset) throws IOException {
     var document = new Document(pageSize, marginLeft, marginRight, marginTop, marginBottom);
+    
+    // Delay this step.. we're creating a file even if we encounter errors. Not good (!)
+//    PdfWriter.getInstance(
+//        document,
+//        new FileOutputStream(file));
+    
+    // what's this? Can I add meta this way? TODO
+//    document.addHeader("", "");
+    
+    
+    // create the PDF tables before writing anymore to the file
+    // (avoid more file I/O if an error is to occur)
+    var headTable = components.header().headerTable().createTable(rowset);
+    var subHeadTable = components.subHeader().map(subHeader -> subHeader.createTable(rowset));
+    var mainTable = components.mainTable().createTable(rowset);
+
     PdfWriter.getInstance(
         document,
         new FileOutputStream(file));
+
+    components.header().headContent().ifPresent(
+        border -> document.setHeader(border.newHeaderFooter()));
+    components.footer().ifPresent(
+        footer -> document.setFooter(footer.newHeaderFooter()));
     
-    document.addHeader("", "");
-    
-    header.getHeadContent().ifPresent(border -> document.setHeader(border.newHeaderFooter()));
-    if (footer != null)
-      document.setFooter(footer.newHeaderFooter());
-    
-    
+    // open file for writing
     document.open();
-    document.add(headerPdfTable);
-    document.add(mainPdfTable);
+    document.add(headTable);
+    subHeadTable.ifPresent(document::add);
+    document.add(mainTable);
     document.close();
   }
+
   
   
-  public final RefContext getReferences() {
-    return references;
-  }
   
   
-  public void setReferences(RefContext references) {
-    this.references = references == null ? RefContext.EMPTY : references;
+  //         PROPERTY SETTERS / GETTERS
+  
+  
+  public final Components getComponents() {
+    return components;
   }
   
   
@@ -359,5 +229,24 @@ public class ReportTemplate {
     if (margin < 0)
       throw new IllegalArgumentException("margin: " + margin);
   }
-  
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

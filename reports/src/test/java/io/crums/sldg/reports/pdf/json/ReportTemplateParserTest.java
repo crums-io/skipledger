@@ -19,22 +19,22 @@ import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FixedTable;
 import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.Header;
+import io.crums.sldg.reports.pdf.LegacyHeader;
 import io.crums.sldg.reports.pdf.LegacyTableTemplate;
 import io.crums.sldg.reports.pdf.LineSpec;
-import io.crums.sldg.reports.pdf.ReportTemplate;
-import io.crums.sldg.reports.pdf.ReportTemplateTest;
+import io.crums.sldg.reports.pdf.LegacyReportTemplate;
+import io.crums.sldg.reports.pdf.LegacyReportTemplateTest;
 import io.crums.sldg.reports.pdf.json.EditableRefContext;
-import io.crums.sldg.reports.pdf.json.ReportTemplateParser;
+import io.crums.sldg.reports.pdf.json.LegacyReportTemplateParser;
 import io.crums.util.json.JsonEntityParser;
 
 /**
  * 
  */
-public class ReportTemplateParserTest extends RefedImageParserTest<ReportTemplate> {
+public class ReportTemplateParserTest extends RefedImageParserTest<LegacyReportTemplate> {
 
   
-  private final static String[] IMAGE_RES = { ReportTemplateTest.ICON };
+  private final static String[] IMAGE_RES = { LegacyReportTemplateTest.ICON };
   
   
   
@@ -47,13 +47,13 @@ public class ReportTemplateParserTest extends RefedImageParserTest<ReportTemplat
     headerTable.setFixedCell(0, 1, iconCell);
     headerTable.setDefaultCell(CellData.TextCell.BLANK);
     headerTable.setColumnWidths(0.25f, 0.5f, 0.25f);
-    var mainTable = ReportTemplateTest.newTableTemplate(ReportTemplateTest.MAIN_TABLE_DEF);
+    var mainTable = LegacyReportTemplateTest.newTableTemplate(LegacyReportTemplateTest.MAIN_TABLE_DEF);
     var footer = new BorderContent(
         "© 2022 example.com",
         new FontSpec("Helvetica", 8, Font.NORMAL, Color.GRAY), Align.H.RIGHT,
         false);
     
-    var report = new ReportTemplate(new Header(headerTable, null), mainTable, footer);
+    var report = new LegacyReportTemplate(new LegacyHeader(headerTable, null), mainTable, footer);
     testRoundtrip(report);
   }
   
@@ -117,7 +117,7 @@ public class ReportTemplateParserTest extends RefedImageParserTest<ReportTemplat
         Align.H.RIGHT,
         false);
     
-    var report = new ReportTemplate(new Header(headerTable, null), mainTable, footer);
+    var report = new LegacyReportTemplate(new LegacyHeader(headerTable, null), mainTable, footer);
     report.setReferences(references);
     
     testRoundtrip(report);
@@ -127,15 +127,15 @@ public class ReportTemplateParserTest extends RefedImageParserTest<ReportTemplat
   
   
   @Override
-  public JsonEntityParser<ReportTemplate> parser() throws Exception {
+  public JsonEntityParser<LegacyReportTemplate> parser() throws Exception {
     var refedImages = getRefedImages(IMAGE_RES);
-    return new ReportTemplateParser(refedImages);
+    return new LegacyReportTemplateParser(refedImages);
   }
 
 
   @Override
-  public void assertTripEquals(ReportTemplate expected, ReportTemplate actual) {
-    assertTrue(ReportTemplate.equal(expected, actual));
+  public void assertTripEquals(LegacyReportTemplate expected, LegacyReportTemplate actual) {
+    assertTrue(LegacyReportTemplate.equal(expected, actual));
   }
   
   

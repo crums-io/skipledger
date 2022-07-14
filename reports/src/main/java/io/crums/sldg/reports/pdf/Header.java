@@ -3,52 +3,28 @@
  */
 package io.crums.sldg.reports.pdf;
 
+
 import java.util.Objects;
 import java.util.Optional;
 
 /**
  * 
  */
-public final class Header {
+public record Header(TableTemplate headerTable, Optional<BorderContent> headContent) {
   
-  private final BorderContent headContent;
-  
-  private final FixedTable headerTable;
-
   /**
    * 
+   * @param headerTable   not null
+   * @param headContent   not null
+   * @see #Header(TableTemplate)
    */
-  public Header(FixedTable headerTable, BorderContent headContent) {
-    this.headContent = headContent;
-    this.headerTable = Objects.requireNonNull(headerTable, "null headerTable");
+  public Header {
+    Objects.requireNonNull(headerTable, "null header table");
+    Objects.requireNonNull(headContent, "null head content option");
   }
   
-  
-  
-  public Optional<BorderContent> getHeadContent() {
-    return Optional.ofNullable(headContent);
-  }
-  
-  
-  public FixedTable getHeaderTable() {
-    return headerTable;
-  }
-  
-  
-  
-  
-  public boolean equals(Object o) {
-    return o == this ||
-        (o instanceof Header other) &&
-        FixedTable.equal(headerTable, other.headerTable) &&
-        Objects.equals(headContent,  other.headContent);
-  }
-  
-  
-  public int hashCode() {
-    int cHash = headContent == null ? -1 : headContent.hashCode();
-    int tHash = headerTable.getCellCount() ^ headerTable.getFixedCells().hashCode();
-    return cHash + 499 * tHash;
+  public Header(TableTemplate headerTable) {
+    this(headerTable, Optional.empty());
   }
 
 }

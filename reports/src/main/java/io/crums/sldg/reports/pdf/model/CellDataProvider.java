@@ -192,11 +192,22 @@ public interface CellDataProvider<T> {
     
     private final NumberFormat format;
 
+    public NumberProvider() {
+      this("");
+    }
     
     public NumberProvider(String pattern)
         throws IllegalArgumentException {
       super(pattern);
       this.format = new DecimalFormat(pattern);
+      init();
+    }
+    
+    
+    
+    private void init() {
+      if (pattern.isEmpty())
+        format.setGroupingUsed(false);
     }
 
     
@@ -204,6 +215,7 @@ public interface CellDataProvider<T> {
         throws IllegalArgumentException {
       super(pattern, prefix);
       this.format = new DecimalFormat(pattern);
+      init();
     }
     
 

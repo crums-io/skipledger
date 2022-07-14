@@ -20,20 +20,14 @@ import com.lowagie.text.Font;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
-
-import io.crums.sldg.reports.pdf.CellData;
-import io.crums.sldg.reports.pdf.CellFormat;
-import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.LegacyTableTemplate;
-import io.crums.sldg.reports.pdf.LineSpec;
-import io.crums.sldg.reports.pdf.json.TableTemplateParser;
+import io.crums.sldg.reports.pdf.json.LegacyTableTemplateParser;
 import io.crums.util.Lists;
 
 /**
  * Careful with changing test method names: its name might implicitly
  * match the name of the resource used for that test.
  */
-public class TableTemplateTest extends IoTestCase {
+public class LegacyTableTemplateTest extends IoTestCase {
   
   private File dir;
   
@@ -148,7 +142,7 @@ public class TableTemplateTest extends IoTestCase {
     var in = getClass().getResourceAsStream(resourceName);
     assertNotNull(in, resourceName);
     try (var reader = new InputStreamReader(in)) {
-      return TableTemplateParser.INSTANCE.toEntity(reader);
+      return LegacyTableTemplateParser.INSTANCE.toEntity(reader);
     } catch (IOException iox) {
       fail();
       // never reached

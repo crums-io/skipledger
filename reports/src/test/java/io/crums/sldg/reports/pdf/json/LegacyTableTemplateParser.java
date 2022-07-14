@@ -22,9 +22,9 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class TableTemplateParser implements ContextedParser<LegacyTableTemplate> {
+public class LegacyTableTemplateParser implements ContextedParser<LegacyTableTemplate> {
 
-  public final static TableTemplateParser INSTANCE = new TableTemplateParser();
+  public final static LegacyTableTemplateParser INSTANCE = new LegacyTableTemplateParser();
 
 
   

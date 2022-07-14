@@ -9,9 +9,9 @@ import java.util.Map;
 import java.util.Objects;
 
 import io.crums.sldg.reports.pdf.BorderContent;
-import io.crums.sldg.reports.pdf.Header;
+import io.crums.sldg.reports.pdf.LegacyHeader;
 import io.crums.sldg.reports.pdf.LegacyTableTemplate;
-import io.crums.sldg.reports.pdf.ReportTemplate;
+import io.crums.sldg.reports.pdf.LegacyReportTemplate;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -20,13 +20,13 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
+public class LegacyReportTemplateParser implements JsonEntityParser<LegacyReportTemplate> {
   
   /**
    * <em>Sans-ref</em> instance (no images) always suitable for writing JSON.
    * (The referenced images are only needed on the read-path).
    */
-  public final static ReportTemplateParser WRITER_INSTANCE = new ReportTemplateParser();
+  public final static LegacyReportTemplateParser WRITER_INSTANCE = new LegacyReportTemplateParser();
   
   public final static String OBJ_REFS = "objRefs";
   
@@ -58,7 +58,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
    * 
    * @see #WRITER_INSTANCE
    */
-  public ReportTemplateParser() {
+  public LegacyReportTemplateParser() {
     this.refedImages = Map.of();
   }
 
@@ -67,7 +67,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
    *        These are passed around the parser "pipeline" and are packaged as
    *        a component of a {@linkplain RefContext} instance.
    */
-  public ReportTemplateParser(Map<String, ByteBuffer> refedImages) {
+  public LegacyReportTemplateParser(Map<String, ByteBuffer> refedImages) {
     this.refedImages = Objects.requireNonNull(refedImages, "null refedImages");
   }
   
@@ -79,7 +79,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
    * {@inheritDoc}
    */
   @Override
-  public JSONObject injectEntity(ReportTemplate report, JSONObject jObj) {
+  public JSONObject injectEntity(LegacyReportTemplate report, JSONObject jObj) {
     injectReferences(report, jObj);
     injectPageSpec(report, jObj);
     injectHeader(report, jObj);
@@ -87,7 +87,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
     var refs = report.getReferences();
     jObj.put(
         MAIN_TABLE,
-        TableTemplateParser.INSTANCE.toJsonObject(
+        LegacyTableTemplateParser.INSTANCE.toJsonObject(
             report.getMainTable(), refs)
         );
     report.getFooter().ifPresent(
@@ -100,7 +100,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   }
   
   
-  private void injectReferences(ReportTemplate report, JSONObject jObj) {
+  private void injectReferences(LegacyReportTemplate report, JSONObject jObj) {
     var context = report.getReferences();
     if (context.isEmptyJson())
       return;
@@ -109,7 +109,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
         RefContextParser.INSTANCE.toJsonObject(context));
   }
 
-  private void injectPageSpec(ReportTemplate report, JSONObject jObj) {
+  private void injectPageSpec(LegacyReportTemplate report, JSONObject jObj) {
     var jPageSpec = new JSONObject();
     jPageSpec.put(W, report.getPageWidth());
     jPageSpec.put(H, report.getPageHeight());
@@ -125,21 +125,21 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   }
 
   @Override
-  public ReportTemplate toEntity(JSONObject jObj) throws JsonParsingException {
+  public LegacyReportTemplate toEntity(JSONObject jObj) throws JsonParsingException {
     return toReportTemplate(jObj, this.refedImages);
   }
 
-  public ReportTemplate toReportTemplate(JSONObject jObj, Map<String, ByteBuffer> refedImages)
+  public LegacyReportTemplate toReportTemplate(JSONObject jObj, Map<String, ByteBuffer> refedImages)
       throws JsonParsingException {
     try {
-      ReportTemplate report;
+      LegacyReportTemplate report;
       {
         var context = toRefContext(jObj, refedImages);
         var header = toHeader(jObj, context);
         var subheader = toSubheader(jObj, context);
         
         var mainTable =
-            TableTemplateParser.INSTANCE.toTableTemplate(
+            LegacyTableTemplateParser.INSTANCE.toTableTemplate(
                 JsonUtils.getJsonObject(jObj, MAIN_TABLE, true), context);
         BorderContent footer;
         {
@@ -148,7 +148,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
               jFooter == null ?
                   null : BorderContentParser.INSTANCE.toEntity(jFooter, context);
         }
-        report = new ReportTemplate(header, subheader, mainTable, footer);
+        report = new LegacyReportTemplate(header, subheader, mainTable, footer);
       }
       var jPageSpec = JsonUtils.getJsonObject(jObj, PAGE_SPEC, true);
       float width = JsonUtils.getNumber(jPageSpec, W, true).floatValue();
@@ -180,7 +180,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   }
   
   
-  private void injectHeader(ReportTemplate report, JSONObject jObj) {
+  private void injectHeader(LegacyReportTemplate report, JSONObject jObj) {
     var header = report.getHeader();
     var refs = report.getReferences();
     header.getHeadContent().ifPresent(
@@ -193,7 +193,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   }
   
   
-  private Header toHeader(JSONObject jObj, RefContext context) throws JsonParsingException {
+  private LegacyHeader toHeader(JSONObject jObj, RefContext context) throws JsonParsingException {
     var headTable =
         FixedTableParser.INSTANCE.toFixedTable(
             JsonUtils.getJsonObject(jObj, HEAD_TABLE, true), context);
@@ -203,24 +203,24 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
         jHeadContent == null ?
             null : BorderContentParser.INSTANCE.toEntity(jHeadContent, context);
     
-    return new Header(headTable, headContent);
+    return new LegacyHeader(headTable, headContent);
   }
   
 
   
   
-  private void injectSubheader(ReportTemplate report, JSONObject jObj) {
+  private void injectSubheader(LegacyReportTemplate report, JSONObject jObj) {
     var refs = report.getReferences();
     report.getSubHeader().ifPresent(
         table -> jObj.put(
             SUBHEAD_TABLE,
-            TableTemplateParser.INSTANCE.toJsonObject(table, refs)));
+            LegacyTableTemplateParser.INSTANCE.toJsonObject(table, refs)));
   }
   
   
   private LegacyTableTemplate toSubheader(JSONObject jObj, RefContext context) throws JsonParsingException {
     var jSubheader = JsonUtils.getJsonObject(jObj, SUBHEAD_TABLE, false);
-    return jSubheader == null ? null : TableTemplateParser.INSTANCE.toEntity(jSubheader, context);
+    return jSubheader == null ? null : LegacyTableTemplateParser.INSTANCE.toEntity(jSubheader, context);
   }
 }
 
