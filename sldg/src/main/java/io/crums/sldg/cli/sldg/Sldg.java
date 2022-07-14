@@ -1097,7 +1097,7 @@ class Morsel implements Callable<Integer> {
     if (entries == 0)
       System.out.println("State morsel written to " + file);
     else
-      System.out.printf("Source morsel (%s) written to %s", nOf(entries, "row"), file.getPath());
+      System.out.printf("Source morsel (%s) written to %s%n", nOf(entries, "row"), file.getPath());
 
     return 0;
   }

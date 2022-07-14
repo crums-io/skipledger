@@ -82,10 +82,11 @@ public class Filenaming {
     Objects.requireNonNull(dir, "null dir");
     
     String name = dir.getName();
-    if (name.length() <= 3 && !dir.isAbsolute())
+    if (".".equals(name))
+      name = new File("").getAbsoluteFile().getName();
+    else if (name.length() <= 3 && !dir.isAbsolute()) {
       name = dir.getAbsoluteFile().getName();
-    if (File.separator.equals(name))
-      name = "root";
+    }
     
     return newMorselFile(dir, name, bag);
   }
