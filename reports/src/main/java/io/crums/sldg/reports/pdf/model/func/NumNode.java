@@ -7,6 +7,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import io.crums.util.PrimitiveComparator;
+import io.crums.util.PrimitiveNumber;
+
 /**
  * Arithmetic evaluation tree. The objective is to compose / model functions declaratively
  * and be able to serialize their structure in some format, say JSON.
@@ -44,6 +47,34 @@ import java.util.Objects;
 public abstract class NumNode {
   
   /**
+   * Returns a <em>mutable</em> value leaf instance.
+   */
+  public static NumNode newArgLeaf() {
+    return new ArgLeaf();
+  }
+  
+  /**
+   * Returns a <em>fixed</em> value leaf instance.
+   * 
+   * @param value not null
+   */
+  public static NumNode newLeaf(Number value) {
+    return new FixedLeaf(value);
+  }
+  
+  /**
+   * Returns a branch instance.
+   * 
+   * @param op        not null
+   * @param children  at least 2; <em>exactly</em> 2, if {@code op} is not
+   *                  {@linkplain NumberOp#isAssociative() associative}
+   * @return a branch node
+   */
+  public static NumNode newBranch(NumberOp op, List<NumNode> children) {
+    return new Branch(op, children);
+  }
+  
+  /**
    * Returns the value. Often, this is calculated on demand. If it's a branch node,
    * then the values of the child nodes are calculated from left to right (first to last).
    * This shouldn't matter in principle if (like you should) the values are calculated
@@ -79,11 +110,63 @@ public abstract class NumNode {
   
   
   
+  
   /**
    * A leaf node has no operations. (Unary operations are composed using
    * binary operations.) It represents a direct value.
    */
-  public static class Leaf extends NumNode {
+  public static abstract class Leaf extends NumNode {
+    
+    
+
+
+    @Override
+    public final boolean isLeaf() {
+      return true;
+    }
+    
+    
+    public abstract boolean isSettable();
+    
+    
+    public final void setValue(Long value) {
+      setValueImpl(value);
+    }
+    
+    public final void setValue(Double value) {
+      setValueImpl(value);
+    }
+    
+    public final void setValue(Integer value) {
+      setValueImpl(value);
+    }
+    
+    public final void setValue(Float value) {
+      setValueImpl(value);
+    }
+    
+    public final void setValue(Number value) {
+      boolean ok =
+          value instanceof Long ||
+          value instanceof Double ||
+          value instanceof Integer ||
+          value instanceof Float;
+      if (!ok)
+        throw new IllegalArgumentException(
+            "not one of the top 4 boxed primitives: " + value.getClass());
+      setValueImpl(value);
+    }
+    
+    protected void setValueImpl(Number value) throws UnsupportedOperationException {
+      throw new UnsupportedOperationException();
+    }
+    
+  }
+  
+  
+  
+  /** An immutable leaf value. */
+  public static class FixedLeaf extends Leaf {
     
     private final Number value;
     
@@ -93,32 +176,86 @@ public abstract class NumNode {
      * @param value not null. This is sometimes the special type {@code Primitive.Settable}
      * @see NumberFunc
      */
-    public Leaf(Number value) {
+    public FixedLeaf(Number value) {
       this.value = Objects.requireNonNull(value, "null value");
     }
 
+
+
+    @Override
+    public final Number value() {
+      return value;
+    }
+    
+    
+    public final boolean isSettable() {
+      return false;
+    }
+    
+
+    
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof FixedLeaf fixed && PrimitiveComparator.equal(value, fixed.value);
+    }
+    
+    
+        @Override
+    public final int hashCode() {
+      return value.intValue();
+    }
+    
+  }
+  
+  /** Mutable leaf node. I.e. an argument. */
+  public static class ArgLeaf extends Leaf {
+    
+    private Number value = 0;
+
+    @Override
+    public boolean isSettable() {
+      return true;
+    }
+    
+    
+    protected void setValueImpl(Number value) {
+      this.value = Objects.requireNonNull(value, "null value");
+    }
 
     @Override
     public Number value() {
       return value;
     }
-
+    
+    
+    
+    
+    
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof ArgLeaf;
+    }
+    
 
     @Override
-    public final boolean isLeaf() {
-      return true;
+    public final int hashCode() {
+      return Integer.MIN_VALUE;
     }
     
   }
   
   
+  
+  
+  
   /**
-   * 
+   * A binary operation on multiple sub-branches (children). If
+   * the operation is associative, it can be chained with more than 2 sub-branches.
    */
   public static class Branch extends NumNode {
     
-    private NumberOp op;
-    private List<NumNode> children;
+    private final NumberOp op;
+    private final List<NumNode> children;
     
     /**
      * Creates a branch node with 2 or more children.
@@ -172,8 +309,21 @@ public abstract class NumNode {
      * if the {@linkplain #op() op} is <em>associative</em>, however, then it may
      * have more than 2.
      */
-    public List<NumNode> children() {
+    public final List<NumNode> children() {
       return Collections.unmodifiableList(children);
+    }
+    
+
+    
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof Branch branch && op == branch.op && children.equals(branch.children);
+    }
+    
+
+    @Override
+    public final int hashCode() {
+      return op.hashCode() ^ children.hashCode();
     }
     
   }

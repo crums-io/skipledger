@@ -18,7 +18,6 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPTable;
 
 import io.crums.sldg.src.SourceRow;
-import io.crums.util.Lists;
 
 /**
  * 
@@ -332,20 +331,23 @@ public class TableTemplate {
     // first row..
     int row = 0;
     int[] sourcePtr = { 0 };
+    TreeMap<Integer, CellData> fixedPending = new TreeMap<>(SERIAL_COMP);
+    fixedPending.putAll(fixedCells);
     
-    List<CellData> tableRow = generateRow(row, sourcePtr, rowset);
+    List<CellData> tableRow = generateRow(row, sourcePtr, rowset, fixedPending);
     ++row;
     {
-      boolean finished = finished(sourcePtr[0], rowset, row);
+      boolean finished = finished(sourcePtr[0], rowset, fixedPending);
       injectFirstRow(tableRow.iterator(), table, finished);
       if (finished)
         return table;
     }
     
+    
     while (true) {
-      tableRow = generateRow(row, sourcePtr, rowset);
+      tableRow = generateRow(row, sourcePtr, rowset, fixedPending);
       ++row;
-      if (finished(sourcePtr[0], rowset, row))
+      if (finished(sourcePtr[0], rowset, fixedPending))
         break;
       injectMidRow(tableRow.iterator(), table);
     }
@@ -355,40 +357,52 @@ public class TableTemplate {
   }
   
   
-  private boolean finished(int sourceIndex, List<SourceRow> sources, int row) {
+  
+  
+  private boolean finished(
+      int sourceIndex,
+      List<SourceRow> sources,
+      TreeMap<Integer, CellData> fixedPending) {
+    
+    
     return
         (!consumesSources || sourceIndex >= sources.size()) &&
-        fixedCells.ceilingKey(toSerialIndex(0, row)) == null;
+        fixedPending.isEmpty();
   }
   
   
   
   private List<CellData> generateRow(
       int row,
-      int[] sourcePtr,
-      List<SourceRow> rowset) {
+      int[] sourcePtr,    // c-like hack
+      List<SourceRow> rowset,
+      TreeMap<Integer, CellData> fixedPending) {
     
     final int baseIndex = toSerialIndex(0, row);      // (inc)
-    final int cc = getColumnCount();
-    
-    List<CellData> out = new ArrayList<>(cc);
     
     boolean srcConsumed = false;
+    
+    // set the working source row, if the table consumes sources
+    // (consume here means generate a row per element in rowset)
     SourceRow sourceRow =
-        sourcePtr[0] < rowset.size() ?
+        consumesSources && sourcePtr[0] < rowset.size() ?
             rowset.get(sourcePtr[0]) :
               null;
     
+
+    final int cc = getColumnCount();
+    List<CellData> out = new ArrayList<>(cc);
+    
     for (int col = 0; col < cc; ++col) {
-      var fixedCell = fixedCells.get(baseIndex + col);
+      CellData fixedCell = fixedPending.remove(baseIndex + col);
       if (fixedCell != null) {
         fixedCell = prepareCell(fixedCell, rowset);
         out.add(fixedCell);
         
       } else if (sourceRow != null && columns.get(col).usesSource()) {
-        var cell = makeSourcedCell(col, sourceRow);
-        out.add(cell);
-        srcConsumed = true;
+          var cell = makeSourcedCell(col, sourceRow);
+          out.add(cell);
+          srcConsumed = true;
         
       } else
         out.add(defaultCell);
@@ -396,6 +410,25 @@ public class TableTemplate {
     
     if (srcConsumed)
       sourcePtr[0]++;
+
+    // if there are no more source rows to consume AND the remaining cells
+    // are all indexed implicitly (using negative numbers to signify the
+    // *last* rows), then rekey those implicit values to the actual values
+    // of the occasion..
+    
+    boolean nomoSrcs = !consumesSources || sourcePtr[0] >= rowset.size();
+    if (nomoSrcs && !fixedPending.isEmpty() && fixedPending.firstKey() < 0) {
+      // rewrite the map so that its keys are anchored to the last row number
+      var rekeyed = new TreeMap<Integer, CellData>();
+      for (var entry : fixedPending.entrySet()) {
+        int serialIndex = entry.getKey();
+        int rowIndex = toRowIndex(serialIndex);
+        int colIndex = toColIndex(serialIndex);
+        rekeyed.put(toSerialIndex(colIndex, row - rowIndex), entry.getValue());
+      }
+      fixedPending.clear();
+      fixedPending.putAll(rekeyed);
+    }
     
     return out;
   }

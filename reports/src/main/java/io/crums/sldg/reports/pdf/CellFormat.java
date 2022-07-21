@@ -139,7 +139,7 @@ public class CellFormat {
   }
 
   @Override
-  public boolean equals(Object obj) {
+  public final boolean equals(Object obj) {
     return
         obj instanceof CellFormat other &&
         other.font.equals(font) &&

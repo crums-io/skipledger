@@ -17,6 +17,7 @@ public class ColorParser implements ContextedParser<Color> {
   
   public final static ColorParser INSTANCE = new ColorParser();
   
+  /** @deprecated does not belong inside the JSON object; should be ref'ed from outside, not here. */
   public final static String C_REF = "cRef";
 
   public final static String R = "r";

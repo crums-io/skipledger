@@ -3,41 +3,22 @@
  */
 package io.crums.sldg.reports.pdf;
 
-import java.util.Objects;
 
-import io.crums.sldg.reports.pdf.model.CellDataProvider;
-import io.crums.sldg.reports.pdf.model.func.NumberFunc;
-import io.crums.sldg.src.ColumnType;
+import java.util.Objects;
 
 /**
  * A PDF table column. This describes default behavior for a column.
  */
 public class ColumnTemplate {
   
-//  private final static int NO_SOURCE_INDEX = -2;
-//  
-//  private final static int SOURCE_INDEX_ROWNUM = -1;
-  
   
 
   private final CellFormat format;
   private final SourcedCell protoSrc;
   
-//  /** &ge; -1. -1 means a row's row-number. */
-//  private final int sourceIndex;
-//  
-//  
-//  
-//  private ColumnType columnType;
-//  
-//  private NumberFunc func;
-  
-//  private CellDataProvider<?> 
-
-  
   
   public ColumnTemplate(CellFormat format, SourcedCell protoSrc) {
-    this.format = format;
+    this.format = Objects.requireNonNull(format, "null format");
     this.protoSrc = protoSrc;
   }
   

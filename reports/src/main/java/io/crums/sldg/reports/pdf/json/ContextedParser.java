@@ -8,6 +8,7 @@ import java.util.List;
 
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
+import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONArray;
 import io.crums.util.json.simple.JSONObject;
 
@@ -83,6 +84,17 @@ public interface ContextedParser<T> extends JsonEntityParser<T> {
    */
   default RefContext defaultContext() {
     return RefContext.EMPTY;
+  }
+
+
+  /**
+   * Returns a named instance, if present; {@code null} otherwise.
+   * 
+   * @return may be null (!)
+   */
+  default T parseIfPresent(JSONObject jObj, String name, RefContext context) throws JsonParsingException {
+    var jSub = JsonUtils.getJsonObject(jObj, name, false);
+    return jSub == null ? null : toEntity(jSub, context);
   }
 
 }

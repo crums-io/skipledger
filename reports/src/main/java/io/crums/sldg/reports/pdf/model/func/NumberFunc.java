@@ -4,22 +4,16 @@
 package io.crums.sldg.reports.pdf.model.func;
 
 
-import static io.crums.util.PrimitiveNumber.isSettable;
-
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import io.crums.util.PrimitiveNumber;
-import io.crums.util.PrimitiveNumber.Settable;
 
 /**
- * A numeric function "specification" using a composition of a tree of {@linkplain NumNode}s
- * and one or more {@linkplain PrimitiveNumber.Settable settable number}s as the value of
- * leaves in that tree.
+ * A numeric function "specification" using a composition of a tree of {@linkplain NumNode}s.
+ * At least one the nodes in the tree must be an {@linkplain NumNode.ArgNode ArgNode} instance.
  * 
  * <h3>Argument Order and Evaluation</h3>
  * <p>
@@ -33,32 +27,49 @@ import io.crums.util.PrimitiveNumber.Settable;
 public class NumberFunc  {
   
   
-  private NumNode root;
-  private List<Settable> arguments; 
+  public static NumberFunc divideBy(Number number) {
+    return
+        new NumberFunc(
+            NumNode.newBranch(
+                NumberOp.DIVIDE,
+                List.of(NumNode.newArgLeaf(), NumNode.newLeaf(number))));
+        
+  }
+  
+  public static NumberFunc biFunction(NumberOp op) {
+    return
+        new NumberFunc(
+            NumNode.newBranch(
+                op,
+                List.of(NumNode.newArgLeaf(), NumNode.newArgLeaf())));
+        
+  }
+  
+  
+  private final NumNode root;
+  private final List<NumNode.Leaf> arguments; 
   
   /**
-   * On construction, an instance <em>discovers</em> is arguments by examining
-   * the {@code Number} type in the leaves of the tree.
+   * On construction, an instance <em>discovers</em> its arguments by inspecting
+   * and collecting {@linkplain NumNode.Leaf#isSettable() settable} leaf nodes.
    */
   public NumberFunc(NumNode root) {
     this.root = Objects.requireNonNull(root, "null root");
-    this.arguments = 
-        Collections.unmodifiableList(
-            collectArgs(new ArrayList<>(4), root));
+    this.arguments = collectArgs(new ArrayList<>(4), root);
     if (arguments.isEmpty())
-      throw new IllegalArgumentException("no settable numbers found in evaluation tree");
+      throw new IllegalArgumentException("no arguments (settable nodes) found in evaluation tree");
   }
   
   
   /**
-   * Collects the <em>settable</em> numbers in a pre-order traversal
+   * Collects the <em>settable</em> leaf nodes in a pre-order traversal
    * of the evaluation tree.
    */
-  private List<Settable> collectArgs(List<Settable> collected, NumNode cursor) {
+  private List<NumNode.Leaf> collectArgs(List<NumNode.Leaf> collected, NumNode cursor) {
     if (cursor.isLeaf()) {
-      Number value = cursor.value();
-      if (isSettable(value))
-        collected.add((Settable) value);
+      var leaf = cursor.asLeaf();
+      if (leaf.isSettable())
+        collected.add(leaf);
     } else {
       for (var n : cursor.asBranch().children())
         collectArgs(collected, n);
@@ -142,7 +153,7 @@ public class NumberFunc  {
   
   
   
-  public Number eval(Number...numbers) throws UnsupportedOperationException {
+  public Number eval(Number...numbers) {
     assertArgCount(numbers.length);
     for (int index = 0; index < numbers.length; ++index)
       arguments.get(index).setValue(numbers[index]);
@@ -150,16 +161,37 @@ public class NumberFunc  {
   }
   
   
+  public Number eval(List<Number> numbers) {
+    final int count = numbers.size();
+    assertArgCount(count);
+    for (int index = 0; index < count; ++index)
+      arguments.get(index).setValue(numbers.get(index));
+    return root.value();
+  }
+  
+  
+  
+  
+  @Override
+  public final boolean equals(Object o) {
+    return o instanceof NumberFunc func && root.equals(func.root);
+  }
+  
+  
+  @Override
+  public final int hashCode() {
+    return 0x10000 + root.hashCode();
+  }
   
   
   
   
   
-  private void assertArgCount(int expected) {
-    int count = arguments.size();
-    if (count != expected)
+  private void assertArgCount(int actual) {
+    int expected = arguments.size();
+    if (actual != expected)
       throw new UnsupportedOperationException(
-          "arg count mismatch: expected " + expected + "; given " + count);
+          "arg count mismatch: expected " + expected + "; given " + actual);
   }
 
 }

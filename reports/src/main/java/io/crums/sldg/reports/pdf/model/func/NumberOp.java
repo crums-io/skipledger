@@ -15,13 +15,13 @@ import java.util.function.BinaryOperator;
  */
 public enum NumberOp implements BinaryOperator<Number> {
   
-  /** {@code +} */
+  /** Symbol: {@code +} */
   ADD("+"),
-  /** {@code -} */
+  /** Symbol: {@code -} */
   SUBTRACT("-"),
-  /** {@code *} */
+  /** Symbol: {@code *} */
   MULTIPLY("*"),
-  /** {@code /} */
+  /** Symbol: {@code /} */
   DIVIDE("/");
   
   
@@ -106,6 +106,14 @@ public enum NumberOp implements BinaryOperator<Number> {
    */
   public static Number negate(Number number) {
     return multiply(number, -1);
+  }
+  
+  
+  public static NumberOp forSymbol(String symbol) {
+    for (var op : values())
+      if (op.symbol().equals(symbol))
+        return op;
+    throw new IllegalArgumentException("symbol: " + symbol);
   }
 
 

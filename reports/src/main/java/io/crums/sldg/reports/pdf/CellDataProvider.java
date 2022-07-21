@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model;
+package io.crums.sldg.reports.pdf;
 
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
@@ -10,10 +10,7 @@ import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 
-import io.crums.sldg.reports.pdf.CellData;
-import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.CellData.ImageCell;
 import io.crums.sldg.reports.pdf.CellData.TextCell;
 
@@ -42,14 +39,6 @@ public interface CellDataProvider<T> {
   
   
   
-//  boolean accepts(Class<?> clazz);
-  
-  
-  
-  default <R> CellDataProvider<R> compose(Function<R, T> mapper) {
-    return new ChainedProvider<>(this, mapper);
-  }
-  
   
   
   
@@ -61,7 +50,7 @@ public interface CellDataProvider<T> {
   
   
   
-  static abstract class BaseTextProvider<T> implements CellDataProvider<T> {
+  public static abstract class BaseTextProvider<T> implements CellDataProvider<T> {
     
     protected final String prefix;
     protected final String postfix;
@@ -89,6 +78,11 @@ public interface CellDataProvider<T> {
     }
     
     
+    final boolean baseEquals(BaseTextProvider<?> other) {
+      return other.prefix.equals(prefix) && other.postfix.equals(postfix);
+    }
+    
+    
     public Optional<String> prefix() {
       return ofNotEmpty(prefix);
     }
@@ -101,10 +95,17 @@ public interface CellDataProvider<T> {
     private Optional<String> ofNotEmpty(String value) {
       return value.isEmpty() ? Optional.empty() : Optional.of(value);
     }
+    
+
+    
+    @Override
+    public int hashCode() {
+      return prefix.hashCode() * 31 + postfix.hashCode();
+    }
   }
   
   
-  static abstract class PatternedProvider<T> extends BaseTextProvider<T> {
+  public static abstract class PatternedProvider<T> extends BaseTextProvider<T> {
     
     protected final String pattern;
     
@@ -123,6 +124,17 @@ public interface CellDataProvider<T> {
     }
     
     
+    final boolean patternedEquals(PatternedProvider<?> other) {
+      return baseEquals(other) && other.pattern.equals(pattern);
+    }
+    
+    
+    @Override
+    public int hashCode() {
+      return super.hashCode() * 31 + pattern.hashCode();
+    }
+    
+    
     public final String pattern() {
       return pattern;
     }
@@ -133,25 +145,25 @@ public interface CellDataProvider<T> {
   
   
   
-  static class ChainedProvider<T, B> implements CellDataProvider<T> {
-    
-    private final CellDataProvider<B> baseProvider;
-    private final Function<T, B> mapper;
-    
-    
-    ChainedProvider(CellDataProvider<B> baseProvider, Function<T, B> mapper) {
-      this.baseProvider = Objects.requireNonNull(baseProvider, "null base provider");
-      this.mapper = Objects.requireNonNull(mapper, "null mapper");
-    }
-    
-    
-
-    @Override
-    public CellData getCellData(T value, CellFormat cellFormat) {
-      return baseProvider.getCellData(mapper.apply(value), cellFormat);
-    }
-    
-  }
+//  static class ChainedProvider<T, B> implements CellDataProvider<T> {
+//    
+//    private final CellDataProvider<B> baseProvider;
+//    private final Function<T, B> mapper;
+//    
+//    
+//    ChainedProvider(CellDataProvider<B> baseProvider, Function<T, B> mapper) {
+//      this.baseProvider = Objects.requireNonNull(baseProvider, "null base provider");
+//      this.mapper = Objects.requireNonNull(mapper, "null mapper");
+//    }
+//    
+//    
+//
+//    @Override
+//    public CellData getCellData(T value, CellFormat cellFormat) {
+//      return baseProvider.getCellData(mapper.apply(value), cellFormat);
+//    }
+//    
+//  }
   
   
   
@@ -184,6 +196,18 @@ public interface CellDataProvider<T> {
       return new TextCell(dressUp(value.toString()), cellFormat);
     }
     
+    
+    
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof StringProvider other && baseEquals(other);
+    }
+
+    @Override
+    public final int hashCode() {
+      return super.hashCode() * 31 + 1;
+    }
+    
   }
   
   
@@ -198,24 +222,21 @@ public interface CellDataProvider<T> {
     
     public NumberProvider(String pattern)
         throws IllegalArgumentException {
-      super(pattern);
-      this.format = new DecimalFormat(pattern);
-      init();
-    }
-    
-    
-    
-    private void init() {
-      if (pattern.isEmpty())
-        format.setGroupingUsed(false);
+      this(pattern, "", "");
     }
 
     
     public NumberProvider(String pattern, String prefix)
         throws IllegalArgumentException {
-      super(pattern, prefix);
+      this(pattern, prefix, "");
+    }
+    
+
+    public NumberProvider(String pattern, String prefix, String postfix) {
+      super(pattern, prefix, postfix);
       this.format = new DecimalFormat(pattern);
-      init();
+      if (pattern.isEmpty())
+        format.setGroupingUsed(false);
     }
     
 
@@ -229,11 +250,26 @@ public interface CellDataProvider<T> {
       
       return new TextCell(dressUp(string), cellFormat);
     }
+    
+    
+    
+    @Override
+    public final int hashCode() {
+      return super.hashCode() * 31 + 2;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof NumberProvider np && patternedEquals(np);
+    }
   }
   
   
 
-  /** Date provider. <em>Not safe under concurrent access.</em> */
+  /**
+   *  Date provider. <em>Not safe under concurrent access.</em>
+   *  <p>TODO: needs work.. add TZ</p>
+   */
   public static class DateProvider extends PatternedProvider<Long> {
     
     private final DateFormat format;
@@ -259,6 +295,19 @@ public interface CellDataProvider<T> {
     public CellData getCellData(Long utc, CellFormat cellFormat) {
       var string = format.format(utc);
       return new TextCell(dressUp(string), cellFormat);
+    }
+    
+    
+    
+    
+    @Override
+    public final int hashCode() {
+      return super.hashCode() * 31 + 3;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+      return o instanceof DateProvider dp && patternedEquals(dp);
     }
     
   }
@@ -317,6 +366,24 @@ public interface CellDataProvider<T> {
 
     public final CellData getFallback() {
       return fallback;
+    }
+    
+    
+    
+    
+    
+    @Override
+    public final int hashCode() {
+      return (int) (31 * width + height);
+    }
+    
+
+    @Override
+    public final boolean equals(Object o) {
+      return
+          o instanceof ImageProvider ip &&
+          width == ip.width &&
+          height == ip.height;
     }
     
   }

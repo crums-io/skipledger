@@ -9,7 +9,6 @@ import java.awt.Color;
 import org.junit.jupiter.api.Test;
 
 import io.crums.sldg.reports.pdf.LineSpec;
-import io.crums.sldg.reports.pdf.json.LineSpecParser;
 import io.crums.util.json.JsonEntityParser;
 
 /**
