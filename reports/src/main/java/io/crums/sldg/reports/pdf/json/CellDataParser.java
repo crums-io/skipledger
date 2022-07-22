@@ -9,6 +9,7 @@ import java.util.Map;
 
 import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
+import io.crums.sldg.reports.pdf.SourcedCell;
 import io.crums.sldg.reports.pdf.CellData.ImageCell;
 import io.crums.sldg.reports.pdf.CellData.TextCell;
 import io.crums.util.json.JsonParsingException;
@@ -20,7 +21,7 @@ import io.crums.util.json.simple.JSONObject;
  */
 public class CellDataParser extends RefedImageParser<CellData>{
   
-  public final static CellDataParser SANS_REF_INSTANCE = new CellDataParser();
+  public final static CellDataParser INSTANCE = new CellDataParser();
   
   public final static String CELL_REF = "cellRef";
   
@@ -83,6 +84,9 @@ public class CellDataParser extends RefedImageParser<CellData>{
     if (ref != null)
       return context.getCellData(ref);
     
+    if (JsonUtils.getString(jObj, SourcedCellParser.TYPE, false) != null)
+      return SourcedCellParser.INSTANCE.toEntity(jObj, context);
+    
     CellFormat format;
     {
       var jFormat = JsonUtils.getJsonObject(jObj, FORMAT, false);
@@ -105,6 +109,8 @@ public class CellDataParser extends RefedImageParser<CellData>{
   }
   
   public JSONObject injectCellData(CellData cell, JSONObject jObj, RefContext context) {
+    if (cell instanceof SourcedCell s)
+      return SourcedCellParser.INSTANCE.injectEntity(s, jObj, context);
     var ref = context.findRef(cell);
     if (ref.isPresent())
       jObj.put(CELL_REF, ref.get());

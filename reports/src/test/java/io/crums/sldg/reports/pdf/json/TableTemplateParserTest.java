@@ -4,165 +4,140 @@
 package io.crums.sldg.reports.pdf.json;
 
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import java.awt.Color;
 import java.util.List;
 
-import io.crums.sldg.reports.pdf.Align;
-import io.crums.sldg.reports.pdf.CellFormat;
-import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.LegacyTableTemplate;
-import io.crums.sldg.reports.pdf.LineSpec;
-import io.crums.sldg.reports.pdf.json.LegacyTableTemplateParser;
-import io.crums.util.json.JsonEntityParser;
-import io.crums.util.json.JsonPrinter;
-import io.crums.util.json.simple.JSONObject;
-
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
 import com.lowagie.text.Font;
+
+import io.crums.sldg.reports.pdf.CellData;
+import io.crums.sldg.reports.pdf.CellFormat;
+import io.crums.sldg.reports.pdf.ColumnTemplate;
+import io.crums.sldg.reports.pdf.FontSpec;
+import io.crums.sldg.reports.pdf.LineSpec;
+import io.crums.sldg.reports.pdf.SourcedCell;
+import io.crums.sldg.reports.pdf.TableTemplate;
+import io.crums.sldg.reports.pdf.Align.H;
+import io.crums.sldg.reports.pdf.CellData.TextCell;
+import io.crums.sldg.reports.pdf.CellDataProvider.DateProvider;
+import io.crums.sldg.reports.pdf.CellDataProvider.NumberProvider;
+import io.crums.sldg.reports.pdf.CellDataProvider.StringProvider;
+import io.crums.sldg.reports.pdf.func.NumberFunc;
+import io.crums.sldg.reports.pdf.func.NumberOp;
+import io.crums.sldg.reports.pdf.json.ParserRoundtripTest.Base;
 
 /**
  * 
  */
-public class TableTemplateParserTest extends SelfAwareTestCase implements ParserRoundtripTest<LegacyTableTemplate> {
-  
-  private Object methodLabel;
-  
-  @Test
-  public void singleColumn() throws Exception {
-    
-    methodLabel = new Object() {  };
-    
-    var font = new FontSpec("Helvetica", 10, Font.BOLD, Color.BLACK);
-    
-    var col = new CellFormat(font);
-    
-    var table = new LegacyTableTemplate(List.of(col));  // single column
-    
-    testRoundtrip(table);
-  }
-  
-  
-  @Test
-  public void test2SameColumns() throws Exception {
-    
-    methodLabel = new Object() {  };
-    
-    var font = new FontSpec("Helvetica", 10, Font.NORMAL, Color.BLACK);
-    
-    var col = new CellFormat(font);
-    
-    var table = new LegacyTableTemplate(List.of(col, col));
-    
-    testRoundtrip(table);
-    
-  }
-  
-  
-  @Test
-  public void test2UniqueColumns() throws Exception {
-    
-    methodLabel = new Object() {  };
-    
-    var font = new FontSpec("Helvetica", 10, Font.ITALIC, Color.BLACK);
-    
-    var col1 = new CellFormat(font);
-    
-    col1.setLeading(1.5f);
-    col1.scalePaddingToFont(1.0f);
-    
-    var col2 = new CellFormat(new FontSpec("Helvetica", 10, Font.NORMAL, Color.BLACK));
-    
-    
-    var table = new LegacyTableTemplate(List.of(col1, col2));
-    
-    testRoundtrip(table);
-    
-  }
-  
-  
-  @Test
-  public void test2UniqueColsWithMoreSettings() throws Exception {
-    
-    methodLabel = new Object() {  };
-    
-    var font = new FontSpec("Helvetica", 10, Font.ITALIC, Color.BLACK);
-    
-    var col1 = new CellFormat(font);
-    
-    col1.setLeading(1.5f);
-    col1.scalePaddingToFont(1.0f);
-    
-    var col2 = new CellFormat(new FontSpec("Helvetica", 10, Font.NORMAL, Color.BLACK));
-    col2.scalePaddingToFont(1.0f);
-    col2.setAlignH(Align.H.RIGHT);
-    
-    
-    var table = new LegacyTableTemplate(List.of(col1, col2));
-    
-    table.setTableBorders(new LineSpec(1.5f, Color.BLACK));
-    table.setDefaultLines(new LineSpec(1, Color.BLACK));
-    
-    testRoundtrip(table);
-    
-  }
-  
-  
+public class TableTemplateParserTest extends Base<TableTemplate> {
 
+  
+  /**
+   * 
+   */
+  public TableTemplateParserTest() {
+    super(TableTemplateParser.INSTANCE);
+  }
+  
+  
   @Test
-  public void test2UniqueCols80x20() throws Exception {
+  public void testSingleColumn() throws Exception {
+    clearPrint();
+    var format = new CellFormat(new FontSpec("Helvetica", 11, Font.NORMAL, Color.BLACK));
+    var cellFormat = new CellFormat(new FontSpec("Helvetica", 10, Font.BOLD, Color.GRAY));
     
-    methodLabel = new Object() {  };
-    
-    var font = new FontSpec("Helvetica", 10, Font.ITALIC, Color.BLACK);
-    
-    var col1 = new CellFormat(font);
-    
-    col1.setLeading(1.5f);
-    col1.scalePaddingToFont(1.0f);
-    
-    var col2 = new CellFormat(new FontSpec("Helvetica", 10, Font.NORMAL, Color.BLACK));
-    col2.scalePaddingToFont(1.0f);
-    col2.setAlignH(Align.H.RIGHT);
+    var protoSrc = new SourcedCell.DateCell(5, new DateProvider("yyyy-MM-dd"), null);
     
     
-    var table = new LegacyTableTemplate(List.of(col1, col2));
-    table.setColumnWidths(0.8f, 0.2f);
-    
-    table.setTableBorders(new LineSpec(1.5f, Color.BLACK));
-    table.setDefaultLines(new LineSpec(1, Color.BLACK));
+    var table = new TableTemplate(List.of(new ColumnTemplate(format, null)));
     
     testRoundtrip(table);
+//    methodLabel = new Object() { };
+    table = new TableTemplate(List.of(new ColumnTemplate(format, protoSrc)));
+    testRoundtrip(table);
+  }
+  
+  
+  @Test
+  public void testDoubleColumn() throws Exception {
+    clearPrint();
+//    methodLabel = new Object() { };
+    
+    var format = new CellFormat(new FontSpec("Helvetica", 11, Font.NORMAL, Color.BLACK));
+    var cellFormat = new CellFormat(new FontSpec("Helvetica", 10, Font.BOLD, Color.GRAY));
+    
+    var protoSrc = new SourcedCell.DateCell(5, new DateProvider("yyyy-MM-dd"), null);
+    var protoSrc2 = new SourcedCell.NumberCell(
+        2,
+        new NumberProvider("###,###.##", "$"),
+        NumberFunc.divideBy(100.0),
+        cellFormat);
+    
+    var table = new TableTemplate(
+        List.of(
+            new ColumnTemplate(format, protoSrc),
+            new ColumnTemplate(format, protoSrc2)));
+            
+    testRoundtrip(table); 
+  }
+  
+  
+  @Test
+  public void testWithFixed() throws Exception {
+    clearPrint();
+    methodLabel = new Object() { };
+    
+    var format = new CellFormat(new FontSpec("Helvetica", 11, Font.NORMAL, Color.BLACK));
+    format.setPadding(4);
+    var cellFormat = new CellFormat(new FontSpec("Helvetica", 10, Font.BOLD, Color.GRAY));
+    
+
+    var trackIdCell = new SourcedCell.StringCell(2, new StringProvider(), null);
+    var unitPriceCell = new SourcedCell.NumberCell(3, new NumberProvider("###,###.##", "$"), null, null);
+    var quantityCell = new SourcedCell.NumberCell(4, new NumberProvider(), null, null);
+    
+    ColumnTemplate[] columns = {
+        new ColumnTemplate(cellFormat, trackIdCell),
+        new ColumnTemplate(cellFormat, unitPriceCell),
+        new ColumnTemplate(cellFormat, quantityCell)
+    };
+    
+    var mainTable = new TableTemplate(List.of(columns));
+
+    var mainBorderColor = new Color(100, 183, 222);
+    mainTable.setTableBorders(new LineSpec(3, mainBorderColor));
+    var headingStyle = new CellFormat(new FontSpec("Helvetica", 10, Font.BOLD, Color.WHITE));
+    headingStyle.setBackgroundColor(mainBorderColor);
+    headingStyle.setAlignH(H.CENTER);
+    headingStyle.setPadding(8);
+    CellData[] colHeadings = {
+        new TextCell("Track ID", headingStyle),
+        new TextCell("Unit Price", headingStyle),
+        new TextCell("Quantity", headingStyle),
+    };
+    for (int index = 0; index < colHeadings.length; ++index)
+      mainTable.setFixedCell(index, colHeadings[index]);
+
+    var total = new SourcedCell.Sum(
+        List.of(3,4),
+        NumberFunc.biFunction(NumberOp.MULTIPLY),
+        new NumberProvider("###,###.##", "$"), null, null);
+
+    mainTable.setFixedCell(1, -2, new TextCell("Total: "));
+    mainTable.setFixedCell(2, -2, total);
+    
+    testRoundtrip(mainTable);
     
   }
   
   
   
   
-  
-  @Override
-  public void observeJson(JSONObject jObj, LegacyTableTemplate expected) {
-    if (methodLabel != null) {
-      var out = System.out;
-      out.println(" - - - " + method(methodLabel) + " - - -");
-      new JsonPrinter(out).print(jObj);
-      out.println();
-    }
-  }
-  
-
-  @Override
-  public JsonEntityParser<LegacyTableTemplate> parser() {
-    return LegacyTableTemplateParser.INSTANCE;
-  }
-
-  @Override
-  public void assertTripEquals(LegacyTableTemplate expected, LegacyTableTemplate actual) {
-    
-    assertTrue(LegacyTableTemplate.equal(expected, actual));
-  }
 
 }
+
+
+
+
+

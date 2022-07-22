@@ -22,9 +22,9 @@ import io.crums.sldg.reports.pdf.CellDataProvider.StringProvider;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.reports.pdf.ReportTemplate.Components;
 import io.crums.sldg.reports.pdf.SourcedCell.MultiStringCell;
-import io.crums.sldg.reports.pdf.model.func.NumNode;
-import io.crums.sldg.reports.pdf.model.func.NumberFunc;
-import io.crums.sldg.reports.pdf.model.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumNode;
+import io.crums.sldg.reports.pdf.func.NumberFunc;
+import io.crums.sldg.reports.pdf.func.NumberOp;
 import io.crums.util.Lists;
 
 import org.junit.jupiter.api.Test;
@@ -329,7 +329,6 @@ public class ReportTemplateTest extends IoTestCase {
     mainTable.setFixedCell(1, -1, emptyBlue);
     mainTable.setFixedCell(2, -1, emptyBlue);
     
-    // TODO: this is totally inadequate
     
     NumberFunc columnsFunc;
     {

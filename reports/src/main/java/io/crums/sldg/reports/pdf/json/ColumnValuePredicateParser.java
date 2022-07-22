@@ -10,18 +10,18 @@ import io.crums.util.json.simple.JSONObject;
 
 import java.util.Optional;
 
-import io.crums.sldg.reports.pdf.model.NumberArg;
-import io.crums.sldg.reports.pdf.model.pred.CellPredicate;
-import io.crums.sldg.reports.pdf.model.pred.PNode;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
+import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.src.ColumnValue;
 
 
 /**
- * Cell predicate tree parser.
+ * Column value predicate tree parser.
  * 
  * @see PNodeParser
  */
-public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate> {
+public class ColumnValuePredicateParser extends PNodeParser<ColumnValue, ColumnValuePredicate> {
 
   
   /**
@@ -29,7 +29,7 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
    * then you must supply your own {@linkplain EditableRefContext instance};
    * otherwise the {@code toJsonXxx} methods will fail with an {@code IllegalArgumentException}.
    */
-  public final static CellPredicateParser INSTANCE = new CellPredicateParser();
+  public final static ColumnValuePredicateParser INSTANCE = new ColumnValuePredicateParser();
   
   
   public final static String EQ = "=";
@@ -44,11 +44,11 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
   
 
   
-  private CellPredicateParser() {  }
+  private ColumnValuePredicateParser() {  }
   
 
   /** @param context the default context (not null) */
-  public CellPredicateParser(RefContext context) {
+  public ColumnValuePredicateParser(RefContext context) {
     super(context);
   }
   
@@ -58,7 +58,7 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
   
 
   @Override
-  protected PNode<ColumnValue, CellPredicate> toLeaf(JSONObject jObj, RefContext context) {
+  protected PNode<ColumnValue, ColumnValuePredicate> toLeaf(JSONObject jObj, RefContext context) {
     Number rhs = JsonUtils.getNumber(jObj, RHS, false);
     if (rhs == null) {
       String ref = JsonUtils.getString(jObj, RHS_REF, true);
@@ -70,20 +70,20 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
   }
   
   
-  private CellPredicate toCellPredicate(String op, Number rhs) {
+  private ColumnValuePredicate toCellPredicate(String op, Number rhs) {
     switch (op) {
     case EQ:
-      return CellPredicate.equalTo(rhs);
+      return ColumnValuePredicate.equalTo(rhs);
     case NEQ:
-      return CellPredicate.notEqualTo(rhs);
+      return ColumnValuePredicate.notEqualTo(rhs);
     case GT:
-      return CellPredicate.greaterThan(rhs);
+      return ColumnValuePredicate.greaterThan(rhs);
     case GTE:
-      return CellPredicate.greaterThanOrEqualTo(rhs);
+      return ColumnValuePredicate.greaterThanOrEqualTo(rhs);
     case LT:
-      return CellPredicate.lessThan(rhs);
+      return ColumnValuePredicate.lessThan(rhs);
     case LTE:
-      return CellPredicate.lessThanOrEqualTo(rhs);
+      return ColumnValuePredicate.lessThanOrEqualTo(rhs);
     default:
       throw new JsonParsingException("unknown op: " + op);
     }
@@ -106,9 +106,9 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
    * @return  {@code argNames} (so to remind it's being updated!)
    */
   protected void injectLeaf(
-      PNode.Leaf<ColumnValue, CellPredicate> pNode, JSONObject jObj, EditableRefContext context) {
+      PNode.Leaf<ColumnValue, ColumnValuePredicate> pNode, JSONObject jObj, EditableRefContext context) {
     
-    CellPredicate cellPredicate = pNode.getPredicate();
+    ColumnValuePredicate cellPredicate = pNode.getPredicate();
     
     if (cellPredicate.rhs().isPresent())
       injectNumberPredicate(cellPredicate, jObj, context);
@@ -118,7 +118,7 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
   
   // TODO: add String predicate support
   private void injectNumberPredicate(
-      CellPredicate numPredicate, JSONObject jObj, EditableRefContext context) {
+      ColumnValuePredicate numPredicate, JSONObject jObj, EditableRefContext context) {
     
     injectType(numPredicate, jObj);
     Number rhs;
@@ -140,18 +140,18 @@ public class CellPredicateParser extends PNodeParser<ColumnValue, CellPredicate>
     }
   }
 
-  private void injectType(CellPredicate numPredicate, JSONObject jObj) {
-    if (numPredicate instanceof CellPredicate.NumberEquals)
+  private void injectType(ColumnValuePredicate numPredicate, JSONObject jObj) {
+    if (numPredicate instanceof ColumnValuePredicate.NumberEquals)
       jObj.put(OP, EQ);
-    else if (numPredicate instanceof CellPredicate.NotNumberEquals)
+    else if (numPredicate instanceof ColumnValuePredicate.NotNumberEquals)
       jObj.put(OP, NEQ);
-    else if (numPredicate instanceof CellPredicate.Greater)
+    else if (numPredicate instanceof ColumnValuePredicate.Greater)
       jObj.put(OP, GT);
-    else if (numPredicate instanceof CellPredicate.GreaterOrEqual)
+    else if (numPredicate instanceof ColumnValuePredicate.GreaterOrEqual)
       jObj.put(OP, GTE);
-    else if (numPredicate instanceof CellPredicate.Lesser)
+    else if (numPredicate instanceof ColumnValuePredicate.Lesser)
       jObj.put(OP, LT);
-    else if (numPredicate instanceof CellPredicate.LesserOrEqual)
+    else if (numPredicate instanceof ColumnValuePredicate.LesserOrEqual)
       jObj.put(OP, LTE);
     else
       throw new JsonParsingException("unsupported cell predicate: " + numPredicate);

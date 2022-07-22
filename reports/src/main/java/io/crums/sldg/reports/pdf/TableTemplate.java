@@ -6,12 +6,16 @@ package io.crums.sldg.reports.pdf;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 
 import com.lowagie.text.Rectangle;
@@ -23,7 +27,6 @@ import io.crums.sldg.src.SourceRow;
  * 
  */
 public class TableTemplate {
-  
   
   private final static Comparator<Integer> SERIAL_COMP =
       new Comparator<Integer>() {
@@ -65,6 +68,38 @@ public class TableTemplate {
   private CellData defaultCell = CellData.TextCell.BLANK;
   
   
+  @Override
+  public final int hashCode() {
+    int hash = tableBorderH.hashCode();
+    hash *= 7;
+    hash += tableBorderV.hashCode();
+    hash *= 7;
+    hash += defaultLineH.hashCode();
+    hash *= 7;
+    hash += defaultLineV.hashCode();
+    hash *= 7;
+    hash += Float.hashCode(docPercentage);
+    if (columnWidths != null) for (var w : columnWidths) {
+      hash *= 7;
+      hash += Float.hashCode(w);
+    }
+    hash *= 7;
+    hash += columns.hashCode();
+    return hash;
+  }
+  
+  
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o instanceof TableTemplate t &&
+        t.columns.equals(columns) &&
+        t.tableBorderH.equals(tableBorderH) &&
+        t.tableBorderV.equals(tableBorderV) &&
+        t.defaultLineH.equals(defaultLineH) &&
+        t.defaultLineV.equals(defaultLineV) &&
+        Arrays.equals(t.columnWidths, columnWidths);
+  }
   
   
   /**
@@ -121,6 +156,10 @@ public class TableTemplate {
     return Optional.of(copy);
   }
   
+  
+  public final List<ColumnTemplate> getColumns() {
+    return columns;
+  }
   
   public final int getColumnCount() {
     return columns.size();
@@ -242,6 +281,15 @@ public class TableTemplate {
     setFixedCell(toSerialIndex(col, row), cell);
   }
   
+  
+  /**
+   * Returns a read-only view of the instance's fixed cells.
+   * 
+   * @return not null
+   */
+  public SortedMap<Integer, CellData> getFixedCells() {
+    return Collections.unmodifiableSortedMap(fixedCells);
+  }
   
   
   /**

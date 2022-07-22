@@ -8,9 +8,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-import io.crums.sldg.reports.pdf.model.NumberArg;
-import io.crums.sldg.reports.pdf.model.pred.PNode;
-import io.crums.sldg.reports.pdf.model.pred.PNode.Op;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.pred.PNode;
+import io.crums.sldg.reports.pdf.pred.PNode.Op;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONArray;
@@ -47,7 +47,7 @@ import io.crums.util.json.simple.JSONObject;
  * (how it's pre-populate) is not <em>this</em> parser's concern.
  * </p>
  * 
- * @see CellPredicateParser
+ * @see ColumnValuePredicateParser
  * @see ColumnPredicateParser
  */
 public abstract class PNodeParser<T, U extends Predicate<T>>

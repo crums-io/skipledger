@@ -11,7 +11,7 @@ import java.util.Objects;
  */
 public class ColumnTemplate {
   
-  
+  private final static int CH = ColumnTemplate.class.hashCode();
 
   private final CellFormat format;
   private final SourcedCell protoSrc;
@@ -28,7 +28,7 @@ public class ColumnTemplate {
   
   
   
-  public boolean usesSource() {
+  public final boolean usesSource() {
     return protoSrc != null;
   }
   
@@ -43,6 +43,22 @@ public class ColumnTemplate {
     return format;
   }
   
+  
+  @Override
+  public final int hashCode() {
+    int hash = format.hashCode();
+    if (usesSource())
+      hash = hash * 31 + protoSrc.hashCode();
+    return hash ^ CH;
+  }
+  
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o instanceof ColumnTemplate other &&
+        other.format.equals(format) &&
+        Objects.equals(other.protoSrc,  protoSrc);
+  }
   
 }
 

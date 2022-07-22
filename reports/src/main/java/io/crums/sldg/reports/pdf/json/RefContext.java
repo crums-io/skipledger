@@ -13,7 +13,7 @@ import java.util.Optional;
 import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.model.NumberArg;
+import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.util.json.JsonParsingException;
 
 /**

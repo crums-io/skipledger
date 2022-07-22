@@ -7,8 +7,8 @@ package io.crums.sldg.reports.pdf.json;
 import java.util.Map;
 import java.util.function.Function;
 
-import io.crums.sldg.reports.pdf.model.NumberArg;
-import io.crums.sldg.reports.pdf.model.Param;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;

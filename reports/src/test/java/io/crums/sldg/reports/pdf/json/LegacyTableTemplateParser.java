@@ -118,7 +118,7 @@ public class LegacyTableTemplateParser implements ContextedParser<LegacyTableTem
   private JSONObject  toJsonObject(Entry<Integer, CellData> e, RefContext context) {
     var cObj = new JSONObject();
     cObj.put(INDEX, e.getKey());
-    return CellDataParser.SANS_REF_INSTANCE.injectCellData(e.getValue(), cObj, context);
+    return CellDataParser.INSTANCE.injectCellData(e.getValue(), cObj, context);
   }
   
   
@@ -167,7 +167,7 @@ public class LegacyTableTemplateParser implements ContextedParser<LegacyTableTem
       for (var o : jCells) {
         var jCell = (JSONObject) o;
         int index = JsonUtils.getInt(jCell, INDEX);
-        var fixedCell = CellDataParser.SANS_REF_INSTANCE.toCellData(jCell, context);
+        var fixedCell = CellDataParser.INSTANCE.toCellData(jCell, context);
         table.setFixedCell(index, fixedCell);
       }
     } catch (IllegalArgumentException | IndexOutOfBoundsException | UncheckedIOException x) {

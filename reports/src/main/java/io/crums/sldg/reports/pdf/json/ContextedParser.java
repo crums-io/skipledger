@@ -25,6 +25,12 @@ import io.crums.util.json.simple.JSONObject;
  * in {@code JsonEntityParser} methods delegate to their overloaded versions using
  * the {@linkplain #defaultContext()} method.
  * </p>
+ * <h4>TODO:</h4>
+ * <p>
+ * This idea can be generalized with generics: instead of the application specific
+ * {@code RefContext}, use a generic type {@code <C>}. (After all, the interface
+ * knows nothing about how {@code context} object is used by the implementation.)
+ * </p>
  * 
  * @see RefContext
  */
@@ -62,6 +68,7 @@ public interface ContextedParser<T> extends JsonEntityParser<T> {
   }
   
 
+  
   @Override
   default JSONObject injectEntity(T entity, JSONObject jObj) {
     return injectEntity(entity, jObj, defaultContext());

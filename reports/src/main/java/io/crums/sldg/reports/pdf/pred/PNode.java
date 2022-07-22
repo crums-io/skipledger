@@ -1,9 +1,10 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;
 
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -37,6 +38,8 @@ import io.crums.util.Lists;
  * @param <P>   predicate implementation class or type (for leaf instances)
  */
 public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
+  
+  // Base instance methods are at the bottom of file
   
   /** Creates and return a leaf node using the given predicate. */
   public static <T, U extends Predicate<T>> PNode<T, U> leaf(U predicate) {
@@ -163,6 +166,12 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
       return false;
     }
     
+    @Override
+    public final Branch<T, P> asBranch() {
+      return this;
+    }
+    
+    
     /** Returns the child predicate nodes. */
     public List<PNode<T, P>> getChildren() {
       return Collections.unmodifiableList(branches);
@@ -194,6 +203,11 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
     @Override
     public final boolean isLeaf() {
       return true;
+    }
+    
+    @Override
+    public final Leaf<T, P> asLeaf() {
+      return this;
     }
     
     /** Returns the leaf predicate. */
@@ -248,5 +262,47 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
     return (PNode.Leaf<T, P>) this;
   }
   
+  
+  
+  public List<PNode.Leaf<T, P>> leaves() {
+    if (isLeaf())
+      return List.of(asLeaf());
+    var out = new ArrayList<PNode.Leaf<T, P>>(8);
+    collectLeaves(out);
+    return Collections.unmodifiableList(out);
+  }
+  
+  
+  
+  private void collectLeaves(List<PNode.Leaf<T, P>> list) {
+    if (isLeaf())
+      list.add(asLeaf());
+    else
+      asBranch().getChildren().forEach(n -> n.collectLeaves(list));
+  }
+  
+  
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

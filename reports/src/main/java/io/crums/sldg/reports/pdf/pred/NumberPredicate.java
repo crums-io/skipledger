@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;
 
 
 import java.util.Objects;
@@ -11,9 +11,9 @@ import io.crums.sldg.src.ColumnType;
 import io.crums.util.PrimitiveComparator;
 
 /**
- * Base class {@linkplain Number}-based {@linkplain CellPredicate}s.
+ * Base class {@linkplain Number}-based {@linkplain ColumnValuePredicate}s.
  */
-public non-sealed class NumberPredicate implements CellPredicate {
+public non-sealed class NumberPredicate implements ColumnValuePredicate {
   
   protected final Number rhs;
   protected final int expectedSign;

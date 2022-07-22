@@ -10,9 +10,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import io.crums.sldg.reports.pdf.model.pred.CellPredicate;
-import io.crums.sldg.reports.pdf.model.pred.PNode;
-import io.crums.sldg.reports.pdf.model.pred.PNode.Op;
+import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
+import io.crums.sldg.reports.pdf.pred.PNode;
+import io.crums.sldg.reports.pdf.pred.PNode.Op;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.LongValue;
 
@@ -27,13 +27,13 @@ public class PNodeCellPredicateTest {
     final long benchmark = 27L;
     
     
-    CellPredicate[] cellPredicates = {
-        CellPredicate.lessThan(benchmark - 2),
-        CellPredicate.equalTo(benchmark),
-        CellPredicate.greaterThan(benchmark + 2),
+    ColumnValuePredicate[] cellPredicates = {
+        ColumnValuePredicate.lessThan(benchmark - 2),
+        ColumnValuePredicate.equalTo(benchmark),
+        ColumnValuePredicate.greaterThan(benchmark + 2),
     };
     
-    PNode<ColumnValue, CellPredicate> branch =
+    PNode<ColumnValue, ColumnValuePredicate> branch =
         PNode.branchLeaves(List.of(cellPredicates), PNode.Op.OR);
 
     assertTrue(branch.test(new LongValue(benchmark - 3)));
@@ -54,13 +54,13 @@ public class PNodeCellPredicateTest {
     final byte benchmark = 27;
     
     
-    CellPredicate[] cellPredicates = {
-        CellPredicate.lessThan(benchmark + 2),
-        CellPredicate.equalTo(benchmark),
-        CellPredicate.greaterThan(benchmark - 2),
+    ColumnValuePredicate[] cellPredicates = {
+        ColumnValuePredicate.lessThan(benchmark + 2),
+        ColumnValuePredicate.equalTo(benchmark),
+        ColumnValuePredicate.greaterThan(benchmark - 2),
     };
     
-    PNode<ColumnValue, CellPredicate> branch =
+    PNode<ColumnValue, ColumnValuePredicate> branch =
         PNode.branchLeaves(List.of(cellPredicates), PNode.Op.AND);
     
     assertFalse(branch.test(new LongValue(benchmark - 1)));
@@ -76,24 +76,24 @@ public class PNodeCellPredicateTest {
     // verify any type of Number works
     final short benchmark = 27;
     
-    CellPredicate[] lhs = {
-        CellPredicate.lessThan(benchmark + 2),
-        CellPredicate.greaterThan(benchmark - 2),
+    ColumnValuePredicate[] lhs = {
+        ColumnValuePredicate.lessThan(benchmark + 2),
+        ColumnValuePredicate.greaterThan(benchmark - 2),
     };
     
-    CellPredicate[] rhs = {
-        CellPredicate.lessThan(benchmark + 1),
-        CellPredicate.equalTo(benchmark),
-        CellPredicate.greaterThan(benchmark - 1),
+    ColumnValuePredicate[] rhs = {
+        ColumnValuePredicate.lessThan(benchmark + 1),
+        ColumnValuePredicate.equalTo(benchmark),
+        ColumnValuePredicate.greaterThan(benchmark - 1),
     };
     
-    PNode<ColumnValue, CellPredicate> leftBranch =
+    PNode<ColumnValue, ColumnValuePredicate> leftBranch =
         PNode.branchLeaves(List.of(lhs), Op.AND);
     
-    PNode<ColumnValue, CellPredicate> rightBranch =
+    PNode<ColumnValue, ColumnValuePredicate> rightBranch =
         PNode.branchLeaves(List.of(rhs), Op.AND);
     
-    PNode<ColumnValue, CellPredicate> root =
+    PNode<ColumnValue, ColumnValuePredicate> root =
         PNode.branch(List.of(leftBranch, rightBranch), Op.AND);
 
     

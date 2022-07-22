@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model;
+package io.crums.sldg.reports.pdf.input;
 
 
 import java.util.Objects;

@@ -8,9 +8,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import io.crums.sldg.reports.pdf.model.func.NumNode;
-import io.crums.sldg.reports.pdf.model.func.NumberFunc;
-import io.crums.sldg.reports.pdf.model.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumNode;
+import io.crums.sldg.reports.pdf.func.NumberFunc;
+import io.crums.sldg.reports.pdf.func.NumberOp;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONObject;

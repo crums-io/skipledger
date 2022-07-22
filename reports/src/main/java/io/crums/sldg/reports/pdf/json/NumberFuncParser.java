@@ -3,9 +3,9 @@
  */
 package io.crums.sldg.reports.pdf.json;
 
-import io.crums.sldg.reports.pdf.model.func.NumNode;
-import io.crums.sldg.reports.pdf.model.func.NumberFunc;
-import io.crums.sldg.reports.pdf.model.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumNode;
+import io.crums.sldg.reports.pdf.func.NumberFunc;
+import io.crums.sldg.reports.pdf.func.NumberOp;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;

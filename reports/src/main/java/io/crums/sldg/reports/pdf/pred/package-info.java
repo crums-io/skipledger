@@ -14,4 +14,4 @@
  * those <code>WHERE</code>-clauses in code. Thus this package.
  * </p>
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;

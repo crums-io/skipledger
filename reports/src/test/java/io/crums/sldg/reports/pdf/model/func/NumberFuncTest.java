@@ -10,6 +10,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import io.crums.sldg.reports.pdf.func.NumNode;
+import io.crums.sldg.reports.pdf.func.NumberFunc;
+import io.crums.sldg.reports.pdf.func.NumberOp;
+
 /**
  * 
  */

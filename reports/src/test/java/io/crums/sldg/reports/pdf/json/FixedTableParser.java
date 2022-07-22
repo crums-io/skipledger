@@ -27,7 +27,7 @@ public class FixedTableParser extends RefedImageParser<FixedTable> {
   public final static String INDEX = "index";
   public final static String CELLS = "cells";
   
-  private final static CellDataParser CELL_PARSER = CellDataParser.SANS_REF_INSTANCE;
+  private final static CellDataParser CELL_PARSER = CellDataParser.INSTANCE;
   
   
   

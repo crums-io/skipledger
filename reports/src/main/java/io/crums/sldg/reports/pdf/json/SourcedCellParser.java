@@ -100,6 +100,8 @@ public class SourcedCellParser implements ContextedParser<SourcedCell> {
       }
     } catch (NullPointerException | IllegalArgumentException e) {
       throw new JsonParsingException(e);
+    } catch (ClassCastException ccx) {
+      throw new JsonParsingException("provider/type mismatch: " + ccx.getMessage(), ccx);
     }
   }
   

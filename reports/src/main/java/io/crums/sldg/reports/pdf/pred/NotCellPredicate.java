@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -11,11 +11,11 @@ import io.crums.sldg.src.ColumnType;
 /**
  * Base class for &ge; and &le; cell predicates.
  */
-non-sealed class NotCellPredicate implements CellPredicate {
+non-sealed class NotCellPredicate implements ColumnValuePredicate {
   
-  private final CellPredicate cellPredicate;
+  private final ColumnValuePredicate cellPredicate;
   
-  NotCellPredicate(CellPredicate cellPredicate) {
+  NotCellPredicate(ColumnValuePredicate cellPredicate) {
     this.cellPredicate = Objects.requireNonNull(cellPredicate, "null cell predicate");
   }
 

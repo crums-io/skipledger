@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;
 
 
 import java.util.ArrayList;
@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import io.crums.sldg.reports.pdf.model.NumberArg;
+import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 
@@ -26,14 +26,14 @@ public class ColumnPredicate implements Predicate<SourceRow> {
   
   private final int colIndex;
   
-  private final PNode<ColumnValue, CellPredicate> cellPredicate;
+  private final PNode<ColumnValue, ColumnValuePredicate> cellPredicate;
   
   /**
    * 
    * @param colNumber &ge; 1 (first column is 1)
    * @param predicate column value predicate tree
    */
-  public ColumnPredicate(int colNumber, PNode<ColumnValue, CellPredicate> predicate) {
+  public ColumnPredicate(int colNumber, PNode<ColumnValue, ColumnValuePredicate> predicate) {
     this.colIndex = colNumber - 1;
     this.cellPredicate = Objects.requireNonNull(predicate, "null cell predicate");
     if (colIndex < 0)
@@ -57,24 +57,31 @@ public class ColumnPredicate implements Predicate<SourceRow> {
   }
   
   
-  public PNode<ColumnValue, CellPredicate> getCellPredicate() {
+  public PNode<ColumnValue, ColumnValuePredicate> getCellPredicate() {
     return cellPredicate;
   }
   
   
   public List<NumberArg> getNumberArgs() {
-    var out = collectNumberArgs(cellPredicate, new ArrayList<>(8));
-    return out.isEmpty() ? List.of() : Collections.unmodifiableList(out);
+    return cellPredicate.leaves().stream().filter(
+        n ->  n.getPredicate().rhs().isPresent() &&
+              n.getPredicate().rhs().get() instanceof NumberArg)
+        .map(n -> (NumberArg) n.getPredicate().rhs().get())
+        .toList();
+        
+
+//    var out = collectNumberArgs(cellPredicate, new ArrayList<>(8));
+//    return out.isEmpty() ? List.of() : Collections.unmodifiableList(out);
   }
   
   
-  private List<NumberArg> collectNumberArgs(PNode<ColumnValue, CellPredicate> pNode, List<NumberArg> bag) {
-    if (pNode.isLeaf())
-      pNode.asLeaf().getPredicate().rhs().ifPresent(
-          rhs -> { if (rhs instanceof NumberArg arg) bag.add(arg); });
-    else
-      pNode.asBranch().getChildren().forEach(n -> collectNumberArgs(n, bag));
-    return bag;
-  }
+//  private List<NumberArg> collectNumberArgs(PNode<ColumnValue, ColumnValuePredicate> pNode, List<NumberArg> bag) {
+//    if (pNode.isLeaf())
+//      pNode.asLeaf().getPredicate().rhs().ifPresent(
+//          rhs -> { if (rhs instanceof NumberArg arg) bag.add(arg); });
+//    else
+//      pNode.asBranch().getChildren().forEach(n -> collectNumberArgs(n, bag));
+//    return bag;
+//  }
 
 }

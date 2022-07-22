@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.func;
+package io.crums.sldg.reports.pdf.func;
 
 
 import java.util.function.BinaryOperator;

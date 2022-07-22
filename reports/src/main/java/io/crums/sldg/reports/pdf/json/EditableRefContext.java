@@ -14,7 +14,7 @@ import java.util.TreeMap;
 import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
-import io.crums.sldg.reports.pdf.model.NumberArg;
+import io.crums.sldg.reports.pdf.input.NumberArg;
 
 /**
  * The typed maps returned by this implementation are editable and sorted.

@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.pred;
+package io.crums.sldg.reports.pdf.pred;
 
 
 import java.util.Optional;
@@ -15,7 +15,7 @@ import io.crums.sldg.src.ColumnValue;
  * Used as a constraint to define a selection of
  * {@linkplain io.crums.sldg.src.SourceRow SourceRow}s.
  * 
- * <h3>About {@code Number}s</h3>
+ * <h3>About Numbers</h3>
  * <p>
  * {@linkplain Number} arguments here work with any of the autoboxed <em>primitives</em>,
  * even when mixed. <em>They do not work arbitrary precision types such as
@@ -23,40 +23,40 @@ import io.crums.sldg.src.ColumnValue;
  * See {@linkplain io.crums.util.PrimitiveComparator} for details.
  * </p>
  */
-public sealed interface CellPredicate extends Predicate<ColumnValue>
+public sealed interface ColumnValuePredicate extends Predicate<ColumnValue>
     permits
     NumberPredicate,
 //    CellPredicate.Equals,
     NotCellPredicate {
 
   /** Returns a &gt; {@code rhs} predicate. */
-  public static CellPredicate greaterThan(Number rhs) {
+  public static ColumnValuePredicate greaterThan(Number rhs) {
     return new Greater(rhs);
   }
 
 
   /** Returns a &ge; {@code rhs} predicate. */
-  public static CellPredicate greaterThanOrEqualTo(Number rhs) {
+  public static ColumnValuePredicate greaterThanOrEqualTo(Number rhs) {
     return new GreaterOrEqual(rhs);
   }
 
   /** Returns a &lt; {@code rhs} predicate. */
-  public static CellPredicate lessThan(Number rhs) {
+  public static ColumnValuePredicate lessThan(Number rhs) {
     return new Lesser(rhs);
   }
 
   /** Returns a &le; {@code rhs} predicate. */
-  public static CellPredicate lessThanOrEqualTo(Number rhs) {
+  public static ColumnValuePredicate lessThanOrEqualTo(Number rhs) {
     return new LesserOrEqual(rhs);
   }
 
   /** Returns an = {@code rhs} predicate. */
-  public static CellPredicate equalTo(Number rhs) {
+  public static ColumnValuePredicate equalTo(Number rhs) {
     return new NumberEquals(rhs);
   }
 
   /** Returns an = {@code rhs} predicate. */
-  public static CellPredicate notEqualTo(Number rhs) {
+  public static ColumnValuePredicate notEqualTo(Number rhs) {
     return new NotNumberEquals(rhs);
   }
   

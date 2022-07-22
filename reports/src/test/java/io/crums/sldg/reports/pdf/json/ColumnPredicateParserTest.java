@@ -4,33 +4,33 @@
 package io.crums.sldg.reports.pdf.json;
 
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
+import org.junit.jupiter.api.Test;
+
 import com.gnahraf.test.SelfAwareTestCase;
 
-import io.crums.sldg.reports.pdf.json.ColumnPredicateParser;
-import io.crums.sldg.reports.pdf.json.EditableRefContext;
-import io.crums.sldg.reports.pdf.json.RefContext;
-import io.crums.sldg.reports.pdf.model.NumberArg;
-import io.crums.sldg.reports.pdf.model.Param;
-import io.crums.sldg.reports.pdf.model.pred.CellPredicate;
-import io.crums.sldg.reports.pdf.model.pred.ColumnPredicate;
-import io.crums.sldg.reports.pdf.model.pred.PNode;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
+import io.crums.sldg.reports.pdf.pred.ColumnPredicate;
+import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
+import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONObject;
 
-import org.junit.jupiter.api.Test;
-
 /**
- * 
+ * White-box info: this also tests {@linkplain ColumnValuePredicateParser}, since
+ * {@code ColumnPredicateParser} in turn calls it. 
  */
 public class ColumnPredicateParserTest extends SelfAwareTestCase
     implements ParserRoundtripTest<PNode<SourceRow, ColumnPredicate>> {
@@ -45,7 +45,7 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
   public void testSimple() throws Exception {
     this.methodLabel = new Object() { };
     // prepare
-    PNode<ColumnValue, CellPredicate> equalsRhs = PNode.leaf(CellPredicate.equalTo(3));
+    PNode<ColumnValue, ColumnValuePredicate> equalsRhs = PNode.leaf(ColumnValuePredicate.equalTo(3));
     PNode<SourceRow, ColumnPredicate> colNode = PNode.leaf(new ColumnPredicate(2, equalsRhs));
     
     testRoundtrip(colNode);
@@ -55,9 +55,9 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
   public void testSimpleCellPredicateTree() throws Exception {
     this.methodLabel = new Object() { };
     // prepare
-    PNode<ColumnValue, CellPredicate> gt = PNode.leaf(CellPredicate.greaterThan(555));
-    PNode<ColumnValue, CellPredicate> lt = PNode.leaf(CellPredicate.lessThanOrEqualTo(777));
-    PNode<ColumnValue, CellPredicate> range = PNode.and(List.of(gt, lt));
+    PNode<ColumnValue, ColumnValuePredicate> gt = PNode.leaf(ColumnValuePredicate.greaterThan(555));
+    PNode<ColumnValue, ColumnValuePredicate> lt = PNode.leaf(ColumnValuePredicate.lessThanOrEqualTo(777));
+    PNode<ColumnValue, ColumnValuePredicate> range = PNode.and(List.of(gt, lt));
     PNode<SourceRow, ColumnPredicate> colNode = PNode.leaf(new ColumnPredicate(4, range));
     
     testRoundtrip(colNode);
@@ -73,7 +73,7 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
     int defaultVal = 13;
     // prepare
     final NumberArg rhs = new NumberArg(new Param<Number>(name, desc, defaultVal), notEqRhs);
-    PNode<ColumnValue, CellPredicate> notEq = PNode.leaf(CellPredicate.notEqualTo(rhs));
+    PNode<ColumnValue, ColumnValuePredicate> notEq = PNode.leaf(ColumnValuePredicate.notEqualTo(rhs));
     PNode<SourceRow, ColumnPredicate> colNode = PNode.leaf(new ColumnPredicate(2, notEq));
     
     this.readContext = RefContext.patchArgs(
@@ -95,9 +95,9 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
 
     PNode<SourceRow, ColumnPredicate> col2Node;
     {
-      PNode<ColumnValue, CellPredicate> gt = PNode.leaf(CellPredicate.greaterThan(555));
-      PNode<ColumnValue, CellPredicate> notEq = PNode.leaf(CellPredicate.notEqualTo(rhs));
-      PNode<ColumnValue, CellPredicate> lte = PNode.leaf(CellPredicate.lessThanOrEqualTo(777));
+      PNode<ColumnValue, ColumnValuePredicate> gt = PNode.leaf(ColumnValuePredicate.greaterThan(555));
+      PNode<ColumnValue, ColumnValuePredicate> notEq = PNode.leaf(ColumnValuePredicate.notEqualTo(rhs));
+      PNode<ColumnValue, ColumnValuePredicate> lte = PNode.leaf(ColumnValuePredicate.lessThanOrEqualTo(777));
       
       var rangeWithQuirk = PNode.and(List.of(gt, notEq, lte));
       col2Node = PNode.leaf(new ColumnPredicate(2, rangeWithQuirk));
@@ -105,7 +105,7 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
     
     PNode<SourceRow, ColumnPredicate> col5Node;
     {
-      PNode<ColumnValue, CellPredicate> equalsRhs = PNode.leaf(CellPredicate.equalTo(7));
+      PNode<ColumnValue, ColumnValuePredicate> equalsRhs = PNode.leaf(ColumnValuePredicate.equalTo(7));
       col5Node = PNode.leaf(new ColumnPredicate(5, equalsRhs));
     }
     
@@ -194,7 +194,7 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
 
 
   private void assertCellLeafEquals(
-      PNode<ColumnValue,CellPredicate> expected, PNode<ColumnValue,CellPredicate> actual) {
+      PNode<ColumnValue,ColumnValuePredicate> expected, PNode<ColumnValue,ColumnValuePredicate> actual) {
     assertTrue(actual.isLeaf(), "actual not a leaf");
     var expCellPred = expected.asLeaf().getPredicate();
     var actCellPred = actual.asLeaf().getPredicate();
@@ -213,7 +213,7 @@ public class ColumnPredicateParserTest extends SelfAwareTestCase
   
 
   private void assertCellBranchEquals(
-      PNode<ColumnValue,CellPredicate> expected, PNode<ColumnValue,CellPredicate> actual) {
+      PNode<ColumnValue,ColumnValuePredicate> expected, PNode<ColumnValue,ColumnValuePredicate> actual) {
     assertBranchEqualsImpl(
         expected, actual,
         this::assertCellLeafEquals, this::assertCellBranchEquals);

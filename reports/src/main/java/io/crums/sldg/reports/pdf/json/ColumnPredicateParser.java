@@ -4,8 +4,8 @@
 package io.crums.sldg.reports.pdf.json;
 
 
-import io.crums.sldg.reports.pdf.model.pred.ColumnPredicate;
-import io.crums.sldg.reports.pdf.model.pred.PNode;
+import io.crums.sldg.reports.pdf.pred.ColumnPredicate;
+import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -45,7 +45,7 @@ public class ColumnPredicateParser extends PNodeParser<SourceRow, ColumnPredicat
       throw new JsonParsingException("illegal column number (" + COL + "): " + colNo);
     
     var jCellPredicate = JsonUtils.getJsonObject(jObj, COND, true);
-    var cellPredicate = CellPredicateParser.INSTANCE.toEntity(jCellPredicate, context);
+    var cellPredicate = ColumnValuePredicateParser.INSTANCE.toEntity(jCellPredicate, context);
     var colPredicate = new ColumnPredicate(colNo, cellPredicate);
     return PNode.leaf(colPredicate);
   }
@@ -59,7 +59,7 @@ public class ColumnPredicateParser extends PNodeParser<SourceRow, ColumnPredicat
     var columnPredicate = pNode.getPredicate();
     jObj.put(COL, columnPredicate.columnNumber());
     var cellPredicate = pNode.getPredicate().getCellPredicate();
-    jObj.put(COND, CellPredicateParser.INSTANCE.toJsonObject(cellPredicate, context));
+    jObj.put(COND, ColumnValuePredicateParser.INSTANCE.toJsonObject(cellPredicate, context));
   }
 
 }

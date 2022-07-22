@@ -10,8 +10,8 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-import io.crums.sldg.reports.pdf.model.NumberArg;
-import io.crums.sldg.reports.pdf.model.Param;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -127,7 +127,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     var maskedCtx = RefContext.of(
         null, context.cellFormatRefs(), null, context.colorRefs(), context.fontRefs(), null);
     for (var e : cellRefs.entrySet())
-      jRefs.put(e.getKey(), CellDataParser.SANS_REF_INSTANCE.toJsonObject(e.getValue(), maskedCtx));
+      jRefs.put(e.getKey(), CellDataParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(CELLS, jRefs);
   }
   
@@ -243,7 +243,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     buildMap(
         context.cellDataRefs(),
         getJsonObject(jObj, CELLS, false),
-        CellDataParser.SANS_REF_INSTANCE,
+        CellDataParser.INSTANCE,
         context);
   }
   
