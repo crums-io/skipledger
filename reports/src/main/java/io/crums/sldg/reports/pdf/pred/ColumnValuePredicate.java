@@ -27,7 +27,7 @@ public sealed interface ColumnValuePredicate extends Predicate<ColumnValue>
     permits
     NumberPredicate,
 //    CellPredicate.Equals,
-    NotCellPredicate {
+    NotColumnValuePredicate {
 
   /** Returns a &gt; {@code rhs} predicate. */
   public static ColumnValuePredicate greaterThan(Number rhs) {
@@ -145,7 +145,7 @@ public sealed interface ColumnValuePredicate extends Predicate<ColumnValue>
   
   
   
-  public final class GreaterOrEqual extends NotCellPredicate {
+  public final class GreaterOrEqual extends NotColumnValuePredicate {
 
     /** @param rhs non-null boxed primitive */
     public GreaterOrEqual(Number rhs) {
@@ -155,7 +155,7 @@ public sealed interface ColumnValuePredicate extends Predicate<ColumnValue>
   }
   
   
-  public final class LesserOrEqual extends NotCellPredicate {
+  public final class LesserOrEqual extends NotColumnValuePredicate {
 
     /** @param rhs non-null boxed primitive */
     public LesserOrEqual(Number rhs) {
@@ -173,7 +173,7 @@ public sealed interface ColumnValuePredicate extends Predicate<ColumnValue>
   
 
   /** @param rhs non-null boxed primitive */
-  public final class NotNumberEquals extends NotCellPredicate {
+  public final class NotNumberEquals extends NotColumnValuePredicate {
     public NotNumberEquals(Number rhs) {
       super(new NumberEquals(rhs));
     }

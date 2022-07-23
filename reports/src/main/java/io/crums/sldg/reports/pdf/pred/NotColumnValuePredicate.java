@@ -11,27 +11,27 @@ import io.crums.sldg.src.ColumnType;
 /**
  * Base class for &ge; and &le; cell predicates.
  */
-non-sealed class NotCellPredicate implements ColumnValuePredicate {
+non-sealed class NotColumnValuePredicate implements ColumnValuePredicate {
   
-  private final ColumnValuePredicate cellPredicate;
+  private final ColumnValuePredicate colPredicate;
   
-  NotCellPredicate(ColumnValuePredicate cellPredicate) {
-    this.cellPredicate = Objects.requireNonNull(cellPredicate, "null cell predicate");
+  NotColumnValuePredicate(ColumnValuePredicate colPredicate) {
+    this.colPredicate = Objects.requireNonNull(colPredicate, "null column predicate");
   }
 
   @Override
   public boolean acceptType(ColumnType type) {
-    return cellPredicate.acceptType(type);
+    return colPredicate.acceptType(type);
   }
 
   @Override
   public boolean acceptValue(Object value) {
-    return !cellPredicate.acceptValue(value);
+    return !colPredicate.acceptValue(value);
   }
   
   /** @return the RHS of the predicate passed in at construction time, if any */
   public Optional<?> rhs() {
-    return cellPredicate.rhs();
+    return colPredicate.rhs();
   }
 
 }
