@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Objects;
 
 import io.crums.util.PrimitiveComparator;
-import io.crums.util.PrimitiveNumber;
 
 /**
  * Arithmetic evaluation tree. The objective is to compose / model functions declaratively
@@ -42,7 +41,7 @@ import io.crums.util.PrimitiveNumber;
  * addition. The abstractions used here are no different.
  * </p>
  * 
- * @see NumberFunc
+ * @see NumFunc
  */
 public abstract class NumNode {
   
@@ -174,7 +173,7 @@ public abstract class NumNode {
      * Constructs an instance.
      * 
      * @param value not null. This is sometimes the special type {@code Primitive.Settable}
-     * @see NumberFunc
+     * @see NumFunc
      */
     public FixedLeaf(Number value) {
       this.value = Objects.requireNonNull(value, "null value");

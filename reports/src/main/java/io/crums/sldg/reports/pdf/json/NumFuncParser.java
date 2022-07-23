@@ -14,10 +14,10 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class NumberFuncParser implements JsonEntityParser<NumFunc> {
+public class NumFuncParser implements JsonEntityParser<NumFunc> {
   
   
-  public final static NumberFuncParser INSTANCE = new NumberFuncParser();
+  public final static NumFuncParser INSTANCE = new NumFuncParser();
   
   
   private final NumNodeParser nodeParser = new NumNodeParser();

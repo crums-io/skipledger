@@ -18,7 +18,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class NumberFuncParserTest implements ParserRoundtripTest<NumFunc> {
+public class NumFuncParserTest implements ParserRoundtripTest<NumFunc> {
 
   
   @Test
@@ -38,7 +38,7 @@ public class NumberFuncParserTest implements ParserRoundtripTest<NumFunc> {
   
   @Override
   public JsonEntityParser<NumFunc> parser() {
-    return NumberFuncParser.INSTANCE;
+    return NumFuncParser.INSTANCE;
   }
 
 }
