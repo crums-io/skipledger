@@ -11,8 +11,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.NumberFunc;
-import io.crums.sldg.reports.pdf.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.NumOp;
 
 /**
  * 
@@ -24,8 +24,8 @@ public class NumberFuncTest {
   public void testPlusOne() {
     var lhs = NumNode.newArgLeaf();
     var rhs = NumNode.newLeaf(1);
-    var result = NumNode.newBranch(NumberOp.ADD, List.of(lhs, rhs));
-    var func = new NumberFunc(result);
+    var result = NumNode.newBranch(NumOp.ADD, List.of(lhs, rhs));
+    var func = new NumFunc(result);
     assertEquals(1, func.eval(0));
     assertEquals(2, func.eval(1));
   }

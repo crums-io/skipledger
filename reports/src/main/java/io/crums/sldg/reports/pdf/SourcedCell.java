@@ -17,8 +17,8 @@ import io.crums.sldg.reports.pdf.CellDataProvider.DateProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.ImageProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.NumberProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.StringProvider;
-import io.crums.sldg.reports.pdf.func.NumberFunc;
-import io.crums.sldg.reports.pdf.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.NumOp;
 import io.crums.sldg.src.ColumnType;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.Lists;
@@ -219,9 +219,9 @@ public abstract class SourcedCell extends CellData {
   static abstract class BaseNumber extends ColumnCell {
 
 
-    final NumberFunc func;
+    final NumFunc func;
     
-    BaseNumber(int columnIndex, NumberProvider provider, NumberFunc func, CellFormat format) {
+    BaseNumber(int columnIndex, NumberProvider provider, NumFunc func, CellFormat format) {
       super(columnIndex, provider, format);
       this.func = func;
       if (func != null && func.getArgCount() != 1)
@@ -240,7 +240,7 @@ public abstract class SourcedCell extends CellData {
     
     
     /** @return may be {@code null} */
-    public NumberFunc func() {
+    public NumFunc func() {
       return func;
     }
     
@@ -278,7 +278,7 @@ public abstract class SourcedCell extends CellData {
     private final static int CH = NumberCell.class.hashCode();
 
     public NumberCell(
-        int columnIndex, NumberProvider provider, NumberFunc func, CellFormat format) {
+        int columnIndex, NumberProvider provider, NumFunc func, CellFormat format) {
       super(columnIndex, provider, func, format);
     }
 
@@ -317,7 +317,7 @@ public abstract class SourcedCell extends CellData {
     }
     
     private final List<Integer> colIndexes;
-    private final NumberFunc columnsFunc;
+    private final NumFunc columnsFunc;
     
 
     /**
@@ -325,7 +325,7 @@ public abstract class SourcedCell extends CellData {
      * 
      * @param colIndexes  source row column indices in ascending order. At least one
      * @param columnsFunc  optionally {@code null} only if there is only one column.
-     *                    Must have the same {@linkplain NumberFunc#getArgCount() arg count}
+     *                    Must have the same {@linkplain NumFunc#getArgCount() arg count}
      *                    as the column count ({@code colIndexes.size()})
      * @param provider    not null
      * @param func        optional (may be null)
@@ -333,9 +333,9 @@ public abstract class SourcedCell extends CellData {
      */
     public Sum(
         List<Integer> colIndexes,
-        NumberFunc columnsFunc,
+        NumFunc columnsFunc,
         NumberProvider provider,
-        NumberFunc func,
+        NumFunc func,
         CellFormat format) {
       super(first(colIndexes), provider, func, format);
       this.colIndexes = colIndexes;
@@ -365,7 +365,7 @@ public abstract class SourcedCell extends CellData {
     
     
     /** @return may be null (!) */
-    public NumberFunc getColumnsFunc() {
+    public NumFunc getColumnsFunc() {
       return columnsFunc;
     }
     
@@ -396,7 +396,7 @@ public abstract class SourcedCell extends CellData {
       
       Number total = ZERO;
       for (var row : rowset)
-        total = NumberOp.ADD.apply(total, computeRowValue(row));
+        total = NumOp.ADD.apply(total, computeRowValue(row));
       generateCell(total);
       return effectiveCell();
     }

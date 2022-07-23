@@ -19,8 +19,8 @@ import io.crums.util.PrimitiveNumber;
  * A function's return value is represented by a tree's root node {@linkplain #value()}.
  * {@code NumNode}s come in 2 flavors, {@linkplain Leaf} and {@linkplain Branch}. {@code Leaf} instances
  * represent a "plain" number (thru their {@code value()} method), while {@code Branch}
- * types represent an arithmetic operation {@linkplain NumberOp} on 2 or more child nodes.
- * If the operation {@linkplain NumberOp#isAssociative() is associative} then the branch
+ * types represent an arithmetic operation {@linkplain NumOp} on 2 or more child nodes.
+ * If the operation {@linkplain NumOp#isAssociative() is associative} then the branch
  * node can operate on (have) more than 2 children.
  * </p><p>
  * From a design perspecitve, these operations needn't be restricted to the basic four types
@@ -67,10 +67,10 @@ public abstract class NumNode {
    * 
    * @param op        not null
    * @param children  at least 2; <em>exactly</em> 2, if {@code op} is not
-   *                  {@linkplain NumberOp#isAssociative() associative}
+   *                  {@linkplain NumOp#isAssociative() associative}
    * @return a branch node
    */
-  public static NumNode newBranch(NumberOp op, List<NumNode> children) {
+  public static NumNode newBranch(NumOp op, List<NumNode> children) {
     return new Branch(op, children);
   }
   
@@ -254,16 +254,16 @@ public abstract class NumNode {
    */
   public static class Branch extends NumNode {
     
-    private final NumberOp op;
+    private final NumOp op;
     private final List<NumNode> children;
     
     /**
      * Creates a branch node with 2 or more children.
      * 
      * @param op        not null
-     * @param children  2; more only if {@code op} is {@linkplain NumberOp#isAssociative() is associative}
+     * @param children  2; more only if {@code op} is {@linkplain NumOp#isAssociative() is associative}
      */
-    public Branch(NumberOp op, List<NumNode> children) {
+    public Branch(NumOp op, List<NumNode> children) {
       this.op = Objects.requireNonNull(op, "null op");
       this.children = Objects.requireNonNull(children, "null children");
       int size = children.size();
@@ -299,7 +299,7 @@ public abstract class NumNode {
     
     
     /** Returns the branch op. (Only branches have ops).   */
-    public final NumberOp op() {
+    public final NumOp op() {
       return op;
     }
     

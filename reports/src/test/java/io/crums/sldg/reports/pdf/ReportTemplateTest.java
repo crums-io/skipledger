@@ -23,8 +23,8 @@ import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.reports.pdf.ReportTemplate.Components;
 import io.crums.sldg.reports.pdf.SourcedCell.MultiStringCell;
 import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.NumberFunc;
-import io.crums.sldg.reports.pdf.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.NumOp;
 import io.crums.util.Lists;
 
 import org.junit.jupiter.api.Test;
@@ -330,14 +330,14 @@ public class ReportTemplateTest extends IoTestCase {
     mainTable.setFixedCell(2, -1, emptyBlue);
     
     
-    NumberFunc columnsFunc;
+    NumFunc columnsFunc;
     {
       var leaves = List.of(
           NumNode.newArgLeaf(),
           NumNode.newArgLeaf()
           );
       
-      columnsFunc = new NumberFunc(NumNode.newBranch(NumberOp.MULTIPLY, leaves));
+      columnsFunc = new NumFunc(NumNode.newBranch(NumOp.MULTIPLY, leaves));
     }
     
     var total = new SourcedCell.Sum(

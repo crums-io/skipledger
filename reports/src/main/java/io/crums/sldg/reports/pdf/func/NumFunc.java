@@ -24,21 +24,21 @@ import java.util.function.Function;
  * <em>Not thread safe!</em>
  * </p>
  */
-public class NumberFunc  {
+public class NumFunc  {
   
   
-  public static NumberFunc divideBy(Number number) {
+  public static NumFunc divideBy(Number number) {
     return
-        new NumberFunc(
+        new NumFunc(
             NumNode.newBranch(
-                NumberOp.DIVIDE,
+                NumOp.DIVIDE,
                 List.of(NumNode.newArgLeaf(), NumNode.newLeaf(number))));
         
   }
   
-  public static NumberFunc biFunction(NumberOp op) {
+  public static NumFunc biFunction(NumOp op) {
     return
-        new NumberFunc(
+        new NumFunc(
             NumNode.newBranch(
                 op,
                 List.of(NumNode.newArgLeaf(), NumNode.newArgLeaf())));
@@ -53,7 +53,7 @@ public class NumberFunc  {
    * On construction, an instance <em>discovers</em> its arguments by inspecting
    * and collecting {@linkplain NumNode.Leaf#isSettable() settable} leaf nodes.
    */
-  public NumberFunc(NumNode root) {
+  public NumFunc(NumNode root) {
     this.root = Objects.requireNonNull(root, "null root");
     this.arguments = collectArgs(new ArrayList<>(4), root);
     if (arguments.isEmpty())
@@ -174,7 +174,7 @@ public class NumberFunc  {
   
   @Override
   public final boolean equals(Object o) {
-    return o instanceof NumberFunc func && root.equals(func.root);
+    return o instanceof NumFunc func && root.equals(func.root);
   }
   
   

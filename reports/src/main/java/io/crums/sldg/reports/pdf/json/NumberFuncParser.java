@@ -4,8 +4,8 @@
 package io.crums.sldg.reports.pdf.json;
 
 import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.NumberFunc;
-import io.crums.sldg.reports.pdf.func.NumberOp;
+import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.NumOp;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -14,7 +14,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class NumberFuncParser implements JsonEntityParser<NumberFunc> {
+public class NumberFuncParser implements JsonEntityParser<NumFunc> {
   
   
   public final static NumberFuncParser INSTANCE = new NumberFuncParser();
@@ -25,7 +25,7 @@ public class NumberFuncParser implements JsonEntityParser<NumberFunc> {
   
 
   @Override
-  public JSONObject injectEntity(NumberFunc func, JSONObject jObj) {
+  public JSONObject injectEntity(NumFunc func, JSONObject jObj) {
     nodeParser.injectEntity(func.evaluationTree(), jObj);
     return jObj;
   }
@@ -34,10 +34,10 @@ public class NumberFuncParser implements JsonEntityParser<NumberFunc> {
   
 
   @Override
-  public NumberFunc toEntity(JSONObject jObj) throws JsonParsingException {
+  public NumFunc toEntity(JSONObject jObj) throws JsonParsingException {
     var root = nodeParser.toEntity(jObj);
     try {
-      return new NumberFunc(root);
+      return new NumFunc(root);
     } catch (Exception x) {
       throw new JsonParsingException(x);
     }
@@ -92,7 +92,7 @@ public class NumberFuncParser implements JsonEntityParser<NumberFunc> {
       // else a branch
       } else {
         try {
-          NumberOp op = NumberOp.forSymbol(opSym);
+          NumOp op = NumOp.forSymbol(opSym);
           var jArray = JsonUtils.getJsonArray(jObj, SUB, true);
           var children = toEntityList(jArray);
           return NumNode.newBranch(op, children);

@@ -13,7 +13,7 @@ import java.util.function.BinaryOperator;
  * @see #apply(Number, Number)
  * @see #negate(Number)
  */
-public enum NumberOp implements BinaryOperator<Number> {
+public enum NumOp implements BinaryOperator<Number> {
   
   /** Symbol: {@code +} */
   ADD("+"),
@@ -28,7 +28,7 @@ public enum NumberOp implements BinaryOperator<Number> {
   
   private final String symbol;
   
-  private NumberOp(String symbol) {
+  private NumOp(String symbol) {
     this.symbol = symbol;
   }
   
@@ -109,7 +109,7 @@ public enum NumberOp implements BinaryOperator<Number> {
   }
   
   
-  public static NumberOp forSymbol(String symbol) {
+  public static NumOp forSymbol(String symbol) {
     for (var op : values())
       if (op.symbol().equals(symbol))
         return op;
