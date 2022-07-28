@@ -3,9 +3,11 @@
  */
 package io.crums.sldg.reports.pdf.func;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+//import java.util.function.Supplier;
 
 import io.crums.util.PrimitiveComparator;
 
@@ -41,9 +43,11 @@ import io.crums.util.PrimitiveComparator;
  * addition. The abstractions used here are no different.
  * </p>
  * 
- * @see NumFunc
+ * @see BaseNumFunc
  */
 public abstract class NumNode {
+  
+  
   
   /**
    * Returns a <em>mutable</em> value leaf instance.
@@ -51,6 +55,16 @@ public abstract class NumNode {
   public static NumNode newArgLeaf() {
     return new ArgLeaf();
   }
+  
+  // Backing out..
+//  /**
+//   * Returns a {@linkplain SuppliedLeaf} instance.
+//   * 
+//   * @param input non-null, with constant equality semantics and hash code
+//   */
+//  public static NumNode suppliedLeaf(Supplier<Number> input) {
+//    return new SuppliedLeaf(input);
+//  }
   
   /**
    * Returns a <em>fixed</em> value leaf instance.
@@ -106,6 +120,35 @@ public abstract class NumNode {
   }
   
   
+
+  /**
+   * Collects and returns the <em>settable</em> leaf nodes in a pre-order traversal
+   * of tree.
+   */
+  public List<Leaf> getArguments() {
+    if (isLeaf()) {
+      var leaf = asLeaf();
+      return leaf.isArgument() ? List.of(leaf) : List.of();
+    }
+    
+    var settables = collectArgs(new ArrayList<>(4));
+    
+    return settables.isEmpty() ?
+        List.of() : Collections.unmodifiableList(settables);
+  }
+  
+  
+  private List<Leaf> collectArgs(List<NumNode.Leaf> collected) {
+    if (isLeaf()) {
+      var leaf = asLeaf();
+      if (leaf.isArgument())
+        collected.add(leaf);
+    } else {
+      for (var sub : asBranch().children())
+        sub.collectArgs(collected);
+    }
+    return collected;
+  }
   
   
   
@@ -125,24 +168,28 @@ public abstract class NumNode {
     }
     
     
-    public abstract boolean isSettable();
+    public abstract boolean isArgument();
+    
+//    public Supplier<Number> supplier() {
+//      return null;
+//    }
     
     
-    public final void setValue(Long value) {
-      setValueImpl(value);
-    }
-    
-    public final void setValue(Double value) {
-      setValueImpl(value);
-    }
-    
-    public final void setValue(Integer value) {
-      setValueImpl(value);
-    }
-    
-    public final void setValue(Float value) {
-      setValueImpl(value);
-    }
+//    public final void setValue(Long value) {
+//      setValueImpl(value);
+//    }
+//    
+//    public final void setValue(Double value) {
+//      setValueImpl(value);
+//    }
+//    
+//    public final void setValue(Integer value) {
+//      setValueImpl(value);
+//    }
+//    
+//    public final void setValue(Float value) {
+//      setValueImpl(value);
+//    }
     
     public final void setValue(Number value) {
       boolean ok =
@@ -173,7 +220,7 @@ public abstract class NumNode {
      * Constructs an instance.
      * 
      * @param value not null. This is sometimes the special type {@code Primitive.Settable}
-     * @see NumFunc
+     * @see BaseNumFunc
      */
     public FixedLeaf(Number value) {
       this.value = Objects.requireNonNull(value, "null value");
@@ -187,7 +234,7 @@ public abstract class NumNode {
     }
     
     
-    public final boolean isSettable() {
+    public final boolean isArgument() {
       return false;
     }
     
@@ -206,13 +253,15 @@ public abstract class NumNode {
     
   }
   
-  /** Mutable leaf node. I.e. an argument. */
+  /** Mutable leaf node. I.e. an argument.
+   */
   public static class ArgLeaf extends Leaf {
     
     private Number value = 0;
+    
 
     @Override
-    public boolean isSettable() {
+    public boolean isArgument() {
       return true;
     }
     
@@ -242,6 +291,51 @@ public abstract class NumNode {
     }
     
   }
+  
+  
+  // Backing out.. not worth the complication
+  
+//  public static class SuppliedLeaf extends Leaf {
+//    
+//    private final static int CH = SuppliedLeaf.class.hashCode();
+//
+//    private Supplier<Number> supplier;
+//    
+//    
+//    /**
+//     * @param supplier non-null, with constant equality semantics and hash code
+//     */
+//    public SuppliedLeaf(Supplier<Number> supplier) {
+//      this.supplier = Objects.requireNonNull(supplier, "null supplier");
+//    }
+//
+//    @Override
+//    public boolean isSupplied() {
+//      return true;
+//    }
+//    
+//    public Number value() {
+//      return supplier.get();
+//    }
+//    
+//
+//    @Override
+//    public Supplier<Number> supplier() {
+//      return supplier;
+//    }
+//    
+//    
+//    @Override
+//    public final boolean equals(Object o) {
+//      return o instanceof SuppliedLeaf;
+//    }
+//    
+//
+//    @Override
+//    public final int hashCode() {
+//      return CH ^ supplier.hashCode();
+//    }
+//  }
   
   
   

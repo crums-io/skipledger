@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.json;
+package io.crums.sldg.reports.pdf.pred.dep;
 
 
 import io.crums.util.json.JsonParsingException;
@@ -11,7 +11,9 @@ import io.crums.util.json.simple.JSONObject;
 import java.util.Optional;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
-import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
+import io.crums.sldg.reports.pdf.json.EditableRefContext;
+import io.crums.sldg.reports.pdf.json.PNodeParser;
+import io.crums.sldg.reports.pdf.json.RefContext;
 import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.src.ColumnValue;
 

@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.pred;
+package io.crums.sldg.reports.pdf.pred.dep;
 
 import java.util.List;
 import java.util.function.Predicate;

@@ -4,7 +4,9 @@
 package io.crums.sldg.reports.pdf.input;
 
 
+import java.util.Collection;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import io.crums.util.PrimitiveComparator;
 
@@ -14,31 +16,47 @@ import io.crums.util.PrimitiveComparator;
  * @see #param()
  */
 @SuppressWarnings("serial")
-public class NumberArg extends Number {
+public class NumberArg extends Number implements Supplier<Number> {
+  
+  private final static int CH = NumberArg.class.hashCode();
+  
+  /**
+   * A {@code NumberArg} collector. {@linkplain NumberArg}s are designed to be
+   * sprinkled about constructs and expressions the same way regular numbers are.
+   * This interface standardizes how components gather there user-supplied arguments.
+   */
+  public interface Collector {
+    /** Adds an instance's arguments to the given collection. */
+    void collectNumberArgs(Collection<NumberArg> collector);
+  }
+  
+  
+  
+  
   
   private final Param<Number> param;
-  private final Number value;
+  private Number value;
   
   /**
-   * 
-   * @param param
-   * @param value
+   * @param param   not null
+   * @param value   an {@code int, long, float}, or {@code double}, may be {@code null}
+   *                if {@code param} {@linkplain #isDefaulted()}
+   * @throws IllegalArgumentException if {@code value} is {@code null} and {@code param} has no default
    */
-  /**
-   * @throws IllegalArgumentException if {@code value} is {@code null} and {@code param} has no default */
   public NumberArg(Param<Number> param, Number value) {
-    this(param, value, true);
-    boolean ok =
-        value == null ||            // (base constructor has checked *param* has default value)
-        value instanceof Integer ||
-        value instanceof Double ||
-        value instanceof Long ||
-        value instanceof Float ||
-        value instanceof Short ||
-        value instanceof Byte;
-    if (!ok)
-      throw new IllegalArgumentException(
-          "unsupported Number type (class: " + value.getClass() + "): " + value);
+    this.param = Objects.requireNonNull(param, "null param");
+    set(value);
+  }
+
+  /**
+   * Creates a new instance whose value is either the {@code param}'s
+   * default, if any; {@code 0}, otherwise.
+   * 
+   * @param param not null
+   */
+  public NumberArg(Param<Number> param) {
+    this.param = Objects.requireNonNull(param, "null param");
+    set(param.getDefaultValue().isEmpty() ? 0 : null);
   }
   
   
@@ -49,16 +67,6 @@ public class NumberArg extends Number {
 
   /** @throws IllegalArgumentException if {@code value} is {@code null} and {@code param} has no default */
   public NumberArg(Param<Number> param, Integer value) {
-    this(param, value, true);
-  }
-
-  /** @throws IllegalArgumentException if {@code value} is {@code null} and {@code param} has no default */
-  public NumberArg(Param<Number> param, Short value) {
-    this(param, value, true);
-  }
-
-  /** @throws IllegalArgumentException if {@code value} is {@code null} and {@code param} has no default */
-  public NumberArg(Param<Number> param, Byte value) {
     this(param, value, true);
   }
 
@@ -74,32 +82,41 @@ public class NumberArg extends Number {
   
   
   
+  
+  
   /** @param ignore (signature disambiguation hack) */
-  private NumberArg(Param<Number> argName, Number value, boolean ignore) {
-    this.param = Objects.requireNonNull(argName, "null argName");
+  private NumberArg(Param<Number> param, Number value, boolean ignore) {
+    this.param = Objects.requireNonNull(param, "null param");
     this.value = value;
-    if (value == null && argName.defaultValue() == null)
-      throw new IllegalArgumentException("missing value for non-default param '" + argName + "'");
+    
+    if (value == null && !param.hasDefault())
+      throw new IllegalArgumentException(
+          "missing value for non-default param '" + param + "'");
   }
+  
+  
+  
+  
+  
 
   @Override
   public int intValue() {
-    return getValue().intValue();
+    return get().intValue();
   }
 
   @Override
   public long longValue() {
-    return getValue().longValue();
+    return get().longValue();
   }
 
   @Override
   public float floatValue() {
-    return getValue().floatValue();
+    return get().floatValue();
   }
 
   @Override
   public double doubleValue() {
-    return getValue().doubleValue();
+    return get().doubleValue();
   }
   
   
@@ -120,14 +137,27 @@ public class NumberArg extends Number {
    * @return not null
    * @see #isDefaulted()
    */
-  public Number getValue() {
+  @Override
+  public Number get() {
     return value == null ? param.defaultValue() : value;
   }
   
+  public void set(Number value) {
+    if (value == null && !param.hasDefault())
+      throw new IllegalArgumentException("attempt to set non defaulted to null");
+    boolean ok =
+        value == null ||            // (we checked *param* has default value)
+        value instanceof Integer ||
+        value instanceof Double ||
+        value instanceof Long ||
+        value instanceof Float;
+    if (!ok)
+      throw new IllegalArgumentException("unsupported Number type: " + value.getClass());
+  }
   
   
   /**
-   * Indicates whether the {@linkplain #getValue() value} comes from
+   * Indicates whether the {@linkplain #get() value} comes from
    * the param default.
    * 
    * @return {@code false} <b>iff</b> if instance was constructed with a {@code null} value 
@@ -138,21 +168,21 @@ public class NumberArg extends Number {
   
   
   /**
-   * Not a good idea to compare instances. There will be edge cases
-   * where 2 numbers compare equal but still fail this test. Uses
-   * {@linkplain PrimitiveComparator#equal(Number, Number)} and
-   * {@linkplain PrimitiveComparator#hashCode(Number)}.
+   * Equality is based on param name.
+   * 
+   * @see #param()
+   * @see Param#name()
    */
   @Override
   public final boolean equals(Object o) {
     return o == this ||
         o instanceof NumberArg arg &&
-        PrimitiveComparator.equal(value, arg.value) &&
-        hashCode() == arg.hashCode();
+        arg.param().name().equals(param.name());
+//        PrimitiveComparator.equal(value, arg.value);
   }
   
 
-  /** See {@linkplain PrimitiveComparator#hashCode(Number)}. */
+  /** Consistent with {@linkplain #equals(Object)}. */
   @Override
   public final int hashCode() {
     return PrimitiveComparator.hashCode(value);
@@ -167,7 +197,7 @@ public class NumberArg extends Number {
    */
   @Override
   public final String toString() {
-    return getValue().toString();
+    return get().toString();
   }
 
 }

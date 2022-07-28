@@ -42,6 +42,12 @@ public record Param<T>(String name, String description, T defaultValue) {
     return Optional.ofNullable(defaultValue);
   }
   
+  
+  /** Returns {@code true} if this parameter has a default value. */
+  public boolean hasDefault() {
+    return defaultValue != null;
+  }
+  
 }
 
 

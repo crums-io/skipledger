@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.pred;
+package io.crums.sldg.reports.pdf.pred.dep;
 
 
 import java.util.ArrayList;
@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 

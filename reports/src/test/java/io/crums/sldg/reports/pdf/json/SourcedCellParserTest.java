@@ -25,8 +25,8 @@ import io.crums.sldg.reports.pdf.SourcedCell.NumberCell;
 import io.crums.sldg.reports.pdf.SourcedCell.SourcedImage;
 import io.crums.sldg.reports.pdf.SourcedCell.StringCell;
 import io.crums.sldg.reports.pdf.SourcedCell.Sum;
+import io.crums.sldg.reports.pdf.func.BaseNumFunc;
 import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.NumFunc;
 import io.crums.sldg.reports.pdf.func.NumOp;
 
 /**
@@ -55,10 +55,10 @@ public class SourcedCellParserTest extends ParserRoundtripTest.Base<SourcedCell>
     clearPrint();
     var provider = new NumberProvider("###,###.##", "$");
     var format = new CellFormat(new FontSpec("Helvetica", 9, Font.NORMAL, Color.GRAY));
-    NumFunc func;
+    BaseNumFunc func;
     {
       var children = List.of(NumNode.newArgLeaf(), NumNode.newLeaf(100));
-      func = new NumFunc(NumNode.newBranch(NumOp.DIVIDE, children));
+      func = new BaseNumFunc(NumNode.newBranch(NumOp.DIVIDE, children));
     }
     testRoundtrip(new NumberCell(0, provider, null, null));
     testRoundtrip(new NumberCell(1, provider, null, format));
@@ -104,8 +104,8 @@ public class SourcedCellParserTest extends ParserRoundtripTest.Base<SourcedCell>
   public void testSum() throws Exception {
     clearPrint();
     var provider = new NumberProvider("###,###.##", "$");
-    var colFunc = NumFunc.biFunction(NumOp.MULTIPLY);
-    var func = NumFunc.divideBy(100.0);
+    var colFunc = BaseNumFunc.biFunction(NumOp.MULTIPLY);
+    var func = BaseNumFunc.divideBy(100.0);
     var format = new CellFormat(new FontSpec("Helvetica", 11, Font.NORMAL, Color.BLACK));
     List<Integer> cols = List.of(3, 7);
     List<Integer> monCol = List.of(6);

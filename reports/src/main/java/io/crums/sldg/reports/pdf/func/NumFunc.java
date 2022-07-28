@@ -3,223 +3,120 @@
  */
 package io.crums.sldg.reports.pdf.func;
 
-
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
+import io.crums.sldg.reports.pdf.input.NumberArg;
 
 /**
- * A numeric function "specification" using a composition of a tree of {@linkplain NumNode}s.
- * At least one the nodes in the tree must be an {@linkplain NumNode.ArgNode ArgNode} instance.
- * 
- * <h3>Argument Order and Evaluation</h3>
- * <p>
- * Arguments are ordered (left to right) by the order of discovery in pre-order traversal.
- * Evaluation, too, is in pre-order, but that only matters for debugging.
- * </p>
- * <p>
- * <em>Not thread safe!</em>
- * </p>
+ * Abstraction of number functions with zero or many arguments.
+ * In the event the function takes zero arguments, it also doubles
+ * as a number {@linkplain Supplier supplier}.
  */
-public class NumFunc  {
+public interface NumFunc extends Supplier<Number>, NumberArg.Collector {
   
   
-  public static NumFunc divideBy(Number number) {
-    return
-        new NumFunc(
-            NumNode.newBranch(
-                NumOp.DIVIDE,
-                List.of(NumNode.newArgLeaf(), NumNode.newLeaf(number))));
-        
+  public static NumFunc of(Number value) {
+    Objects.requireNonNull(value, "null value");
+    return new NumFunc() {
+      
+      @Override
+      public int getArgCount() {
+        return 0;
+      }
+      
+      @Override
+      public Number eval(List<Number> args) throws IllegalArgumentException {
+        assertArgCount(args);
+        return value;
+      }
+      
+      @Override
+      public Number eval() {
+        return value;
+      }
+    };
   }
   
-  public static NumFunc biFunction(NumOp op) {
-    return
-        new NumFunc(
-            NumNode.newBranch(
-                op,
-                List.of(NumNode.newArgLeaf(), NumNode.newArgLeaf())));
-        
-  }
   
   
-  private final NumNode root;
-  private final List<NumNode.Leaf> arguments; 
   
+  
+  
+
   /**
-   * On construction, an instance <em>discovers</em> its arguments by inspecting
-   * and collecting {@linkplain NumNode.Leaf#isSettable() settable} leaf nodes.
+   * Returns the number of arguments this instance's {@linkplain #eval(List)} takes.
+   * 
+   * @return &ge; 0
    */
-  public NumFunc(NumNode root) {
-    this.root = Objects.requireNonNull(root, "null root");
-    this.arguments = collectArgs(new ArrayList<>(4), root);
-    if (arguments.isEmpty())
-      throw new IllegalArgumentException("no arguments (settable nodes) found in evaluation tree");
-  }
-  
+  int getArgCount();
   
   /**
-   * Collects the <em>settable</em> leaf nodes in a pre-order traversal
-   * of the evaluation tree.
+   * Determines whether the argument count is zero. If this
+   * method returns {@code true}, then either {@linkplain #get()} or
+   * {@linkplain #eval()} be safely
+   * be invoked (w/o raising an {@code UnsupportedOperationException}).
+   * 
+   * @return {@code getArgCount() == 0}
    */
-  private List<NumNode.Leaf> collectArgs(List<NumNode.Leaf> collected, NumNode cursor) {
-    if (cursor.isLeaf()) {
-      var leaf = cursor.asLeaf();
-      if (leaf.isSettable())
-        collected.add(leaf);
-    } else {
-      for (var n : cursor.asBranch().children())
-        collectArgs(collected, n);
-    }
-    return collected;
+  default boolean isSupplied() {
+    return getArgCount() == 0;
   }
+  
+  @Override
+  default void collectNumberArgs(Collection<NumberArg> collector) {  }
   
   
   /**
-   * Returns the evaluation tree. Used to write JSON (or maybe some other format in the future).
-   *
+   * Returns the result of the computation.
+   * 
+   * @param args of size {@linkplain #getArgCount()}
    * @return not null
+   * @throws IllegalArgumentException if {@code getArgCount() != args.size()}
    */
-  public NumNode evaluationTree() {
-    return root;
-  }
-  
+  Number eval(List<Number> args) throws IllegalArgumentException;
   
   /**
-   * Returns the number of argument this instance takes.
+   * Returns the result of the computation with no arguments.
    * 
-   * @return &ge; 1
+   * @return {@code eval(List.of())}
+   * @throws UnsupportedOperationException if {@code !isSupplied()}
+   * @see #isSupplied()
    */
-  public int getArgCount() {
-    return arguments.size();
-  }
-  
-  
-  /**
-   * Returns this instance as a single argument number function.
-   * 
-   * @throws UnsupportedOperationException if {@linkplain #getArgCount()}{@code != 1}
-   */
-  public Function<Number, Number> asFunc() throws UnsupportedOperationException {
-    assertArgCount(1);
-    return this::evalImpl1;
-  }
-  
-
-  /**
-   * Returns this instance as a 2-argument number function.
-   * 
-   * @throws UnsupportedOperationException if {@linkplain #getArgCount()}{@code != 2}
-   */
-  public BiFunction<Number, Number, Number> asBiFunc() throws UnsupportedOperationException {
-    assertArgCount(2);
-    return this::evalImpl2;
-  }
-  
-  
-  /**
-   *
-   * @throws UnsupportedOperationException if {@linkplain #getArgCount()}{@code != 1}
-   */
-  public Number eval(Number arg) throws UnsupportedOperationException {
-    assertArgCount(1);
-    return evalImpl1(arg);
-  }
-  
-  
-  private Number evalImpl1(Number arg) {
-    arguments.get(0).setValue(arg);
-    return root.value();
-  }
-  
-
-  /**
-   * 
-   * @throws UnsupportedOperationException if {@linkplain #getArgCount()}{@code != 2}
-   */
-  public Number eval(Number a, Number b) {
-    assertArgCount(2);
-    return evalImpl2(a, b);
-  }
-  
-  private Number evalImpl2(Number a, Number b) {
-    arguments.get(0).setValue(a);
-    arguments.get(1).setValue(a);
-    return root.value();
-  }
-  
-  
-  
-  public Number eval(Number...numbers) {
-    assertArgCount(numbers.length);
-    for (int index = 0; index < numbers.length; ++index)
-      arguments.get(index).setValue(numbers[index]);
-    return root.value();
-  }
-  
-  
-  public Number eval(List<Number> numbers) {
-    final int count = numbers.size();
-    assertArgCount(count);
-    for (int index = 0; index < count; ++index)
-      arguments.get(index).setValue(numbers.get(index));
-    return root.value();
-  }
-  
-  
-  
-  
-  @Override
-  public final boolean equals(Object o) {
-    return o instanceof NumFunc func && root.equals(func.root);
-  }
-  
-  
-  @Override
-  public final int hashCode() {
-    return 0x10000 + root.hashCode();
-  }
-  
-  
-  
-  
-  
-  private void assertArgCount(int actual) {
-    int expected = arguments.size();
-    if (actual != expected)
+  default Number eval() throws UnsupportedOperationException {
+    if (!isSupplied())
       throw new UnsupportedOperationException(
-          "arg count mismatch: expected " + expected + "; given " + actual);
+          "func takes arguments (" + getArgCount() + ")");
+    return eval(List.of());
+  }
+  
+  /**
+   * Returns the result of the computation with no arguments.
+   * 
+   * @return {@code eval()}
+   * @throws UnsupportedOperationException if {@code !isSupplied()}
+   * @see #isSupplied()
+   */
+  @Override
+  default Number get() throws UnsupportedOperationException {
+    return eval();
+  }
+  
+  
+  
+  /**
+   * Convenience method for both implementor and user.
+   * 
+   * @param args    the arguments (invoked on {@linkplain #eval(List)}
+   * 
+   * @throws IllegalArgumentException if {@code args.size() != getArgCount()}
+   */
+  default void assertArgCount(List<Number> args) throws IllegalArgumentException {
+    if (args.size() != getArgCount())
+      throw new IllegalArgumentException (
+          "arg count mismatch: expected " + getArgCount() + "; given " + args.size());
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

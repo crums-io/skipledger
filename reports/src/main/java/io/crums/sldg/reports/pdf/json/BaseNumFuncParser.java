@@ -4,7 +4,7 @@
 package io.crums.sldg.reports.pdf.json;
 
 import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.BaseNumFunc;
 import io.crums.sldg.reports.pdf.func.NumOp;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
@@ -14,10 +14,10 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class NumFuncParser implements JsonEntityParser<NumFunc> {
+public class BaseNumFuncParser implements JsonEntityParser<BaseNumFunc> {
   
   
-  public final static NumFuncParser INSTANCE = new NumFuncParser();
+  public final static BaseNumFuncParser INSTANCE = new BaseNumFuncParser();
   
   
   private final NumNodeParser nodeParser = new NumNodeParser();
@@ -25,7 +25,7 @@ public class NumFuncParser implements JsonEntityParser<NumFunc> {
   
 
   @Override
-  public JSONObject injectEntity(NumFunc func, JSONObject jObj) {
+  public JSONObject injectEntity(BaseNumFunc func, JSONObject jObj) {
     nodeParser.injectEntity(func.evaluationTree(), jObj);
     return jObj;
   }
@@ -34,10 +34,10 @@ public class NumFuncParser implements JsonEntityParser<NumFunc> {
   
 
   @Override
-  public NumFunc toEntity(JSONObject jObj) throws JsonParsingException {
+  public BaseNumFunc toEntity(JSONObject jObj) throws JsonParsingException {
     var root = nodeParser.toEntity(jObj);
     try {
-      return new NumFunc(root);
+      return new BaseNumFunc(root);
     } catch (Exception x) {
       throw new JsonParsingException(x);
     }
@@ -60,7 +60,7 @@ public class NumFuncParser implements JsonEntityParser<NumFunc> {
     public JSONObject injectEntity(NumNode node, JSONObject jObj) {
       if (node.isLeaf()) {
         var leaf = node.asLeaf();
-        Object value = leaf.isSettable() ? ARG : leaf.value();
+        Object value = leaf.isArgument() ? ARG : leaf.value();
         jObj.put(VAL, value);
       
       } else {

@@ -11,6 +11,8 @@ import java.util.function.Predicate;
 import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.reports.pdf.pred.PNode.Op;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnPredicateParser;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnValuePredicateParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONArray;
@@ -67,12 +69,12 @@ public abstract class PNodeParser<T, U extends Predicate<T>>
   
 
   /** Constructs an instance with an empty, read-only context. */
-  PNodeParser() {
+  public PNodeParser() {
     this.defaultContext = RefContext.EMPTY;
   }
   
   /** @param context the default context (not null) */
-  PNodeParser(RefContext context) {
+  public PNodeParser(RefContext context) {
     this.defaultContext = Objects.requireNonNull(context, "null ref context");
   }
   

@@ -19,9 +19,11 @@ import com.gnahraf.test.SelfAwareTestCase;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.input.Param;
-import io.crums.sldg.reports.pdf.pred.ColumnPredicate;
-import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
 import io.crums.sldg.reports.pdf.pred.PNode;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnPredicate;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnPredicateParser;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnValuePredicate;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnValuePredicateParser;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.json.JsonEntityParser;

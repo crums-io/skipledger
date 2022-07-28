@@ -23,7 +23,7 @@ import io.crums.sldg.reports.pdf.CellData.TextCell;
 import io.crums.sldg.reports.pdf.CellDataProvider.DateProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.NumberProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.StringProvider;
-import io.crums.sldg.reports.pdf.func.NumFunc;
+import io.crums.sldg.reports.pdf.func.BaseNumFunc;
 import io.crums.sldg.reports.pdf.func.NumOp;
 import io.crums.sldg.reports.pdf.json.ParserRoundtripTest.Base;
 
@@ -71,7 +71,7 @@ public class TableTemplateParserTest extends Base<TableTemplate> {
     var protoSrc2 = new SourcedCell.NumberCell(
         2,
         new NumberProvider("###,###.##", "$"),
-        NumFunc.divideBy(100.0),
+        BaseNumFunc.divideBy(100.0),
         cellFormat);
     
     var table = new TableTemplate(
@@ -121,7 +121,7 @@ public class TableTemplateParserTest extends Base<TableTemplate> {
 
     var total = new SourcedCell.Sum(
         List.of(3,4),
-        NumFunc.biFunction(NumOp.MULTIPLY),
+        BaseNumFunc.biFunction(NumOp.MULTIPLY),
         new NumberProvider("###,###.##", "$"), null, null);
 
     mainTable.setFixedCell(1, -2, new TextCell("Total: "));

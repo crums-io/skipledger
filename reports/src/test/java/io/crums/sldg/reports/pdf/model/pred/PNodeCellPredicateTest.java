@@ -10,9 +10,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import io.crums.sldg.reports.pdf.pred.ColumnValuePredicate;
 import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.reports.pdf.pred.PNode.Op;
+import io.crums.sldg.reports.pdf.pred.dep.ColumnValuePredicate;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.LongValue;
 

@@ -71,7 +71,7 @@ public class SourcedCellParser implements ContextedParser<SourcedCell> {
         return new NumberCell(
             getColumnIndex(jObj),
             (NumberProvider) provider,
-            NumFuncParser.INSTANCE.parseIfPresent(jObj, FUNC),
+            BaseNumFuncParser.INSTANCE.parseIfPresent(jObj, FUNC),
             format);
       case MULTI:
         return new MultiStringCell(
@@ -86,9 +86,9 @@ public class SourcedCellParser implements ContextedParser<SourcedCell> {
       case SUM:
         return new Sum(
             getColumnIndexes(jObj),
-            NumFuncParser.INSTANCE.parseIfPresent(jObj, COL_FUNC),
+            BaseNumFuncParser.INSTANCE.parseIfPresent(jObj, COL_FUNC),
             (NumberProvider) provider,
-            NumFuncParser.INSTANCE.parseIfPresent(jObj, FUNC),
+            BaseNumFuncParser.INSTANCE.parseIfPresent(jObj, FUNC),
             format);
       case IMAGE:
         return new SourcedImage(
@@ -164,7 +164,7 @@ public class SourcedCellParser implements ContextedParser<SourcedCell> {
     if (generic != null) {
       jObj.put(COL_INDEX, generic.getColumnIndex());
       if (num != null && num.func() != null)
-        jObj.put(FUNC, NumFuncParser.INSTANCE.toJsonObject(num.func()));
+        jObj.put(FUNC, BaseNumFuncParser.INSTANCE.toJsonObject(num.func()));
     
     } else if (multi != null) {
       jObj.put(COL_INDEXES, multi.getColumnIndexes());
@@ -176,9 +176,9 @@ public class SourcedCellParser implements ContextedParser<SourcedCell> {
       jObj.put(COL_INDEXES, sum.getColumnIndexes());
       var colsFunc = sum.getColumnsFunc();
       if (colsFunc != null)
-        jObj.put(COL_FUNC, NumFuncParser.INSTANCE.toJsonObject(colsFunc));
+        jObj.put(COL_FUNC, BaseNumFuncParser.INSTANCE.toJsonObject(colsFunc));
       if (sum.func() != null)
-        jObj.put(FUNC, NumFuncParser.INSTANCE.toJsonObject(sum.func()));
+        jObj.put(FUNC, BaseNumFuncParser.INSTANCE.toJsonObject(sum.func()));
     } else {
       throw new RuntimeException("Unaccounted cell type '" + cell.getClass() + "': " + cell);
     }
