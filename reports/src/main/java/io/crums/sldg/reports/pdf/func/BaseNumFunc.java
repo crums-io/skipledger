@@ -10,12 +10,19 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import io.crums.sldg.reports.pdf.input.NumberArg;
-
 
 /**
  * A numeric function "specification" using a composition of a tree of {@linkplain NumNode}s.
- * At least one the nodes in the tree must be an {@linkplain NumNode.ArgNode ArgNode} instance.
+ * At least one the nodes in the tree must be an {@linkplain NumNode.ArgNode ArgNode}
+ * instance.
+ * 
+ * <h3>Quirk</h3>
+ * <p>
+ * This class does not recognize {@code NumberArg} instances as a special {@code Number}
+ * type, so its {@linkplain NumFunc#collectNumberArgs(Collection)} does nothing. This was (not)
+ * done to reduce cognitive load (on the author) while refactoing stuff. So this'll likely
+ * change. (TODO)
+ * </p>
  * 
  * <h3>Argument Order and Evaluation</h3>
  * <p>
@@ -26,7 +33,7 @@ import io.crums.sldg.reports.pdf.input.NumberArg;
  * <em>Not thread safe!</em>
  * </p>
  */
-public class BaseNumFunc implements NumFunc  {
+public class BaseNumFunc implements NumFunc {
   
   
   public static BaseNumFunc divideBy(Number number) {
@@ -46,6 +53,12 @@ public class BaseNumFunc implements NumFunc  {
                 List.of(NumNode.newArgLeaf(), NumNode.newArgLeaf())));
         
   }
+  
+  
+  
+  
+  
+  
   
   
   private final NumNode root;
@@ -82,14 +95,6 @@ public class BaseNumFunc implements NumFunc  {
     return arguments.size();
   }
   
-  
-//  public void collectNumberArgs(Collection<NumberArg> collector) {
-//    root.getArguments()
-//      .stream()
-//      .filter(leaf -> leaf.isArgument() && leaf.supplier() != null)
-//      .map(leaf -> (NumberArg) leaf.supplier())
-//      .forEach(collector::add);;
-//  }
   
   
   /**

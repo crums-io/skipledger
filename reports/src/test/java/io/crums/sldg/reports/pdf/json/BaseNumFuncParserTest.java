@@ -18,7 +18,7 @@ import io.crums.util.json.simple.JSONObject;
 /**
  * 
  */
-public class NumFuncParserTest implements ParserRoundtripTest<BaseNumFunc> {
+public class BaseNumFuncParserTest implements ParserRoundtripTest<BaseNumFunc> {
 
   
   @Test

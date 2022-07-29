@@ -28,7 +28,7 @@ public class NumFuncClosure implements NumFunc {
     /** Ordered by index. */
     @Override
     public int compareTo(Value other) {
-      return Integer.compare(index, other.index);
+      return index - other.index;
     }
     
     public boolean hasNumberArg() {
@@ -121,6 +121,21 @@ public class NumFuncClosure implements NumFunc {
   
   private boolean isSuppliedIndex(int index, int vIndex) {
     return vIndex < values.size() && values.get(vIndex).index() == index;
+  }
+  
+  
+  
+  private final static int CH = NumFuncClosure.class.hashCode();
+  
+  public final int hashCode() {
+    return (values.hashCode() * 31 + baseFunc.getArgCount()) ^ CH;
+  }
+  
+  public final boolean equals(Object o) {
+    return
+        o instanceof NumFuncClosure clsr &&
+        clsr.values.equals(values) &&
+        clsr.baseFunc.equals(baseFunc);
   }
 
 }
