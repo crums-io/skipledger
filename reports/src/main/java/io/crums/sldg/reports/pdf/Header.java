@@ -26,5 +26,9 @@ public record Header(TableTemplate headerTable, Optional<BorderContent> headCont
   public Header(TableTemplate headerTable) {
     this(headerTable, Optional.empty());
   }
+  
+  public Header(TableTemplate headerTable, BorderContent headContent) {
+    this(headerTable, Optional.ofNullable(headContent));
+  }
 
 }

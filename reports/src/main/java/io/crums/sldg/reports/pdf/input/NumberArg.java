@@ -8,8 +8,6 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-import io.crums.util.PrimitiveComparator;
-
 /**
  * A <em>primitive</em> type number, annotated with a name.
  * 
@@ -18,7 +16,6 @@ import io.crums.util.PrimitiveComparator;
 @SuppressWarnings("serial")
 public class NumberArg extends Number implements Supplier<Number> {
   
-  private final static int CH = NumberArg.class.hashCode();
   
   /**
    * A {@code NumberArg} collector. {@linkplain NumberArg}s are designed to be
@@ -56,7 +53,8 @@ public class NumberArg extends Number implements Supplier<Number> {
    */
   public NumberArg(Param<Number> param) {
     this.param = Objects.requireNonNull(param, "null param");
-    set(param.getDefaultValue().isEmpty() ? 0 : null);
+    if (param.getDefaultValue().isEmpty())
+      this.value = 0;
   }
   
   
@@ -124,6 +122,7 @@ public class NumberArg extends Number implements Supplier<Number> {
    * Returns the parameter (contains name and such).
    * 
    * @return not null
+   * @see Param
    */
   public Param<Number> param() {
     return param;
@@ -134,7 +133,7 @@ public class NumberArg extends Number implements Supplier<Number> {
    * Returns the wrapped primitive, or defaulted value. Note a
    * defaulted value comes from {@code param().}{@linkplain Param#defaultValue() defaultValue()}.
    * 
-   * @return not null
+   * @return not null, boxed primitive
    * @see #isDefaulted()
    */
   @Override
@@ -142,9 +141,16 @@ public class NumberArg extends Number implements Supplier<Number> {
     return value == null ? param.defaultValue() : value;
   }
   
+  /**
+   * Sets the instance's value.
+   * 
+   * @param value   boxed primitive, may only be {@code null} if {@linkplain #param() param} provides default
+   * @throws IllegalArgumentException if {@code value} violates above constraints
+   */
   public void set(Number value) {
     if (value == null && !param.hasDefault())
-      throw new IllegalArgumentException("attempt to set non defaulted to null");
+      throw new IllegalArgumentException(
+          "attempt to set not-defaulted number (named '" + param.name() + "') to null");
     boolean ok =
         value == null ||            // (we checked *param* has default value)
         value instanceof Integer ||
@@ -153,6 +159,8 @@ public class NumberArg extends Number implements Supplier<Number> {
         value instanceof Float;
     if (!ok)
       throw new IllegalArgumentException("unsupported Number type: " + value.getClass());
+    
+    this.value = value;
   }
   
   
@@ -178,14 +186,16 @@ public class NumberArg extends Number implements Supplier<Number> {
     return o == this ||
         o instanceof NumberArg arg &&
         arg.param().name().equals(param.name());
-//        PrimitiveComparator.equal(value, arg.value);
   }
   
+
+  
+  private final static int CH = NumberArg.class.hashCode();
 
   /** Consistent with {@linkplain #equals(Object)}. */
   @Override
   public final int hashCode() {
-    return PrimitiveComparator.hashCode(value);
+    return CH ^ param.name().hashCode();
   }
   
   
@@ -197,7 +207,7 @@ public class NumberArg extends Number implements Supplier<Number> {
    */
   @Override
   public final String toString() {
-    return get().toString();
+    return get().toString() + " (param=" + param.name() + ")";
   }
 
 }

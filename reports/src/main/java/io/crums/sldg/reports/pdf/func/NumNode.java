@@ -87,6 +87,23 @@ public abstract class NumNode {
     return new Branch(op, children);
   }
   
+  public static NumNode binaryBranch(NumOp op) {
+    return newBranch(op, List.of(newArgLeaf(), newArgLeaf()));
+  }
+  
+  
+  public static NumNode binaryBranch(Number lhs, NumOp op) {
+    return newBranch(op, List.of(newLeaf(lhs), newArgLeaf()));
+  }
+  
+  
+  public static NumNode binaryBranch(NumOp op, Number rhs) {
+    return newBranch(op, List.of(newArgLeaf(), newLeaf(rhs)));
+  }
+  
+  
+  
+  
   /**
    * Returns the value. Often, this is calculated on demand. If it's a branch node,
    * then the values of the child nodes are calculated from left to right (first to last).

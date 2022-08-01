@@ -123,5 +123,37 @@ public class SourceRowPredicate implements Predicate<SourceRow>, NumberArg.Colle
   public Optional<Supplied> rightFunc() {
     return right.getFunc();
   }
+  
+  
+  
+  @Override
+  public final int hashCode() {
+    return (left.hashCode() * 31 + op.hashCode()) * 31 + right.hashCode();
+  }
+  
+  public final boolean equals(Object o) {
+    return
+        o instanceof SourceRowPredicate s &&
+        s.op == op &&
+        s.left.equals(left) &&
+        s.right.equals(right);
+  }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

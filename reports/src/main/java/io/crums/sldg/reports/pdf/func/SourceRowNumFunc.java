@@ -13,7 +13,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
-import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.Lists;
 
@@ -29,16 +28,18 @@ public class SourceRowNumFunc implements Function<SourceRow, NumFunc>, Predicate
 
   /**
    * Encodes {@linkplain SourceRow} to {@linkplain NumFunc} argument mappings.
-   * 
-   * @param funcIndex the {@linkplain NumFunc#eval(List) NumFunc}'s argument index
-   * @param srcIndex  the source row's column index from which the number value comes from; if
-   *                  equal to {@linkplain #RN_INDEX}, then the row number
    *                  
    * @see #isRowNumber()
    */
   public record Column(int funcIndex, int srcIndex) implements Comparable<Column> {
     
     public final static int RN_INDEX = -1;
+    
+    /**
+     * @param funcIndex the {@linkplain NumFunc#eval(List) NumFunc}'s argument index
+     * @param srcIndex  the source row's column index from which the number value comes from; if
+     *                  equal to {@linkplain #RN_INDEX}, then the row number
+     */
     public Column {
       if (funcIndex < 0)
         throw new IllegalArgumentException("negative funcIndex: " + funcIndex);
@@ -46,8 +47,14 @@ public class SourceRowNumFunc implements Function<SourceRow, NumFunc>, Predicate
         throw new IllegalArgumentException("negative srcIndex: " + srcIndex);
     }
     
-    public Column(int funcIndex) {
-      this(funcIndex, RN_INDEX);
+    /**
+     * For when there's no function. {@code funcIndex} set to abitrarily to 0 (never read).
+     * 
+     * @param srcIndex  the source row's column index from which the number value comes from; if
+     *                  equal to {@linkplain #RN_INDEX}, then the row number
+     */
+    public Column(int srcIndex) {
+      this(0, srcIndex);
     }
 
     /** Ordered by {@linkplain #funcIndex()}. */
@@ -200,11 +207,33 @@ public class SourceRowNumFunc implements Function<SourceRow, NumFunc>, Predicate
     return Optional.ofNullable(func);
   }
   
+  
+  private final static int CH = SourceRowNumFunc.class.hashCode();
+  
+  @Override
+  public final int hashCode() {
+    int hash = columns.hashCode();
+    if (func != null) {
+      hash *= 31;
+      hash += func.hashCode();
+    }
+    return CH ^ hash;
+  }
+  
+  
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o instanceof SourceRowNumFunc f &&
+        f.columns.equals(columns) &&
+        Objects.equals(f.func, func);
+  }
+  
  
   
   public static class Supplied extends SourceRowNumFunc {
     
-    public Supplied(List<Column> columns, NumFunc func, List<Param<Number>> params) {
+    public Supplied(List<Column> columns, NumFunc func) {
       super(columns, func);
       if (!isSupplied())
         throw new IllegalArgumentException(

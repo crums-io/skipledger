@@ -19,9 +19,9 @@ import java.util.function.Function;
  * <h3>Quirk</h3>
  * <p>
  * This class does not recognize {@code NumberArg} instances as a special {@code Number}
- * type, so its {@linkplain NumFunc#collectNumberArgs(Collection)} does nothing. This was (not)
- * done to reduce cognitive load (on the author) while refactoing stuff. So this'll likely
- * change. (TODO)
+ * type, so its {@linkplain NumFunc#collectNumberArgs(Collection)} does nothing. The reason
+ * why is that it becomes difficult to model both "wired in" numbers (eg supplied from
+ * a source row) and those to be supplied by user input.
  * </p>
  * 
  * <h3>Argument Order and Evaluation</h3>

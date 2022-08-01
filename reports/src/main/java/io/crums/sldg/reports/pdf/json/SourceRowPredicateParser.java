@@ -62,6 +62,7 @@ public class SourceRowPredicateParser implements ContextedParser<SourceRowPredic
             new SourceRowPredicate(leftSp, op, rightNum) :
               new SourceRowPredicate(leftSp, op, toSupplied(rightFunc, RIGHT_FUNC));
       }
+      
     } catch (IllegalArgumentException | NullPointerException e) {
       
       throw new JsonParsingException(
@@ -72,18 +73,16 @@ public class SourceRowPredicateParser implements ContextedParser<SourceRowPredic
   
   private SourceRowNumFunc.Supplied toSupplied(SourceRowNumFunc func, String name) {
     Objects.requireNonNull(func, "missing " + name);
-    return func instanceof SourceRowNumFunc.Supplied sup ?
-        sup :
-          new SourceRowNumFunc.Supplied(func);
+    return new SourceRowNumFunc.Supplied(func);
   }
 
   
   
   @Override
   public JSONObject injectEntity(SourceRowPredicate rowPredicate, JSONObject jObj, RefContext context) {
-    injectSide(rowPredicate.leftNum(), rowPredicate.leftFunc(), LEFT_NUM, LEFT_FUNC, jObj);
+    injectSide(rowPredicate.leftNum(), rowPredicate.leftFunc(), LEFT_NUM, LEFT_FUNC, jObj, context);
     jObj.put(OP, rowPredicate.op().symbol());
-    injectSide(rowPredicate.rightNum(), rowPredicate.rightFunc(), RIGHT_NUM, RIGHT_FUNC, jObj);
+    injectSide(rowPredicate.rightNum(), rowPredicate.rightFunc(), RIGHT_NUM, RIGHT_FUNC, jObj, context);
     return jObj;
   }
   
@@ -91,11 +90,11 @@ public class SourceRowPredicateParser implements ContextedParser<SourceRowPredic
   private void injectSide(
       Optional<Number> num, Optional<Supplied> func,
       String numTag, String funcTag,
-      JSONObject jObj) {
+      JSONObject jObj, RefContext context) {
     if (num.isPresent()) {
       ArgParsers.putNumber(numTag, num.get(), jObj);
     } else {
-      var jFunc = SourceRowNumFuncParser.INSTANCE.toJsonObject(func.get());
+      var jFunc = SourceRowNumFuncParser.INSTANCE.toJsonObject(func.get(), context);
       jObj.put(funcTag, jFunc);
     }
   }

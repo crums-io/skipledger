@@ -15,6 +15,7 @@ import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
 import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
 
 /**
  * The typed maps returned by this implementation are editable and sorted.
@@ -67,6 +68,26 @@ public class EditableRefContext implements RefContext {
   @Override
   public SortedMap<String, NumberArg> numberArgs() {
     return numberArgs;
+  }
+  
+  
+  
+  
+  /**
+   * Maps the number arg's paramater name to the given number arg and
+   * returns whether the invocation had any result. (Recall a number
+   * arg's equality semantics is solely based on it's parameter name.)
+   * 
+   * @return {@code true} if there wasn't a previous mapping.
+   */
+  public boolean putNumberArg(NumberArg arg) {
+    return numberArgs.put(arg.param().name(), arg) == null;
+  }
+  
+  
+  /** @return {@code putNumberArg(new NumberArg(param))} */
+  public boolean putNumberArg(Param<Number> param) {
+    return putNumberArg(new NumberArg(param));
   }
 
 }

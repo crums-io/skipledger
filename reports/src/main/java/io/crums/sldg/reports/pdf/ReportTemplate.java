@@ -17,6 +17,7 @@ import com.lowagie.text.PageSize;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
+import io.crums.sldg.reports.pdf.input.Query;
 import io.crums.sldg.src.SourceRow;
 
 /**
@@ -65,6 +66,7 @@ public class ReportTemplate {
   
   
   private final Components components;
+  private final Query query;
   
 
   private Rectangle pageSize = PageSize.A4;
@@ -77,9 +79,13 @@ public class ReportTemplate {
   
   private float marginBottom = DEFAULT_MARGIN;
   
-  
   public ReportTemplate(Components components) {
+    this(components, null);
+  }
+  
+  public ReportTemplate(Components components, Query query) {
     this.components = Objects.requireNonNull(components, "null components");
+    this.query = query;
   }
   
   

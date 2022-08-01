@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-import io.crums.sldg.reports.pdf.input.NumberArg;
+//import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
@@ -31,7 +31,25 @@ import io.crums.util.json.simple.JSONObject;
  * <li>Cell Formats</li>
  * <li>Cell Data (which may also reference images)</li>
  * </ol>
- * Image bytes are stored externally and are not represented as JSON.
+ * Image bytes are stored externally and are not represented as JSON. They are designed
+ * to be provided programmatically (or via configuration).
+ * </p>
+ * <h3>User Input</h3>
+ * <p>
+ * {@linkplain NumberArg}s represent user provided input. (There will be a {@code StringArg}
+ * type in a later release.) {@code NumberArg}s are only ever defined in the JSON for a
+ * {@linkplain RefContext} and are only <em>referenced</em> (never defined) in other JSON
+ * objects.
+ * </p><p>
+ * The parser does not provide a direct way to build the context object pre-injected
+ * with user input. (A development version did.) 2 reasons it doesn't:
+ * <ol>
+ * <li>It's the final (built) object's responsibility to interrogate the user for input.</li>
+ * <li>It would force a 2-pass JSON build process: one to discover the necessary user input,
+ * a second to provide it.</li>
+ * </ol>
+ * For these reasons, {@code NumberArgs} are constructed without input (they're intialized to
+ * {@code 0} when their param does not provide a default).
  * </p>
  * 
  */
@@ -163,21 +181,8 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
    * (loaded somehow externally). The returned instance has no inputs.
    */
   public RefContext toRefContext(JSONObject jObj, Map<String, ByteBuffer> imageRefs) {
-    return toRefContext(jObj, imageRefs, Map.of());
-  }
-  
-  
-  /**
-   * Parses and returns a {@linkplain RefContext} instance using the given image references,
-   * and input numbers (loaded somehow externally).
-   * 
-   * @param jObj
-   * @param imageRefs
-   * @return
-   */
-  public RefContext toRefContext(JSONObject jObj, Map<String, ByteBuffer> imageRefs, Map<String, Number> inputs) {
     var context = new EditableRefContext(imageRefs);
-    buildParams(context, inputs, jObj);
+    buildParams(context, jObj);
     // order matters: successive layers can build on previous ones
     buildColors(context, jObj);
     buildFonts(context, jObj);
@@ -187,9 +192,9 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
   }
 
 
-  
-  private void buildParams(RefContext context, Map<String, Number> inputs, JSONObject jObj) {
-    var numberArgs = context.numberArgs();
+
+//  private void buildParams(EditableRefContext context, Map<String, Number> inputs, JSONObject jObj) {
+  private void buildParams(EditableRefContext context, JSONObject jObj) {
     var jParams = JsonUtils.getJsonObject(jObj, INPUTS, false);
     if (jParams == null) {
       return;
@@ -204,12 +209,13 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
       }
       var desc = JsonUtils.getString(jParam, INPUT_DESC, false);
       Number defaultValue = JsonUtils.getNumber(jParam, INPUT_DEFAULT, false);
-      Number inputValue = inputs.get(name);
-      if (inputValue == null && defaultValue == null)
-        throw new UnmatchedInputException("missing required input '" + name + "'");
+//      Number inputValue = inputs.get(name);
+//      if (inputValue == null && defaultValue == null)
+//        throw new UnmatchedInputException("missing required input '" + name + "'");
       
       var param = new Param<Number>(name, desc, defaultValue);
-      numberArgs.put(name, new NumberArg(param, inputValue));
+      if (!context.putNumberArg(param))
+        throw new JsonParsingException("duplicate definitions for param '" + param.name() + "'");
     }
   }
 

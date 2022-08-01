@@ -4,7 +4,8 @@
 package io.crums.sldg.reports.pdf.input;
 
 
-import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,7 +22,9 @@ public class Query {
   
   
   
-  private final PNode<SourceRow, SourceRowPredicate> tree;
+  private final PNode<SourceRow, SourceRowPredicate> pTree;
+  
+  private final List<NumberArg> numberArgs;
   
   
   public Query(SourceRowPredicate predicate) {
@@ -29,20 +32,39 @@ public class Query {
   }
   
   public Query(PNode<SourceRow, SourceRowPredicate> tree) {
-    this.tree = Objects.requireNonNull(tree, "null predicate tree");
+    this.pTree = Objects.requireNonNull(tree, "null predicate tree");
+    this.numberArgs = numArgs();
+  }
+  
+  @SuppressWarnings("serial")
+  private List<NumberArg> numArgs() {
+    List<NumberArg> out;
+    {
+      var argset = new HashMap<String, NumberArg>();
+      out = new ArrayList<NumberArg>() {
+        @Override public boolean add(NumberArg arg) {
+          var prev = argset.putIfAbsent(arg.param().name(), arg);
+          if (prev == null) 
+            return super.add(arg);
+          if (prev == arg)
+            return false;
+          throw new IllegalArgumentException("duplicate number arg instances: " + arg);
+        }
+      };
+    }
+    
+    pTree.leaves().forEach(leaf -> leaf.getPredicate().collectNumberArgs(out));
+    return Lists.readOnlyCopy(out);
   }
   
   
   public List<NumberArg> getNumberArgs() {
-    var out = new LinkedHashSet<NumberArg>();
-    tree.leaves().forEach(leaf -> leaf.getPredicate().collectNumberArgs(out));
-    var array = out.toArray(new NumberArg[out.size()]);
-    return Lists.asReadOnlyList(array);
+    return numberArgs;
   }
   
   
-  public PNode<SourceRow, SourceRowPredicate> tree() {
-    return tree;
+  public PNode<SourceRow, SourceRowPredicate> predicateTree() {
+    return pTree;
   }
   
 }

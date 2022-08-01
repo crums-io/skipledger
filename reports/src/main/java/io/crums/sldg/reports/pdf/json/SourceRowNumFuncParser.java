@@ -36,14 +36,24 @@ public class SourceRowNumFuncParser implements ContextedParser<SourceRowNumFunc>
   public SourceRowNumFunc toEntity(JSONObject jObj, RefContext context)
       throws JsonParsingException {
     
-    return null;
+    var cols = columnParser.toEntityList(JsonUtils.getJsonArray(jObj, FUNC_COLS, true));
+    var func = NumFuncParser.INSTANCE.parseIfPresent(jObj, FUNC, context);
+    try {
+      return new SourceRowNumFunc(cols, func);
+      
+    } catch (IllegalArgumentException | NullPointerException x) {
+      throw new JsonParsingException("on creating source row number function: " + x.getMessage());
+    }
   }
 
+  
   @Override
   public JSONObject injectEntity(
-      SourceRowNumFunc func, JSONObject jObj, RefContext context) {
-    jObj.put(FUNC_COLS, columnParser.toJsonArray(func.getColumns()));
+      SourceRowNumFunc rowFunc, JSONObject jObj, RefContext context) {
     
+    jObj.put(FUNC_COLS, columnParser.toJsonArray(rowFunc.getColumns()));
+    rowFunc.getFunc().ifPresent(
+        func -> jObj.put(FUNC, NumFuncParser.INSTANCE.toJsonObject(func, context)));
     return jObj;
   }
   
@@ -56,24 +66,25 @@ public class SourceRowNumFuncParser implements ContextedParser<SourceRowNumFunc>
     
     public final static ColumnParser INSTANCE = new ColumnParser();
     
-    public final static String FN_IDX = "fnIdx";
-    public final static String ROW_CN = "rowCn";
+    public final static String IDX = "idx";
+    /** 1-based column number. Zero denotes row-number. */
+    public final static String RCN = "rcn";
 
     @Override
     public JSONObject injectEntity(Column column, JSONObject jObj) {
-      jObj.put(FN_IDX, column.funcIndex());
-      jObj.put(ROW_CN, column.srcIndex() + 1);
+      jObj.put(IDX, column.funcIndex());
+      jObj.put(RCN, column.srcIndex() + 1);
       return jObj;
     }
 
     @Override
     public Column toEntity(JSONObject jObj) throws JsonParsingException {
-      int funcIndex = JsonUtils.getInt(jObj, FN_IDX);
+      int funcIndex = JsonUtils.getInt(jObj, IDX);
       if (funcIndex < 0)
-        throw new JsonParsingException("negative function index '" + FN_IDX + "': " + funcIndex);
-      int cn = JsonUtils.getInt(jObj, ROW_CN);
+        throw new JsonParsingException("negative function index '" + IDX + "': " + funcIndex);
+      int cn = JsonUtils.getInt(jObj, RCN);
       if (cn < 0)
-        throw new JsonParsingException("negative row column number '" + ROW_CN + "': " + cn);
+        throw new JsonParsingException("negative row column number '" + RCN + "': " + cn);
       
       return new Column(funcIndex, cn - 1);
     }

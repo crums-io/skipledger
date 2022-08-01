@@ -48,7 +48,7 @@ public class NumFuncClosureParser implements ContextedParser<NumFuncClosure> {
   @Override
   public JSONObject injectEntity(NumFuncClosure func, JSONObject jObj, RefContext context) {
     jObj.put(ARGS, valueParser.toJsonArray(func.getBoundValues(), context));
-    jObj.put(FUNC, NumFuncParser.INSTANCE.toJsonObject(func, context));
+    jObj.put(FUNC, NumFuncParser.INSTANCE.toJsonObject(func.getBaseFunc(), context));
     return jObj;
   }
   

@@ -8,16 +8,17 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * A named parameter with optional description, and optional default value
- * 
- * @param name          is trimmed; should be neither null, nor blank
- * @param description   optional (may be null)
- * @param defaultValue  optional (may be null)
+ * A named parameter with optional description, and optional default value.
  * 
  * @param <T> default value type (only numbers and strings anticipated)
  */
 public record Param<T>(String name, String description, T defaultValue) {
   
+  /**
+   * @param name          is trimmed; should be neither null, nor blank
+   * @param description   optional (may be null)
+   * @param defaultValue  optional (may be null)
+   */
   public Param {
     name = Objects.requireNonNull(name, "null name").trim();
     if (name.isEmpty())
@@ -30,6 +31,11 @@ public record Param<T>(String name, String description, T defaultValue) {
   
   public Param(String name, String description) {
     this(name, description, null);
+  }
+  
+  
+  public Param(String name) {
+    this(name, null, null);
   }
 
   

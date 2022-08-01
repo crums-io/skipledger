@@ -39,6 +39,8 @@ import io.crums.util.Lists;
  */
 public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
   
+  private final static int CH = PNode.class.hashCode();
+  
   // Base instance methods are at the bottom of file
   
   /** Creates and return a leaf node using the given predicate. */
@@ -137,18 +139,18 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
   /** Branch instances have at least 2 children. */
   public static class Branch<T, P extends Predicate<T>> extends PNode<T, P> {
     
-    private final List<PNode<T, P>> branches;
+    private final List<PNode<T, P>> children;
     private final Op op;
     
     /**
-     * @param branches   of size &ge; 2
+     * @param children   of size &ge; 2
      * @param op         not null
      */
-    public Branch(List<PNode<T, P>> branches, Op op) {
-      this.branches = Objects.requireNonNull(branches, "null branches");
+    public Branch(List<PNode<T, P>> children, Op op) {
+      this.children = Objects.requireNonNull(children, "null children");
       this.op = Objects.requireNonNull(op, "null op");
-      if (branches.size() < 2)
-        throw new IllegalArgumentException("too few branches: " + branches);
+      if (children.size() < 2)
+        throw new IllegalArgumentException("too few children: " + children);
     }
 
     /**
@@ -157,7 +159,7 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
      */
     @Override
     public boolean test(T t) {
-      return test(Lists.downcast(branches), op, t);
+      return test(Lists.downcast(children), op, t);
     }
 
     /** @return {@code false} */
@@ -174,12 +176,27 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
     
     /** Returns the child predicate nodes. */
     public List<PNode<T, P>> getChildren() {
-      return Collections.unmodifiableList(branches);
+      return Collections.unmodifiableList(children);
     }
     
     /** Returns the operation performed on the child nodes. */
     public final Op op() {
       return op;
+    }
+    
+    
+    @Override
+    public final int hashCode() {
+      return children.hashCode() * 31 + op.hashCode();
+    }
+    
+
+    @Override
+    public final boolean equals(Object o) {
+      return
+          o instanceof Branch<?,?> b &&
+          b.op == op &&
+          b.children.equals(children);
     }
     
   }
@@ -211,8 +228,20 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
     }
     
     /** Returns the leaf predicate. */
-    public P getPredicate() {
+    public final P getPredicate() {
       return predicate;
+    }
+    
+    
+    public final int hashCode() {
+      return predicate.hashCode() ^ CH;
+    }
+    
+    
+    public final boolean equals(Object o) {
+      return
+          o instanceof Leaf<?,?> leaf &&
+          leaf.predicate.equals(predicate);
     }
     
   }

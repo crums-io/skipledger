@@ -36,21 +36,26 @@ import io.crums.util.json.simple.JSONObject;
  */
 public interface ContextedParser<T> extends JsonEntityParser<T> {
   
+  /** @return {@code toEntity(jObj, defaultContext())} */
   @Override
   default T toEntity(JSONObject jObj) throws JsonParsingException {
     return toEntity(jObj, defaultContext());
   }
   
-  
+  /** Returns an entity. May use referenced objects in the given {@code context}. */
   T toEntity(JSONObject jObj, RefContext context) throws JsonParsingException;
   
 
+  /**
+   * @return {@code toEntityList(jArray, defaultContext())}
+   * @see #toEntityList(JSONArray, RefContext)
+   */
   @Override
   default List<T> toEntityList(JSONArray jArray) throws JsonParsingException {
     return toEntityList(jArray, defaultContext());
   }
   
-  
+  /** Returns the given JSON array as a typed list, using the given {@code context}. */
   default List<T> toEntityList(JSONArray jArray, RefContext context) throws JsonParsingException {
     var list = new ArrayList<T>(jArray.size());
     try {
@@ -63,20 +68,32 @@ public interface ContextedParser<T> extends JsonEntityParser<T> {
   
   
   
+  /** @return {@code injectEntity(entity, new JSONObject(), context)} */
   default JSONObject toJsonObject(T entity, RefContext context) {
     return injectEntity(entity, new JSONObject(), context);
   }
   
 
-  
+  /**
+   * @return {@code injectEntity(entity, jObj, defaultContext())}
+   * @see #injectEntity(Object, JSONObject, RefContext)
+   */
   @Override
   default JSONObject injectEntity(T entity, JSONObject jObj) {
     return injectEntity(entity, jObj, defaultContext());
   }
   
+  
+  /**
+   * Injects the given entity, optionally minding whether it's referenced.
+   * The pattern is <em>not for populating</em> the given {@code context}.
+   * 
+   * @return {@code jObj}
+   */
   JSONObject injectEntity(T entity, JSONObject jObj, RefContext context);
   
   
+  /** Returns a JSON array using {@linkplain #toJsonObject(Object, RefContext)}. */
   default JSONArray toJsonArray(List<T> entities, RefContext context) {
     var jArray = new JSONArray(entities.size());
     entities.forEach(e -> jArray.add(toJsonObject(e, context)));

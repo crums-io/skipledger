@@ -3,19 +3,15 @@
  */
 package io.crums.sldg.reports.pdf.json;
 
-import java.util.List;
+
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Predicate;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.reports.pdf.pred.PNode.Op;
-import io.crums.sldg.reports.pdf.pred.dep.ColumnPredicateParser;
-import io.crums.sldg.reports.pdf.pred.dep.ColumnValuePredicateParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
-import io.crums.util.json.simple.JSONArray;
 import io.crums.util.json.simple.JSONObject;
 
 /**
@@ -84,57 +80,17 @@ public abstract class PNodeParser<T, U extends Predicate<T>>
     return defaultContext;
   }
   
-  /** Returns the default ref context, if it's editable. */
-  public Optional<EditableRefContext> getEditableContext() {
-    return defaultContext instanceof EditableRefContext e ?
-        Optional.of(e) : Optional.empty();
-  }
-  
 
 
-  /**
-   * Uses an editable ref context. <em>Not an interface method.</em>
-   */
-  public JSONObject toJsonObject(
-      PNode<T, U> pNode, EditableRefContext context) {
-    return injectEntity(pNode, new JSONObject(), context);
-  }
   
 
   
-  @Override
-  public final JSONArray toJsonArray(List<PNode<T, U>> pNodes, RefContext context) {
-    return toJsonArray(pNodes, toEditableContext(context));
-  }
   
-  
-  public final JSONArray toJsonArray(List<PNode<T, U>> pNodes, EditableRefContext context) {
-    var jArray = new JSONArray(pNodes.size());
-    pNodes.forEach(e -> jArray.add(toJsonObject(e, context)));
-    return jArray;
-  }
   
 
   @Override
   public final JSONObject injectEntity(
       PNode<T, U> pNode, JSONObject jObj, RefContext context) {
-    return injectEntity(pNode, jObj, toEditableContext(context));
-  }
-
-  
-  private EditableRefContext toEditableContext(RefContext context)
-      throws IllegalArgumentException {
-    
-    if (context instanceof EditableRefContext e)
-      return e;
-    throw new IllegalArgumentException(
-        (context == defaultContext ? "default " : "") +
-        "ref context not editable: " + context);
-  }
-  
-  
-  public final JSONObject injectEntity(
-      PNode<T, U> pNode, JSONObject jObj, EditableRefContext context) {
     
     if (pNode.isLeaf())
       injectLeaf((PNode.Leaf<T, U>) pNode, jObj, context);
@@ -147,12 +103,12 @@ public abstract class PNodeParser<T, U extends Predicate<T>>
   
   
   protected abstract void injectLeaf(
-      PNode.Leaf<T, U> pNode, JSONObject jObj, EditableRefContext context);
+      PNode.Leaf<T, U> pNode, JSONObject jObj, RefContext context);
   
   
   /** No reason to override. */
   private void injectBranch(
-      PNode<T, U> pNode, JSONObject jObj, EditableRefContext context) {
+      PNode<T, U> pNode, JSONObject jObj, RefContext context) {
     var branch = (PNode.Branch<T, U>) pNode;
     jObj.put(OP, branch.op().name());
     jObj.put(SUB, toJsonArray(branch.getChildren(), context));
