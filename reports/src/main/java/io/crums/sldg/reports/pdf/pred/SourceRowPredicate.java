@@ -57,6 +57,13 @@ public class SourceRowPredicate implements Predicate<SourceRow>, NumberArg.Colle
     Optional<Supplied> getFunc() {
       return Optional.ofNullable(func);
     }
+    
+
+    private final static String CN = Operand.class.getSimpleName();
+    @Override
+    public String toString() {
+      return CN + (num == null ? ("[func=" + func) : ("[num=" + num)) + "]";
+    }
   }
   
   
@@ -130,13 +137,22 @@ public class SourceRowPredicate implements Predicate<SourceRow>, NumberArg.Colle
   public final int hashCode() {
     return (left.hashCode() * 31 + op.hashCode()) * 31 + right.hashCode();
   }
-  
+
+  @Override
   public final boolean equals(Object o) {
     return
         o instanceof SourceRowPredicate s &&
         s.op == op &&
         s.left.equals(left) &&
         s.right.equals(right);
+  }
+  
+  
+  private final static String CN = SourceRowPredicate.class.getSimpleName();
+
+  @Override
+  public String toString() {
+    return CN + "[" + left + " " + op.symbol() + " " + right + "]";
   }
 
 }

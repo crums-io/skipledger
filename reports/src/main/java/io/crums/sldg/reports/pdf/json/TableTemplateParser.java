@@ -133,6 +133,15 @@ public class TableTemplateParser implements ContextedParser<TableTemplate> {
     } else {
       jObj.put(COLS, colParser.toJsonArray(columns, context));
     }
+    
+    table.getColumnWidths().ifPresent(
+        widths -> {
+          var jArray = new JSONArray(widths.length);
+          for (float w : widths) {
+            jArray.add(w);
+          }
+          jObj.put(COL_WIDTHS, jArray);
+        });
 
     // set grid lines
     if (table.sameGridLines()) {

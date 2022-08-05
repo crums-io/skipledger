@@ -110,7 +110,7 @@ public class AutoRefContext extends EditableRefContext {
       Optional<String> opt, Set<T> seen, Map<String, T> map, T item, String prefix) {
     if (opt.isEmpty() && !seen.add(item)) {
       var autoKey = autoKey(prefix, map);
-      map.put(prefix, item);
+      map.put(autoKey, item);
       opt = Optional.of(autoKey);
     }
     return opt;

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import io.crums.sldg.reports.pdf.pred.PNode;
 import io.crums.sldg.reports.pdf.pred.SourceRowPredicate;
@@ -17,7 +18,7 @@ import io.crums.util.Lists;
 /**
  * 
  */
-public class Query {
+public class Query implements Predicate<SourceRow> {
 
   
   
@@ -66,5 +67,57 @@ public class Query {
   public PNode<SourceRow, SourceRowPredicate> predicateTree() {
     return pTree;
   }
+
+  /** Tests the given {@code row} againt the {@linkplain #predicateTree() predicate tree}. */
+  @Override
+  public boolean test(SourceRow row) {
+    return pTree.test(row);
+  }
+  
+  
+  public List<SourceRow> selectFrom(List<SourceRow> candidates) {
+    return candidates.stream().filter(this).toList();
+  }
+  
+  
+  private final static int CH = Query.class.hashCode();
+  
+  @Override
+  public final int hashCode() {
+    return CH ^ pTree.hashCode();
+  }
+  
+
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o instanceof Query q &&
+        q.pTree.equals(pTree);
+  }
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

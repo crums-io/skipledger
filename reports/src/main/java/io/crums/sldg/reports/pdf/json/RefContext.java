@@ -220,7 +220,8 @@ public interface RefContext {
         cellFormatRefs().size() +
         cellDataRefs().size() +
         colorRefs().size() +
-        fontRefs().size();
+        fontRefs().size() +
+        numberArgs().size();
   }
   
   /**

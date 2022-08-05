@@ -11,6 +11,7 @@ import io.crums.sldg.reports.pdf.BorderContent;
 import io.crums.sldg.reports.pdf.Header;
 import io.crums.sldg.reports.pdf.ReportTemplate;
 import io.crums.sldg.reports.pdf.TableTemplate;
+import io.crums.sldg.reports.pdf.input.Query;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;
@@ -20,6 +21,8 @@ import io.crums.util.json.simple.JSONObject;
  * 
  */
 public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
+  
+  public final static String QUERY = "query";
   
   public final static String OBJ_REFS = "objRefs";
   
@@ -67,7 +70,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
    * parsers use this to decide whether to write out the object defintion
    * or instead write a reference.
    * <p>
-   * Previously this lived in the ReportTemplate object itself, but it properly
+   * In previous prototypes this lived in the ReportTemplate object itself, but it properly
    * belongs here.
    * </p>
    * @param references    null means empty
@@ -108,7 +111,10 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
 
   @Override
   public JSONObject injectEntity(ReportTemplate report, JSONObject jObj) {
-    injectReferences(jObj);
+    var jRefs = new JSONObject();
+    jObj.put(OBJ_REFS, jRefs);
+    
+    injectQuery(report, jObj);
     injectPageSpec(report, jObj);
     injectHeader(report, jObj);
     injectSubheader(report, jObj);;
@@ -121,6 +127,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
         footer -> jObj.put(
             FOOTER,
             BorderContentParser.INSTANCE.toJsonObject(footer, refs)) );
+    injectReferences(report, jObj, jRefs);
     return jObj;
   }
 
@@ -130,6 +137,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
       ReportTemplate report;
       {
         var context = toRefContext(jObj, refedImages);
+        var query = toQuery(jObj, context);
         var header = toHeader(jObj, context);
         var subheader = toSubheader(jObj, context);
         
@@ -144,7 +152,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
                   null : BorderContentParser.INSTANCE.toEntity(jFooter, context);
         }
         var components = new ReportTemplate.Components(header, subheader, mainTable, footer);
-        report = new ReportTemplate(components);
+        report = new ReportTemplate(components, query);
       }
       setPageSpec(report, jObj);
       
@@ -157,17 +165,53 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   
   
   
+  
+  
+  
+  
+  
 
-  private void injectReferences(JSONObject jObj) {
-    if (refs.isEmptyJson())
-      return;
-    jObj.put(
-        OBJ_REFS,
-        RefContextParser.INSTANCE.toJsonObject(refs));
+  private void injectReferences(ReportTemplate report, JSONObject jObj, JSONObject jRefs) {
+    RefContext context;
+    if (report.getQuery() != null &&
+        !report.getQuery().getNumberArgs().isEmpty()) {
+      
+      var editContext = new EditableRefContext(refs);
+      report.getQuery().getNumberArgs().forEach(editContext::putNumberArg);
+      context = editContext;
+    } else
+      context = refs;
+    
+    if (context.isEmptyJson())
+      jObj.remove(OBJ_REFS);
+    else
+      RefContextParser.INSTANCE.injectEntity(context, jRefs);
+      
   }
   
   
+  private RefContext toRefContext(JSONObject jObj, Map<String, ByteBuffer> refedImages) {
+    var jRefs = JsonUtils.getJsonObject(jObj, OBJ_REFS, false);
+    return
+        jRefs == null ?
+            RefContext.ofImageRefs(refedImages) :
+              RefContextParser.INSTANCE.toRefContext(jRefs, refedImages);
+  }
+
   
+  
+
+  private void injectQuery(ReportTemplate report, JSONObject jObj) {
+    var query = report.getQuery();
+    if (query != null)
+      jObj.put(QUERY, QueryParser.INSTANCE.toJsonObject(query));
+    
+  }
+  
+  
+  private Query toQuery(JSONObject jObj, RefContext context) {
+    return QueryParser.INSTANCE.parseIfPresent(jObj, QUERY, context);
+  }
   
   
   
@@ -202,15 +246,6 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
       jPageSpec.put(MARGIN_B, report.getMarginBottom());
     }
     jObj.put(PAGE_SPEC, jPageSpec);
-  }
-  
-  
-  private RefContext toRefContext(JSONObject jObj, Map<String, ByteBuffer> refedImages) {
-    var jRefs = JsonUtils.getJsonObject(jObj, OBJ_REFS, false);
-    return
-        jRefs == null ?
-            RefContext.ofImageRefs(refedImages) :
-              RefContextParser.INSTANCE.toRefContext(jRefs, refedImages);
   }
 
   

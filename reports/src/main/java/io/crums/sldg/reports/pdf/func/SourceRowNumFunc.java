@@ -35,6 +35,9 @@ public class SourceRowNumFunc implements Function<SourceRow, NumFunc>, Predicate
     
     public final static int RN_INDEX = -1;
     
+    /** Row number, no function instance. */
+    public final static Column ROW_NUM = new Column(RN_INDEX);
+    
     /**
      * @param funcIndex the {@linkplain NumFunc#eval(List) NumFunc}'s argument index
      * @param srcIndex  the source row's column index from which the number value comes from; if

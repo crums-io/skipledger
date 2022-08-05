@@ -17,6 +17,7 @@ import com.lowagie.text.PageSize;
 import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
+import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.input.Query;
 import io.crums.sldg.src.SourceRow;
 
@@ -69,7 +70,11 @@ public class ReportTemplate {
   private final Query query;
   
 
-  private Rectangle pageSize = PageSize.A4;
+//  private Rectangle pageSize = PageSize.A4;
+  
+  private float pageWidth = PageSize.A4.getWidth();
+  
+  private float pageHeight = PageSize.A4.getHeight();
   
   private float marginLeft = DEFAULT_MARGIN;
   
@@ -88,13 +93,20 @@ public class ReportTemplate {
     this.query = query;
   }
   
-  
-  
-  
-  
-  public void writePdf(File file, List<SourceRow> rowset) throws UncheckedIOException {
+  /**
+   * 
+   * @param file
+   * @param candidates  not-empty list of source rows. If there's a {@linkplain #getQuery() query}
+   *                    object, then these are <em>candidate</em> source rows and are filtered by
+   *                    the query object to create a final <em>rowset<em>
+   * @throws IllegalArgumentException if the final rowset is empty
+   */
+  public void writePdf(File file, List<SourceRow> candidates)
+      throws IllegalArgumentException, UncheckedIOException {
+    
     Objects.requireNonNull(file, "null file");
-    Objects.requireNonNull(rowset, "null rowset");
+    Objects.requireNonNull(candidates, "null candidate source rows");
+    var rowset = query == null ? candidates : query.selectFrom(candidates);
     if (rowset.isEmpty())
       throw new IllegalArgumentException("empty rowset");
     if (file.exists())
@@ -108,23 +120,21 @@ public class ReportTemplate {
   
   
   protected void writePdfFile(File file, List<SourceRow> rowset) throws IOException {
-    var document = new Document(pageSize, marginLeft, marginRight, marginTop, marginBottom);
-    
-    // Delay this step.. we're creating a file even if we encounter errors. Not good (!)
-//    PdfWriter.getInstance(
-//        document,
-//        new FileOutputStream(file));
-    
-    // what's this? Can I add meta this way? TODO
-//    document.addHeader("", "");
-    
     
     // create the PDF tables before writing anymore to the file
-    // (avoid more file I/O if an error is to occur)
+    // (avoid file I/O if an error is to occur)
     var headTable = components.header().headerTable().createTable(rowset);
     var subHeadTable = components.subHeader().map(subHeader -> subHeader.createTable(rowset));
     var mainTable = components.mainTable().createTable(rowset);
 
+    ;
+    var document = new Document(
+        new Rectangle(pageWidth, pageHeight),
+        marginLeft, marginRight, marginTop, marginBottom);
+    
+    // what's this? Can I add meta this way? TODO
+//  document.addHeader("", "");
+    
     PdfWriter.getInstance(
         document,
         new FileOutputStream(file));
@@ -154,20 +164,36 @@ public class ReportTemplate {
   }
   
   
+  /** @return may be {@code null} (!) */
+  public Query getQuery() {
+    return query;
+  }
+  
+  /**
+   * Returns the number args from the {@linkplain #getQuery() query}, if any.
+   * 
+   * @return not null, may be empty
+   */
+  public List<NumberArg> getNumberArgs() {
+    return query == null ? List.of() : query.getNumberArgs();
+  }
+  
+  
   public final float getPageWidth() {
-    return pageSize.getWidth();
+    return pageWidth;
   }
   
   
   public final float getPageHeight() {
-    return pageSize.getHeight();
+    return pageHeight;
   }
   
   
   public void setPageSize(float width, float height) {
     if (width <= marginLeft + marginRight || height <= marginTop + marginBottom)
       throw new IllegalArgumentException("illegal page size (" + width + ":" + height + ")");
-    this.pageSize = new Rectangle(width, height);
+    this.pageWidth = width;
+    this.pageHeight = height;
   }
 
 
@@ -234,6 +260,32 @@ public class ReportTemplate {
   private void checkMargin(float margin) {
     if (margin < 0)
       throw new IllegalArgumentException("margin: " + margin);
+  }
+  
+  
+  @Override
+  public final int hashCode() {
+    int hash = components.hashCode();
+    if (query != null)
+      hash = hash * 31 + query.hashCode();
+    int sizeHash = Float.hashCode(getPageWidth()) * 31 + Float.hashCode(getPageHeight());
+    int marginHash = Float.hashCode(getMarginTop()) * 31 + Float.hashCode(getMarginLeft());
+    return (hash * 7 + sizeHash) * 7 + marginHash;
+  }
+  
+
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o instanceof ReportTemplate r &&
+        r.components.equals(components) &&
+        Objects.equals(r.query,  query) &&
+        r.getPageWidth() == getPageWidth() &&
+        r.getPageHeight() == getPageHeight() &&
+        r.marginLeft == marginLeft &&
+        r.marginRight == marginRight &&
+        r.marginTop == marginTop &&
+        r.marginBottom == marginBottom;
   }
 
 }

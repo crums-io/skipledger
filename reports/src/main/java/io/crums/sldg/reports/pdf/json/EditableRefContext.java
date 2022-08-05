@@ -24,10 +24,10 @@ public class EditableRefContext implements RefContext {
   
   
   private final Map<String, ByteBuffer> imageRefs;
-  private final TreeMap<String, CellFormat> cellFormatRefs = new TreeMap<>();
-  private final TreeMap<String, CellData> cellDataRefs = new TreeMap<>();
   private final TreeMap<String, Color> colorRefs = new TreeMap<>();
   private final TreeMap<String, FontSpec> fontRefs = new TreeMap<>();
+  private final TreeMap<String, CellFormat> cellFormatRefs = new TreeMap<>();
+  private final TreeMap<String, CellData> cellDataRefs = new TreeMap<>();
   private final TreeMap<String, NumberArg> numberArgs = new TreeMap<>();
   
   
@@ -38,7 +38,20 @@ public class EditableRefContext implements RefContext {
   public EditableRefContext(Map<String, ByteBuffer> imageRefs) {
     this.imageRefs = Objects.requireNonNull(imageRefs, "null imageRefs");
   }
+  
+  public EditableRefContext(RefContext copy) {
+    this();
+    imageRefs.putAll(copy.imageRefs());
+    colorRefs.putAll(copy.colorRefs());
+    fontRefs.putAll(copy.fontRefs());
+    cellFormatRefs.putAll(copy.cellFormatRefs());
+    cellDataRefs.putAll(copy.cellDataRefs());
+    numberArgs.putAll(copy.numberArgs());
+  }
 
+  
+  
+  
   @Override
   public Map<String, ByteBuffer> imageRefs() {
     return imageRefs;

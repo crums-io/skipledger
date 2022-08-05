@@ -199,6 +199,12 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
           b.children.equals(children);
     }
     
+    private final static String BRANCH_CN = Branch.class.getSimpleName();
+    
+    public String toString() {
+      return BRANCH_CN + "[op=" + op.name() + ",sub=" + children + "]";
+    }
+    
   }
   
   /** A leaf node in the predicate tree. */
@@ -232,16 +238,26 @@ public abstract class PNode<T, P extends Predicate<T>> implements Predicate<T> {
       return predicate;
     }
     
-    
+
+    @Override
     public final int hashCode() {
       return predicate.hashCode() ^ CH;
     }
     
-    
+
+    @Override
     public final boolean equals(Object o) {
       return
           o instanceof Leaf<?,?> leaf &&
           leaf.predicate.equals(predicate);
+    }
+    
+    
+    private final static String LEAF_CN = Leaf.class.getSimpleName();
+    
+    @Override
+    public String toString() {
+      return LEAF_CN + "[pred=" + predicate + "]";
     }
     
   }

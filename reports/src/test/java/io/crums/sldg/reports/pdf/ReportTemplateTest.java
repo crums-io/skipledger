@@ -9,7 +9,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 
 import com.gnahraf.test.IoTestCase;
 import com.lowagie.text.Font;
@@ -19,12 +22,20 @@ import io.crums.sldg.reports.pdf.Align.H;
 import io.crums.sldg.reports.pdf.CellData.TextCell;
 import io.crums.sldg.reports.pdf.CellDataProvider.NumberProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.StringProvider;
+import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.reports.pdf.ReportTemplate.Components;
 import io.crums.sldg.reports.pdf.SourcedCell.MultiStringCell;
 import io.crums.sldg.reports.pdf.func.NumNode;
 import io.crums.sldg.reports.pdf.func.BaseNumFunc;
 import io.crums.sldg.reports.pdf.func.NumOp;
+import io.crums.sldg.reports.pdf.func.SourceRowNumFunc;
+import io.crums.sldg.reports.pdf.func.SourceRowNumFunc.Column;
+import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
+import io.crums.sldg.reports.pdf.input.Query;
+import io.crums.sldg.reports.pdf.pred.BoolComp;
+import io.crums.sldg.reports.pdf.pred.SourceRowPredicate;
 import io.crums.util.Lists;
 
 import org.junit.jupiter.api.Test;
@@ -37,7 +48,63 @@ public class ReportTemplateTest extends IoTestCase {
   
   public final static String ICON = "example_icon.png";
   
-  public final static String MORSEL = "chinook-263-262-261-260-.mrsl";
+  public final static String CHINOOK_MORSEL_263 = "chinook-263-262-261-260-.mrsl";
+  
+  public final static String CHINOOK_MORSEL_717 = "chinook-717-716-715-714-.mrsl";
+  
+  
+  public final static int INVOICE_47 = 47;
+  public final static int INVOICE_ID_COL_INDEX = 1;
+  
+  
+  
+  public static ReportTemplate queryWithTotalInstance() {
+    
+    try {
+      var invoiceParam = new Param<Number>("invoice-id");
+      var invoiceFunc = new SourceRowNumFunc.Supplied(
+          List.of(new Column(INVOICE_ID_COL_INDEX)),
+          null /* column value not manipulated */);
+      var invoicePred = new SourceRowPredicate(
+          invoiceFunc, BoolComp.EQ, new NumberArg(invoiceParam));
+      
+      return createWithTotal(new Query(invoicePred));
+    
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
+  }
+  
+  
+  
+  public static Map<String, ByteBuffer> iconMap() {
+    try (var in = ReportTemplateTest.class.getResourceAsStream(ICON)) {
+      var buffer  = BufferUtils.readFully(in);
+      return Map.of(ICON, buffer);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
+  }
+
+  
+  /** Contains invoice-47. */
+  public static MorselPack getChinookMorsel() {
+    return getMorsel(CHINOOK_MORSEL_263);
+  }
+  
+  /** More src rows than invoice-47. */
+  public static MorselPack getChinookMorsel717() {
+    return getMorsel(CHINOOK_MORSEL_717);
+  }
+  
+  public static MorselPack getMorsel(String resource) {
+    try (var in = ReportTemplateTest.class.getResourceAsStream(resource)) {
+      return  MorselPack.load(in);
+    } catch (IOException iox) {
+      fail(iox);
+      return null;  // never reached
+    }
+  }
 
   
   
@@ -80,7 +147,7 @@ public class ReportTemplateTest extends IoTestCase {
     
     var file = newPdfPath(label);
     
-    var sourceRows = getMorsel().sources();
+    var sourceRows = getChinookMorsel().sources();
     report.writePdf(file, sourceRows);
   }
   
@@ -124,7 +191,7 @@ public class ReportTemplateTest extends IoTestCase {
     
     var file = newPdfPath(label);
     
-    var sourceRows = getMorsel().sources();
+    var sourceRows = getChinookMorsel().sources();
     report.writePdf(file, sourceRows);
   }
   
@@ -184,7 +251,7 @@ public class ReportTemplateTest extends IoTestCase {
     
     var file = newPdfPath(label);
     
-    var sourceRows = getMorsel().sources();
+    var sourceRows = getChinookMorsel().sources();
     report.writePdf(file, sourceRows);
   }
   
@@ -259,7 +326,7 @@ public class ReportTemplateTest extends IoTestCase {
     
     var file = newPdfPath(label);
     
-    var sourceRows = getMorsel().sources();
+    var sourceRows = getChinookMorsel().sources();
     report.writePdf(file, sourceRows);
     
   }
@@ -268,6 +335,46 @@ public class ReportTemplateTest extends IoTestCase {
   @Test
   public void testWithTotal() throws Exception {
     var label = new Object() { };
+    var report = createWithTotal(null);
+    var file = newPdfPath(label);
+    
+    var sourceRows = getChinookMorsel().sources();
+    report.writePdf(file, sourceRows);
+  }
+
+  
+  
+  @Test
+  public void testQueryTotal() throws Exception {
+
+    var label = new Object() { };
+    
+    var report = queryWithTotalInstance();
+    
+    assertEquals(1, report.getNumberArgs().size());
+    report.getNumberArgs().get(0).set(INVOICE_47);
+
+    var file = newPdfPath(label);
+    var sourceRows = getChinookMorsel717().sources();
+    report.writePdf(file, sourceRows);
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  private static ReportTemplate createWithTotal(Query query) throws IOException {
+    
     var icon = loadImage(ICON);
 
     CellData iconCell = CellData.forImage(ICON, icon, 50, 50);
@@ -352,27 +459,31 @@ public class ReportTemplateTest extends IoTestCase {
         new FontSpec("Helvetica", 8, Font.NORMAL, Color.GRAY), Align.H.RIGHT,
         false);
     
-    var report = new ReportTemplate(new Components(header, null, mainTable, footer));
+    return new ReportTemplate(new Components(header, null, mainTable, footer), query);
     
-    var file = newPdfPath(label);
-    
-    var sourceRows = getMorsel().sources();
-    report.writePdf(file, sourceRows);
   }
   
   
-  private MorselPack getMorsel() {
-    return getMorsel(MORSEL);
-  }
+
   
-  private MorselPack getMorsel(String resource) {
-    try (var in = getClass().getResourceAsStream(resource)) {
-      return  MorselPack.load(in);
-    } catch (IOException iox) {
-      fail(iox);
-      return null;  // never reached
-    }
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   
   
   private File newPdfPath(Object label) {
@@ -384,9 +495,28 @@ public class ReportTemplateTest extends IoTestCase {
 
   
   
-  private Image loadImage(String resourceName) throws IOException {
-    var url = getClass().getResource(resourceName);
+  private static Image loadImage(String resourceName) throws IOException {
+    var url = ReportTemplateTest.class.getResource(resourceName);
     return Image.getInstance(url);
   }
+  
+  
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
