@@ -1,7 +1,7 @@
 /*
  * Copyright 2022 Babak Farhang
  */
-package io.crums.sldg.reports.pdf.model.func;
+package io.crums.sldg.reports.pdf.func;
 
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -9,10 +9,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-
-import io.crums.sldg.reports.pdf.func.NumNode;
-import io.crums.sldg.reports.pdf.func.BaseNumFunc;
-import io.crums.sldg.reports.pdf.func.NumOp;
 
 /**
  * 
