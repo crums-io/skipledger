@@ -3,6 +3,8 @@
  */
 package io.crums.sldg;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -125,6 +127,44 @@ public interface HashLedger extends AutoCloseable {
         return null;
     }
     return getTrailByIndex(sindex);
+  }
+  
+  
+  /**
+   * Returns the nearest witnessed rows <em>on or after</em> the given row numbers.
+   * 
+   * @param rowNumbers non-null bag of row numbers (each &ge; 1)
+   * @return (possibly empty) list of trailed row numbers in ascending order with no duplicates.
+   */
+  default List<TrailedRow> nearestTrails(Collection<Long> rowNumbers) {
+    var rns = Lists.sortRemoveDups(rowNumbers);
+    final var witRns = getTrailedRowNumbers();
+
+    var trails = new ArrayList<TrailedRow>();
+    while (!rns.isEmpty()) {
+      long targetRn = rns.get(0);
+      
+      int tIndex = Collections.binarySearch(witRns, targetRn);
+      
+      if (tIndex < 0) {
+        tIndex = -1 - tIndex;
+        if (tIndex == witRns.size())
+          break;
+        int rIndex = Collections.binarySearch(rns, witRns.get(tIndex));
+        if (rIndex < 0)
+          rIndex = -1 - rIndex;
+        else
+          ++rIndex;
+        rns = rns.subList(rIndex, rns.size());
+      } else
+        rns = rns.subList(1, rns.size());
+      
+      var trail = getTrailByIndex(tIndex);
+      trails.add(trail);
+      
+    } // while (
+    
+    return Collections.unmodifiableList(trails);
   }
   
   

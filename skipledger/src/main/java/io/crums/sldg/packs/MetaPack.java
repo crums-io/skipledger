@@ -43,7 +43,7 @@ public class MetaPack implements Serial {
   public static MetaPack load(ByteBuffer in) {
     int size = BigShort.getBigShort(in);
     if (size == 0)
-      return new MetaPack(null);
+      return EMPTY;
     
     if (in.remaining() != size) {
       if (in.remaining() < size)

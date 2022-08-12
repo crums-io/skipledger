@@ -36,8 +36,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
   protected final TrailPackBuilder trailPackBuilder = new TrailPackBuilder();
   protected final SourcePackBuilder sourcePackBuilder = new SourcePackBuilder();
   protected final PathPackBuilder pathPackBuilder = new PathPackBuilder();
-  
-  private MetaPack metaPack = MetaPack.EMPTY;
+  protected final AssetsBuilder assetsBuilder = new AssetsBuilder();
   
   
   protected final Object lock() {
@@ -59,7 +58,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   public int init(MorselPack pack, List<Long> rows, String comment) {
-    if (!pack.getFullRowNumbers().containsAll(rows))
+    boolean check = Sets.sortedSetView(pack.getFullRowNumbers()).containsAll(rows);
+    if (!check)
       throw new IllegalArgumentException(
           "morsel does not contain (full) information about rows " + rows);
     
@@ -407,16 +407,16 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   public void setMetaPack(SourceInfo sourceInfo) {
-    this.metaPack = new MetaPack(sourceInfo);
+    assetsBuilder.setMeta(new MetaPack(sourceInfo));
   }
   
   public void setMetaPack(MetaPack meta) {
-    this.metaPack = Objects.requireNonNull(meta, "null meta");
+    assetsBuilder.setMeta(meta);
   }
   
   
   public MetaPack getMetaPack() {
-    return metaPack;
+    return assetsBuilder.getMetaPack();
   }
   
   
@@ -445,9 +445,9 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   public int addMetaPack(MetaPack meta) {
-    if (meta.isEmpty() || metaPack.isPresent())
+    if (meta.isEmpty() || getMetaPack().isPresent())
       return 0;
-    this.metaPack = meta;
+    setMetaPack(meta);
     return 1;
   }
   
@@ -737,7 +737,19 @@ public class MorselPackBuilder implements MorselBag, Serial {
         trailPackBuilder.serialSize() +
         sourcePackBuilder.serialSize() +
         pathPackBuilder.serialSize() +
-        metaPack.serialSize();
+        assetsBuilder.serialSize();
+  }
+  
+  @Override
+  public int estimateSize() {
+    int headerBytes = 1 + 4 * MorselPack.VER_PACK_COUNT;
+    return
+        headerBytes +
+        rowPackBuilder.serialSize() +
+        trailPackBuilder.serialSize() +
+        sourcePackBuilder.serialSize() +
+        pathPackBuilder.serialSize() +
+        assetsBuilder.estimateSize();
   }
 
 
@@ -746,18 +758,19 @@ public class MorselPackBuilder implements MorselBag, Serial {
    */
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
-    out.put((byte) MorselPack.VER_PACK_COUNT).putInt(rowPackBuilder.serialSize())
+    out.put((byte) MorselPack.VER_PACK_COUNT)
+    .putInt(rowPackBuilder.serialSize())
     .putInt(trailPackBuilder.serialSize())
     .putInt(sourcePackBuilder.serialSize())
     .putInt(pathPackBuilder.serialSize())
-    .putInt(metaPack.serialSize());
+    .putInt(assetsBuilder.serialSize());
   
-  rowPackBuilder.writeTo(out);
-  trailPackBuilder.writeTo(out);
-  sourcePackBuilder.writeTo(out);
-  pathPackBuilder.writeTo(out);
-  metaPack.writeTo(out);
-  return out;
+    rowPackBuilder.writeTo(out);
+    trailPackBuilder.writeTo(out);
+    sourcePackBuilder.writeTo(out);
+    pathPackBuilder.writeTo(out);
+    assetsBuilder.writeTo(out);
+    return out;
   }
   
 }

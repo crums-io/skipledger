@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
+import io.crums.io.buffer.NamedParts;
 import io.crums.io.buffer.Partitioning;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
@@ -41,7 +42,7 @@ import io.crums.util.Sets;
  * <pre>
  *    PACK_COUNT  := BYTE (current version is 5)
  *    PACK_SIZES  := INT ^PACK_COUNT
- *    MORSEL_PACK := PACK_COUNT PACK_SIZES ROW_PACK TRAIL_PACK SRC_PACK PATH_PACK
+ *    MORSEL_PACK := PACK_COUNT PACK_SIZES ROW_PACK TRAIL_PACK SRC_PACK PATH_PACK ASSETS
  * </pre>
  * </p>
  * 
@@ -65,13 +66,17 @@ public final class MorselPack implements MorselBag {
    */
   public static MorselPack load(InputStream in, boolean hasHeader) {
     var bytes = BufferUtils.readFully(in);
-    if (hasHeader)
-      MorselFile.advanceHeader(bytes, in);
-    return load(bytes);
+    int versionComp = hasHeader ? MorselFile.advanceHeader(bytes, in) : 0;
+    return load(bytes, versionComp);
   }
   
   
   public static MorselPack load(ByteBuffer in) {
+    return load(in, 0);
+  }
+  
+  
+  private static MorselPack load(ByteBuffer in, int versionComp) {
     final int packCount = 0xff & in.get();
     
     if (packCount < MIN_PACK_COUNT)
@@ -87,9 +92,6 @@ public final class MorselPack implements MorselBag {
       totalSize += size;
     }
     
-//    for (int index = VER_PACK_COUNT; index < packCount; ++index)
-//      in.getInt();
-    
     ByteBuffer block = BufferUtils.slice(in, totalSize);
     if (!block.isReadOnly())
       block = block.asReadOnlyBuffer();
@@ -102,12 +104,22 @@ public final class MorselPack implements MorselBag {
     SourcePack sourcePack = SourcePack.load(parts.getPart(2));
     PathPack pathPack = PathPack.load(parts.getPart(3));
     
-    MetaPack metaPack =
-        packCount >= VER_PACK_COUNT ?
-            MetaPack.load(parts.getPart(4)) : MetaPack.EMPTY;
+    ByteBuffer part4 = packCount >= VER_PACK_COUNT ? parts.getPart(4) : null;
+    MetaPack metaPack;
+    NamedParts assets;
+    if (part4 == null) {
+      metaPack = MetaPack.EMPTY;
+      assets = NamedParts.EMPTY;
+    } else if (versionComp < 0) {
+      metaPack = MetaPack.load(part4);
+      assets = NamedParts.EMPTY;
+    } else {
+      metaPack = null;
+      assets = NamedParts.load(part4);
+    }
     
     return new MorselPack(
-        new CachingRowPack(rowPack), trailPack, sourcePack, pathPack, metaPack);
+        new CachingRowPack(rowPack), trailPack, sourcePack, pathPack, metaPack, assets);
   }
   
   
@@ -116,18 +128,21 @@ public final class MorselPack implements MorselBag {
   private final TrailPack trailPack;
   private final SourcePack sourcePack;
   private final PathPack pathPack;
+  private final NamedParts assets;
   private final MetaPack metaPack;
+  
   
   
   private MorselPack(
       RowPack rowPack, TrailPack trailPack, SourcePack sourcePack, PathPack pathPack,
-      MetaPack metaPack) {
+      MetaPack metaPack, NamedParts assets) {
     
     this.rowPack = rowPack;
     this.trailPack = trailPack;
     this.sourcePack = sourcePack;
     this.pathPack = pathPack;
-    this.metaPack = metaPack;
+    this.assets = assets;
+    this.metaPack = metaPack == null ? createMetaPack() : metaPack;
     
     // Validate:
     // the rowPack is the backing "given". Other packs are validated against the row pack
@@ -169,6 +184,12 @@ public final class MorselPack implements MorselBag {
     }
     
   }
+  
+  
+  private MetaPack createMetaPack() {
+    var bytes = assets.getPart(AssetsBuilder.META);
+    return bytes.isPresent() ? MetaPack.load(bytes.get()) : MetaPack.EMPTY;
+  }
 
 
   public RowPack getRowPack() {
@@ -198,6 +219,11 @@ public final class MorselPack implements MorselBag {
   
   public Optional<SourceInfo> getSourceInfo() {
     return metaPack.getSourceInfo();
+  }
+  
+  
+  public NamedParts getAssets() {
+    return assets;
   }
   
   

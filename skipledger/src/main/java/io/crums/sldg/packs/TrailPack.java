@@ -66,7 +66,7 @@ public class TrailPack implements TrailBag {
   
   
   public static TrailPack load(ByteBuffer in) throws ByteFormatException {
-    return load(in, true);
+    return load(in, false);
   }
   
   

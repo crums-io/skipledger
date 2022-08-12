@@ -6,8 +6,10 @@ package io.crums.sldg;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.logging.Logger;
 
@@ -42,12 +44,16 @@ public class MorselFile {
   
   /**
    * File header magic + version string with room for a leading or trailing
-   * digit.
+   * digit. AKA version string.
    */
-  public final static String HEADER_STRING = "MRSL  0.2 ";
+  public final static String HEADER_STRING = "MRSL  0.3 ";
   
-  private final static String HEADER_SANS_VER =
+  
+  
+  private final static String PREAMBLE =
       HEADER_STRING.substring(0, 5);
+  
+  private final static int PREAMBLE_SIZE = PREAMBLE.length();
   
 
   /**
@@ -65,12 +71,26 @@ public class MorselFile {
   }
   
   /**
-   * Returns a read-only view of the expected file header. It reads <em>MRSL  0.2</em> in ASCII.
+   * Returns a read-only view of the expected file header. It reads <em>MRSL  0.3</em> in ASCII.
    * (That's 10 bytes includng a trailing space.)
    */
   public static ByteBuffer header() {
     return HEADER.asReadOnlyBuffer();
   }
+  
+  /**
+   * Header version comparison function.
+   */
+  public final static Comparator<String> HEADER_COMP =
+      new Comparator<>() {
+        @Override
+        public int compare(String left, String right) {
+          var leftVer = left.substring(PREAMBLE_SIZE, left.length()).trim();
+          var rightVer = right.substring(PREAMBLE_SIZE, right.length()).trim();
+          return leftVer.compareTo(rightVer);
+        }
+      };
+  
   
   
   
@@ -194,27 +214,43 @@ public class MorselFile {
    * 
    * @param buffer  buffer containing the file's contents
    * @param file    used for adding context to error messages
+   * @return 0 if the header matches this version; &lt; 0, if the header is from a previous
+   *           version; &gt; 0 if the header is from a future version
    */
-  public static void advanceHeader(ByteBuffer buffer, Object file) {
+  public static int advanceHeader(ByteBuffer buffer, Object file) {
     ByteBuffer expHeader = header();
-    ByteBuffer header = BufferUtils.slice(buffer, expHeader.remaining());
+    ByteBuffer header = BufferUtils.slice(buffer, HEADER_SIZE);
+    
     if (!header.equals(expHeader)) {
-      byte[] b = new byte[expHeader.remaining()];
+      byte[] b = new byte[header.remaining()];
       header.get(b);
       String headerString = new String(b, Strings.UTF_8);
-      if (headerString.startsWith(HEADER_SANS_VER)) {
+      if (headerString.startsWith(PREAMBLE)) {
         // ok, but nag
-        // TODO: check if this must be replaced by system logger
-        // so as to minimize module deps
-        Logger log = Logger.getLogger(MorselFile.class.getSimpleName());
-        log.warning(
-            "Loading " + file + " with header '" + headerString + "'; " +
-            "expected header is '" + HEADER_STRING + "'");
+        int comp = HEADER_COMP.compare(headerString, HEADER_STRING);
+        var log = System.getLogger(MorselFile.class.getSimpleName());
+        String msg = "Loading morsel from " + file;
+        if (comp < 0) {
+          msg +=  " with older version string '" + headerString +
+                  "'; current version string is '" + HEADER_STRING + "'";
+        } else if (comp > 0) {
+          msg +=  " with version string '" + headerString +
+                  "'; ahead of current version string is '" + HEADER_STRING +
+                  "'. If there's legit a new version, consider upgrading the software.";
+        } else {
+          msg +=  " with well formed, but anamolous version string '"+ headerString +
+                  "': expected version string is '" + HEADER_STRING + "'";
+        }
+                
+        log.log(Level.WARNING, msg);
+        return comp;
+      
       } else
         throw new ByteFormatException(
             file + " header not recognized. Expected '" + HEADER_STRING +
             "'; actual was '" + headerString);
     }
+    return 0;
   }
   
   

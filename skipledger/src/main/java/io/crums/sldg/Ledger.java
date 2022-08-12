@@ -3,24 +3,25 @@
  */
 package io.crums.sldg;
 
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
 import io.crums.sldg.cache.HashFrontier;
-import io.crums.sldg.packs.LedgerMorselBuilder;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
+import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessReport;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
@@ -926,7 +927,7 @@ public class Ledger implements AutoCloseable {
   public File writeMorselFile(
       File target, List<Long> rowNumbers, String note, SourceInfo srcInfo) throws IOException {
     
-    return writeMorselFile(target, rowNumbers, note, Collections.emptyList(), srcInfo);
+    return writeMorselFile(target, rowNumbers, note, List.of(), srcInfo);
   }
   
   
@@ -952,20 +953,71 @@ public class Ledger implements AutoCloseable {
   
   
   
+  
   private MorselPackBuilder loadBuilder(
       List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo) {
+    
     Objects.requireNonNull(rowNumbers, "null rowNumbers");
+    rowNumbers = Lists.sortRemoveDups(rowNumbers);
     final long maxRow = hashLedgerSize();
-    LedgerMorselBuilder builder = new LedgerMorselBuilder(hashLedger, note);
-    for (long rn : rowNumbers) {
-      SkipLedger.checkRealRowNumber(rn);
-      if (rn > maxRow)
-        throw new IllegalArgumentException("rowNumber " + rn + " out-of-bounds; max " + maxRow);
-      SourceRow srcRow = srcLedger.getSourceRow(rn).redactColumns(redactCols);
-      builder.addSourceRow(srcRow);
+    
+    var builder = newBuilder();
+    Path initPath;
+    if (rowNumbers.isEmpty()) {
+      initPath = hashLedger.getSkipLedger().statePath();
+    } else {
+      // check row numbers
+      List<Long> one;
+      {
+        long first = rowNumbers.get(0);
+        one = first > 1 ? List.of(1L) : List.of();
+        if (first < 1)
+          throw new IllegalArgumentException("illegal row number: " + first);
+      }
+      List<Long> hi;
+      {
+        long lastRn = rowNumbers.get(rowNumbers.size() - 1);
+        hi = lastRn < maxRow ? List.of(maxRow) : List.of();
+        if (lastRn > maxRow)
+          throw new IllegalArgumentException(
+              "out-of-bounds row number: " + lastRn + " (max = " + maxRow + ")");
+      }
+      var targetRns = Lists.concatLists(one, rowNumbers, hi);
+      initPath = hashLedger.getSkipLedger().getPath(targetRns);
     }
+    
+    
+    builder.initPath(initPath, note);
+    
+    var trails = hashLedger.nearestTrails(rowNumbers);
+    if (!trails.isEmpty()) {
+      
+      var trailedPathRns = new TreeSet<Long>(initPath.rowNumbers());
+      trailedPathRns.addAll(Lists.map(trails, TrailedRow::rowNumber));
+      var targetRns = trailedPathRns.toArray(new Long[trailedPathRns.size()]);
+      var trailedPath = hashLedger.getSkipLedger().getPath(targetRns);
+      builder.addPath(trailedPath);
+      for (var trail : trails)
+        builder.addTrail(trail.rowNumber(), trail.trail());
+      
+    }
+    
+    for (long srcRn : rowNumbers)
+      builder.addSourceRow(
+          srcLedger.getSourceRow(srcRn).redactColumns(redactCols));
+    
     builder.setMetaPack(srcInfo);
     return builder;
+  }
+  
+  
+  /**
+   * Hook for builder initialization/specialization in subclass.
+   * 
+   * @see #writeMorselFile(File, List, String, List, SourceInfo)
+   */
+  protected MorselPackBuilder newBuilder() {
+    return new MorselPackBuilder();
   }
   
   
