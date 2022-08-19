@@ -13,10 +13,15 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.text.DateFormat;
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
@@ -33,6 +38,9 @@ import io.crums.sldg.json.TrailedRowWriter;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.packs.MorselPackBuilder.MergeResult;
+import io.crums.sldg.reports.pdf.ReportAssets;
+import io.crums.sldg.reports.pdf.ReportTemplate;
+import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.DateValue;
 import io.crums.sldg.src.SourceInfo;
@@ -46,6 +54,7 @@ import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONArray;
 import io.crums.util.main.ArgList;
 import io.crums.util.main.NumbersArg;
+import io.crums.util.main.PrintSupport;
 import io.crums.util.main.TablePrint;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -80,6 +89,7 @@ import picocli.CommandLine.Spec;
         Entry.class,
         Merge.class,
         Submerge.class,
+        Report.class,
         Dump.class
     })
 public class Mrsl {
@@ -136,7 +146,6 @@ public class Mrsl {
   }
   
   
-  static List<File> morselFiles = new ArrayList<>(2);
 }
 
 
@@ -1257,6 +1266,278 @@ class Verify {
 
 
 
+
+
+
+
+
+
+
+
+
+@Command(
+    name = Report.NAME,
+    description = "Generate PDF report from template if present. (Alpha)"
+    )
+class Report implements Callable<Integer> {
+  
+  final static String NAME = "report";
+  final static String ARGS = "ARGS";
+  final static String A_OPT = "-a";
+  final static String ABOUT_OPT = "--about";
+  
+  @ParentCommand
+  private Mrsl mrsl;
+  
+  @Spec
+  private CommandSpec spec;
+  
+  
+  @Option(
+      names = {A_OPT, ABOUT_OPT},
+      description = {
+          "Show the named arguments (@|fg(yellow) " + ARGS + "|@) template takes and exit",
+          }
+      )
+  private boolean showInfo;
+  
+
+  /**
+   * Note this isn't quite right: it's required (!) if --about is not set.
+   */
+  @Mixin
+  private SaveOption saveOpt;
+  
+  @Parameters(
+      paramLabel = ARGS,
+      arity = "0..*",
+      description = {
+          "List of required or optional name=@|italic value|@ arguments template",
+          "  takes (see option @|fg(yellow) " + A_OPT + "|@). If the template only takes a",
+          "  single argument, then @|italic value|@ needn't be named.",
+      })
+  public void setQueryArgs(String[] args) {
+    if (args == null || args.length == 0) {
+      queryArgs = Map.of();
+      return;
+    }
+    // parse the numbers
+    var parser = NumberFormat.getInstance();
+    Map<String, Number> input;
+    if (args.length == 1) {
+      var arg = args[0];
+      int eqIndex = arg.indexOf('=');
+      String name;
+      Number value;
+      try {
+        if (eqIndex == -1) {
+          name = "";
+          value = parser.parse(arg);
+        } else {
+          name = arg.substring(0, eqIndex);
+          value = parser.parse(arg.substring(eqIndex + 1));
+        }
+        input = Map.of(name, value);
+      } catch (ParseException px) {
+        throw new ParameterException(spec.commandLine(), "illegal argument: '" + arg + "'");
+      }
+    } else {
+      var map = new HashMap<String, Number>();
+      for (var arg : args) try {
+        int eqIndex = arg.indexOf('=');
+        if (eqIndex == -1)
+          throw new IllegalArgumentException(
+              "'" + arg + "' must be in name=<value> format");
+        var name = arg.substring(0, eqIndex);
+        var value = parser.parse(arg.substring(eqIndex + 1));
+        map.put(name, value);
+      } catch (ParseException px) {
+        throw new ParameterException(spec.commandLine(), "illegal argument: '" + arg + "'");
+      }
+      input = Collections.unmodifiableMap(map);
+    }
+    
+    queryArgs = input;
+  }
+  
+  private Map<String, Number> queryArgs = Map.of();
+
+  @Override
+  public Integer call() throws Exception {
+    if (showInfo) {
+      showInfo();
+      return 0;
+    } else {
+      return makeReport();
+    }
+  }
+  
+  
+  private int makeReport() {
+    if (template().isEmpty()) {
+      System.err.println("[ERROR] Morsel does not contain report template");
+      return Mrsl.ERR_USER;
+    }
+    var sources = mrsl.getMorselFile().getMorselPack().sources();
+    if (sources.isEmpty())
+      throw new ParameterException(
+          spec.commandLine(), "no source rows found in morsel file");
+    
+    var report = template().get();
+    
+    int requiredArgs = report.getRequiredNumberArgs().size();
+    if (requiredArgs > queryArgs.size()) {
+      throw new ParameterException(
+          spec.commandLine(),
+          "report template requires " + nOf(requiredArgs, "number arg"));
+    }
+    
+    Map<String, Number> inputs;
+    
+    if (queryArgs.size() == 1 && queryArgs.containsKey("")) {
+      Number value = queryArgs.get("");
+      if (requiredArgs != 1) {
+        throw new ParameterException(
+            spec.commandLine(),
+            "unnamed value (" + value + "); report template requires " +
+            nOf(requiredArgs, "number arg"));
+      }
+      String name = report.getRequiredNumberArgs().get(0).name();
+      inputs = Map.of(name, value);
+    } else
+      inputs = queryArgs;
+    
+    if (saveOpt == null || !saveOpt.isSaveEnabled())
+      throw new ParameterException(
+          spec.commandLine(), "no path specified to save PDF file");
+    
+    File target = saveOpt.getSaveFile();
+    
+    report.bindNumberArgs(inputs);
+    
+    try {
+      report.writePdf(target, sources);
+      
+      System.out.println("PDF report written to " + target);
+      System.out.println();
+    
+    } catch (Exception x) {
+      System.err.println("[ERROR] Failed to generate PDF report: " + x.getMessage());
+      System.err.println("        Since this is a new feature, this is likely a bug.");
+      System.err.println("        Call stack:");
+      System.err.println();
+      x.printStackTrace();
+      System.err.println();
+      System.err.println("        If not already reported, please open an \"issue\" at");
+      System.err.println("        <https://github.com/crums-io/skipledger/issues>");
+      return Mrsl.ERR_SOFT;
+    }
+    
+    return 0;
+  }
+  
+  
+  private void showInfo() {
+    var printer = new PrintSupport();
+    if (template().isEmpty()) {
+      printer.println("No report template found.");
+      printer.println();
+      return;
+    }
+    var report = template().get();
+    printer.println("Report template found.");
+    printer.println();
+    report.getDescription().ifPresent(
+        desc -> {
+          printer.setIndentation(1);
+          printer.println("Description:");
+          printer.println();
+          printer.printParagraph(desc);
+          printer.println();
+          printer.setIndentation(0);
+        });
+    
+    printer.println("Arguments:");
+    printer.println();
+    printer.setIndentation(1);
+    
+    var args = report.getNumberArgs();
+    final int argCount = args.size();
+    if (argCount == 0) {
+      printer.println("NONE");
+      printer.println();
+      return;
+    }
+    for (var arg : args) {
+      var param = arg.param();
+      printer.println("Name:");
+      printer.incrIndentation(1);
+      printer.println(param.name());
+      printer.decrIndentation(1);
+      param.getDescription().ifPresent(
+          desc -> {
+            printer.println("Description:");
+            printer.incrIndentation(1);
+            printer.printParagraph(desc);
+            printer.decrIndentation(1);
+          });
+      param.getDefaultValue().ifPresent(
+          value -> {
+            printer.println("Default: " + value);
+          });
+      printer.println();
+    }
+    
+    printer.setIndentation(0);
+    var requiredArgs = requiredArgs(report);
+    
+    final int reqArgCount = requiredArgs.size();
+    switch (reqArgCount) {
+    case 0:
+      {
+        var msg = argCount > 1 ?
+            "All template arguments have defaults: " :
+              "Template argument has default: ";
+        printer.println(msg + "no user input necessary.");
+      }
+      break;
+    case 1:
+      {
+        var msg = argCount > 1 ?
+            "Only one argument requires a value (not defaulted):" :
+              "The following value is required (not defaulted):";
+        printer.println(msg);
+        printer.println("  " + requiredArgs.get(0));
+        printer.println("It may be supplied either as a name=value pair");
+        printer.println("  " + requiredArgs.get(0) + "=<value>");
+        printer.println("or without the name (just <value>).");
+        printer.println();
+      }
+      break;
+    default:
+      printer.println("Report template takes " + reqArgCount + " required arguments named");
+      requiredArgs.forEach(name -> printer.println("  " + name));
+      printer.println("supplied as name=<value> pairs.");
+    }
+  }
+  
+  
+  
+  
+  private List<String> requiredArgs(ReportTemplate report) {
+    return Lists.map(report.getRequiredNumberArgs(), NumberArg::name);
+  }
+  
+  
+  private Optional<ReportTemplate> template() {
+    if (template == null)
+      template =  ReportAssets.getReport(
+          mrsl.getMorselFile().getMorselPack().getAssets());
+    return template;
+  }
+  private Optional<ReportTemplate> template;
+  
+}
 
 
 

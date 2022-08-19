@@ -16,9 +16,11 @@ import java.util.concurrent.Callable;
 
 import io.crums.client.ClientException;
 import io.crums.sldg.Ledger;
+import io.crums.sldg.MorselFile;
 import io.crums.sldg.Ledger.State;
 import io.crums.sldg.SourceLedger;
 import io.crums.sldg.json.SourceInfoParser;
+import io.crums.sldg.reports.pdf.ReportAssets;
 import io.crums.sldg.sql.Config;
 import io.crums.sldg.sql.SqlLedger;
 import io.crums.sldg.src.ColumnValue;
@@ -140,12 +142,12 @@ public class Sldg implements Closeable {
   
   
   
-  private Config config;
+  private ConfigR config;
   
   
-  public Config getConfig() {
+  public ConfigR getConfig() {
     if (config == null)
-      config = new Config(getConfigFile());
+      config = new ConfigR(getConfigFile());
     return config;
   }
   
@@ -941,7 +943,7 @@ class Rollback implements Runnable {
     )
 class Morsel implements Callable<Integer> {
   
-  
+
   private final static String REDACT = "--redact";
   
   @ParentCommand
@@ -950,6 +952,11 @@ class Morsel implements Callable<Integer> {
   private CommandSpec spec;
   
   private File morselFile = new File(".");
+
+  @Option(
+      names = {"-r", "--report"},
+      description = "Include report template provided in config (Alpha)")
+  private boolean report;
   
   
   // TODO: add default file extension?
@@ -969,17 +976,13 @@ class Morsel implements Callable<Integer> {
       if (!file.isDirectory())
         throw new ParameterException(spec.commandLine(), file + " already exists");
     
-    } else if (!file.canWrite()) {
+    } else {
       File parent = file.getParentFile();
-      String msg;
-      if (parent == null)
-        msg = "permission to write denied in current directory";
-      else if (parent.exists())
-        msg = "permission to write denied in directory " + parent;
-      else
-        msg = "directory " + parent + " does not exist";
-      
-      throw new ParameterException(spec.commandLine(), msg);
+      if (parent != null && !parent.exists()) {
+        throw new ParameterException(
+            spec.commandLine(),
+            "parent directory does not exist: " + parent);
+      }
     }
   }
   
@@ -990,7 +993,7 @@ class Morsel implements Callable<Integer> {
       description = {
           "Path to ledger meta file injected into morsel",
           "Default: path specified in ledger config file's",
-          "  @|italic " + Config.META_PATH + "|@ property, if any.",
+          "@|italic " + Config.META_PATH +  "|@ property, if any.",
           }
       )
   public void setMeta(File file) {
@@ -1076,14 +1079,28 @@ class Morsel implements Callable<Integer> {
       throw new ParameterException(spec.commandLine(),
           "source ledger conflicts with hash ledger: " + ledger.getState());
     
+    var builder = ledger.loadBuilder(
+        srcRns,
+        null, // no comment (for now)
+        redactCols,
+        getMeta());
+    
+    if (report) try {
+      sldg.getConfig().getReportPath().ifPresentOrElse(
+          f -> ReportAssets.setReport(builder.assetsBuilder(), f),
+          () -> { System.err.println(
+              "[WARNING] no valid report path setting '" + ConfigR.REPORT_PATH_PROPERTY +
+              "' found in config file. (Ignored.)"); });
+    } catch (Exception x) {
+      // bail
+      System.err.println("Report template misconfiguration: " + x.getMessage());
+      return Sldg.ERR_USER;
+    }
+    
     File file;
     try {
-      file = ledger.writeMorselFile(
-          morselFile,
-          srcRns,
-          null, // no comment
-          redactCols,
-          getMeta());
+      
+      file = MorselFile.createMorselFile(morselFile, builder);
     
     } catch (IOException iox) {
       // bail

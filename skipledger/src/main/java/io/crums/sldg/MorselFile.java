@@ -199,10 +199,8 @@ public class MorselFile {
     ByteBuffer buffer = direct ? ByteBuffer.allocateDirect(size) : ByteBuffer.allocate(size);
     FileUtils.loadFileToMemory(file, buffer);
     
-    advanceHeader(buffer, file);
-    
     this.file = file;
-    this.pack = MorselPack.load(buffer);
+    this.pack = MorselPack.loadVersioned(buffer, file);
   }
   
   
@@ -228,21 +226,25 @@ public class MorselFile {
       if (headerString.startsWith(PREAMBLE)) {
         // ok, but nag
         int comp = HEADER_COMP.compare(headerString, HEADER_STRING);
+        Level logLevel;
         var log = System.getLogger(MorselFile.class.getSimpleName());
         String msg = "Loading morsel from " + file;
         if (comp < 0) {
           msg +=  " with older version string '" + headerString +
                   "'; current version string is '" + HEADER_STRING + "'";
+          logLevel = Level.DEBUG;
         } else if (comp > 0) {
           msg +=  " with version string '" + headerString +
                   "'; ahead of current version string is '" + HEADER_STRING +
                   "'. If there's legit a new version, consider upgrading the software.";
+          logLevel = Level.INFO;
         } else {
           msg +=  " with well formed, but anamolous version string '"+ headerString +
                   "': expected version string is '" + HEADER_STRING + "'";
+          logLevel = Level.WARNING;
         }
                 
-        log.log(Level.WARNING, msg);
+        log.log(logLevel, msg);
         return comp;
       
       } else

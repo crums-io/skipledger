@@ -8,7 +8,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,6 +21,7 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.sldg.reports.pdf.input.Query;
 import io.crums.sldg.src.SourceRow;
 
@@ -83,6 +87,11 @@ public class ReportTemplate {
   private float marginTop = DEFAULT_MARGIN;
   
   private float marginBottom = DEFAULT_MARGIN;
+  
+  
+  private Optional<String> description = Optional.empty();
+  
+  
   
   public ReportTemplate(Components components) {
     this(components, null);
@@ -179,6 +188,26 @@ public class ReportTemplate {
   }
   
   
+  /** @return {@code NumberArg.toArgMap(getNumberArgs())} */
+  public Map<String, NumberArg> getNumberArgMap() {
+    return NumberArg.toArgMap(getNumberArgs());
+  }
+  
+  
+  public List<NumberArg> getRequiredNumberArgs() {
+    return getNumberArgs()
+        .stream()
+        .filter(NumberArg::isRequired)
+        .toList();
+  }
+  
+  
+  /** @see NumberArg#bindValues(List, Map) */
+  public void bindNumberArgs(Map<String, Number> input) throws IllegalArgumentException {
+    NumberArg.bindValues(getNumberArgs(), input);
+  }
+  
+  
   public final float getPageWidth() {
     return pageWidth;
   }
@@ -256,6 +285,18 @@ public class ReportTemplate {
     this.marginBottom = margin;
   }
   
+  
+  public void setDescription(String description) {
+    this.description =
+        description == null || description.isBlank() ?
+            Optional.empty() : Optional.of(description);
+  }
+  
+  
+  public final Optional<String> getDescription() {
+    return description;
+  }
+  
 
   private void checkMargin(float margin) {
     if (margin < 0)
@@ -285,7 +326,8 @@ public class ReportTemplate {
         r.marginLeft == marginLeft &&
         r.marginRight == marginRight &&
         r.marginTop == marginTop &&
-        r.marginBottom == marginBottom;
+        r.marginBottom == marginBottom &&
+        r.description.equals(description);
   }
 
 }

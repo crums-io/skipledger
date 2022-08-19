@@ -35,12 +35,9 @@ import io.crums.sldg.src.SourceInfo;
 public class AssetsBuilder implements Serial {
   
   
-  public final static String CRUMS = "crums";
+  public final static String CRUMS = "/crums";
 
   public final static String META = CRUMS + "/meta";
-  
-  /** TODO: Doesn't belong in this module. Belongs in a subclass defined elsewhere. */
-  public final static String REPORT_SPEC = CRUMS + "/reportSpec";
 
   /**
    * Reserved prefix for library-defined stuff.
@@ -55,7 +52,7 @@ public class AssetsBuilder implements Serial {
   
   
   
-  private final TreeMap<String, ByteBuffer> namedBytes = new TreeMap<>();
+  private final TreeMap<String, ByteBuffer> namedBytes;
 
   // not worth making volatile w/o synchronizing access to namedBytes
   // ..and then if you do synchronize access, no point making this volatile :/
@@ -63,6 +60,15 @@ public class AssetsBuilder implements Serial {
   
   
   
+  public AssetsBuilder() {
+    namedBytes = new TreeMap<>();
+  }
+  
+  
+  /** Promotion (copy) constructor. Not a deep copy. */
+  protected AssetsBuilder(AssetsBuilder promote) {
+    this.namedBytes = promote.namedBytes;
+  }
   
   
   
@@ -96,13 +102,14 @@ public class AssetsBuilder implements Serial {
    * 
    * @param key     not null, does not start with {@linkplain #SYS_PREFIX}
    * @param value   do not modify sliced contents (!) ({@code null} or no remaining mean <em>remove</em>)
+   * @return        the previous value, if any; {@code null} o.w.
    */
-  public void setValue(String key, ByteBuffer value) {
+  public ByteBuffer setValue(String key, ByteBuffer value) {
     Objects.requireNonNull(key, "null key");
     if (key.startsWith(SYS_PREFIX))
       throw new IllegalArgumentException(
           "'" + SYS_PREFIX + "' is a reserved key prefix: " + key);
-    setOrRemove(key, value);
+    return setOrRemove(key, value);
   }
   
   
@@ -116,7 +123,7 @@ public class AssetsBuilder implements Serial {
   
   
   
-  
+  /** Returns an immutable snapshot of this instance's state (the point of this class). */
   public NamedParts toNamedParts() {
     var snapshot = this.snapshot;
     if (snapshot == null)

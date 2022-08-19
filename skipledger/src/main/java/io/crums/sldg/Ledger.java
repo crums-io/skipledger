@@ -7,7 +7,6 @@ package io.crums.sldg;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -932,7 +931,15 @@ public class Ledger implements AutoCloseable {
   
   
   
-  
+  /**
+   * Writes out a morsel file in one-shot (convenience method).
+   * 
+   * @param target  file or directory
+   * @return {@code MorselFile.createMorselFile(target, loadBuilder(rowNumbers, note, redactCols, srcInfo))}
+   *         (i.e. the filepath written to)
+   * @see #loadBuilder(List, String, List, SourceInfo)
+   * @see MorselFile#createMorselFile(File, MorselPackBuilder)
+   */
   public File writeMorselFile(
       File target, List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo)
           throws IOException {
@@ -942,22 +949,29 @@ public class Ledger implements AutoCloseable {
   }
   
   
-  public int writeMorselFile(
-      WritableByteChannel ch, List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo)
-          throws IOException {
-    
-    Objects.requireNonNull(ch, "null channel");
-    var builder = loadBuilder(rowNumbers, note, redactCols, srcInfo);
-    return MorselFile.writeMorselFile(ch, builder);
-  }
   
-  
-  
-  
-  private MorselPackBuilder loadBuilder(
+  /**
+   * Returns a morsel builder initialized using the given arguments (convenience
+   * method).
+   * 
+   * @param rowNumbers  list of (positive) source row numbers (dups/unsorted OK).
+   *                    If empty, then the builder is initialized with
+   *                    the state path; if not empty, then these source rows and their nearest
+   *                    known trails (witness records) are also added
+   *                    to the morsel.
+   * @param note        optional
+   * @param redactCols  non-null, but possibly empty list of 1-based columns to redact
+   *                    (like in SQL) from the source rows ({@code rowNumbers})
+   * @param srcInfo     optional
+   * 
+   * @return builder initailized with the above info. If either {@code rowNumbers} is
+   *         is not empty, or 
+   */
+  public MorselPackBuilder loadBuilder(
       List<Long> rowNumbers, String note, List<Integer> redactCols, SourceInfo srcInfo) {
     
     Objects.requireNonNull(rowNumbers, "null rowNumbers");
+    Objects.requireNonNull(redactCols, "null redact columns");
     rowNumbers = Lists.sortRemoveDups(rowNumbers);
     final long maxRow = hashLedgerSize();
     
@@ -1013,8 +1027,9 @@ public class Ledger implements AutoCloseable {
   
   /**
    * Hook for builder initialization/specialization in subclass.
+   * As it turns out, not using this; prefer not to subclass.
    * 
-   * @see #writeMorselFile(File, List, String, List, SourceInfo)
+   * @see #loadBuilder(List, String, List, SourceInfo)
    */
   protected MorselPackBuilder newBuilder() {
     return new MorselPackBuilder();

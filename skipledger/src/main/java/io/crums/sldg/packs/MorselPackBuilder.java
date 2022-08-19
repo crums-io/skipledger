@@ -26,7 +26,9 @@ import io.crums.util.Lists;
 import io.crums.util.Sets;
 
 /**
+ * A mutable bag of morsel data that can be serialized to a {@linkplain MorselPack}.
  * 
+ * @see MorselPack#load(ByteBuffer)
  */
 public class MorselPackBuilder implements MorselBag, Serial {
   
@@ -38,6 +40,18 @@ public class MorselPackBuilder implements MorselBag, Serial {
   protected final PathPackBuilder pathPackBuilder = new PathPackBuilder();
   protected final AssetsBuilder assetsBuilder = new AssetsBuilder();
   
+  
+  /**
+   * The assets builder is relatively safe to expose.
+   * Note, however, that you cannot <em>update</em> a mapping to a
+   * new value (unless accidentally mapping it again to the same value)
+   * before first <em>removing</em> the mapping. There should be little
+   * occasion for setting a mapping twice, so hopefully this note is
+   * just a curiousity.
+   */
+  public final AssetsBuilder assetsBuilder() {
+    return assetsBuilder;
+  }
   
   protected final Object lock() {
     return rowPackBuilder;
@@ -87,6 +101,9 @@ public class MorselPackBuilder implements MorselBag, Serial {
   public void initWithSources(MorselPack pack, List<Integer> redactCols, String comment) {
     initWithSources(pack, pack.sourceRowNumbers(), redactCols, comment);
   }
+  
+  
+  
   
   
   
@@ -388,16 +405,28 @@ public class MorselPackBuilder implements MorselBag, Serial {
   
   
   public int initPath(Path path, String comment) {
+    return initPath(path, List.of(), comment);
+  }
+  
+  
+  
+  public int initPath(Path path, List<Long> targetRns, String comment) {
     if (Objects.requireNonNull(path, "null path").hiRowNumber() < 2)
       throw new IllegalArgumentException("path is single row number 1");
+    Objects.requireNonNull(targetRns);
+    if (!path.rowNumbers().containsAll(targetRns))
+      throw new IllegalArgumentException(
+          "target row numbers not in given path: " + targetRns);
     
-    boolean declare = comment != null && !comment.isEmpty();
-    
+    boolean declare =
+        !targetRns.isEmpty() ||
+        (comment != null && !comment.isBlank());
     
     synchronized (lock()) {
       int count = rowPackBuilder.init(path);
       if (declare) {
-        PathInfo info = new PathInfo(path.loRowNumber(), path.hiRowNumber(), comment);
+        var info = new PathInfo(
+            path.loRowNumber(), targetRns, path.hiRowNumber(), comment);
         pathPackBuilder.addDeclaredPath(info);
         ++count;
       }

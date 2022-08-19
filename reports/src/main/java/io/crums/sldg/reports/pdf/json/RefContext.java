@@ -14,6 +14,7 @@ import io.crums.sldg.reports.pdf.CellData;
 import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
 import io.crums.sldg.reports.pdf.input.NumberArg;
+import io.crums.util.Maps;
 import io.crums.util.json.JsonParsingException;
 
 /**
@@ -60,7 +61,7 @@ public interface RefContext {
     return new RefContext() {
       @Override
       public Map<String, ByteBuffer> imageRefs() {
-        return imageRefs;
+        return Maps.mapValues(imageRefs, ByteBuffer::slice);
       }
     };
   }
@@ -135,7 +136,7 @@ public interface RefContext {
         new RefContext() {
           @Override
           public Map<String, ByteBuffer> imageRefs() {
-            return imageRefs;
+            return Maps.mapValues(imageRefs, ByteBuffer::slice);
           }
           @Override
           public Map<String, CellFormat> cellFormatRefs() {

@@ -24,8 +24,15 @@
   <dependencies>
 
     <dependency>
+    <!-- Actually redundant because of *reports* artifact -->
       <groupId>io.crums</groupId>
       <artifactId>skipledger</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>reports</artifactId>
       <version>${revision}</version>
     </dependency>
 

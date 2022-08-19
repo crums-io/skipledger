@@ -71,6 +71,14 @@ public final class MorselPack implements MorselBag {
   }
   
   
+  
+  public static MorselPack loadVersioned(ByteBuffer in, Object context) {
+    int versionComp = MorselFile.advanceHeader(in, context);
+    return load(in, versionComp);
+    
+  }
+  
+  
   public static MorselPack load(ByteBuffer in) {
     return load(in, 0);
   }

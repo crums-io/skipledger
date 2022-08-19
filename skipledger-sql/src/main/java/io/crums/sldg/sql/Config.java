@@ -269,7 +269,7 @@ public class Config {
     
     File file = FileUtils.getRelativeUnlessAbsolute(metaPath, baseDir);
     if (!file.isFile())
-      Optional.empty();
+      return Optional.empty();
     
     SourceInfo srcInfo;
     try {
@@ -285,7 +285,7 @@ public class Config {
   
   private Properties makeAux(Properties props) {
     Properties aux = new Properties(props);
-    aux.keySet().removeAll(PROP_NAMES);
+    aux.keySet().removeAll(propNames());
     return aux;
   }
   
@@ -361,7 +361,7 @@ public class Config {
    * @see #PROP_NAMES
    */
   public TidyProperties getTidyProperties() {
-    TidyProperties props = new TidyProperties(PROP_NAMES);
+    TidyProperties props = new TidyProperties(propNames());
     props.putAll(aux);
     props.put(SOURCE_JDBC_URL, srcUrl);
     set(props, SOURCE_JDBC_DRIVER, srcDriverClass);
@@ -378,6 +378,15 @@ public class Config {
     props.put(SOURCE_QUERY_SIZE, srcSizeQuery);
     props.put(SOURCE_QUERY_ROW, srcRowQuery);
     return props;
+  }
+  
+  
+  /**
+   * Returns the property names, ordered as they should appear in the properties file.
+   * Contract: <em>does not depend on constructor arguments.</em>
+   */
+  protected List<String> propNames() {
+    return PROP_NAMES;
   }
   
   

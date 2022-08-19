@@ -54,6 +54,11 @@ public record Param<T>(String name, String description, T defaultValue) {
     return defaultValue != null;
   }
   
+  /** @return {@code !hasDefault()} */
+  public boolean isRequired() {
+    return !hasDefault();
+  }
+  
 }
 
 

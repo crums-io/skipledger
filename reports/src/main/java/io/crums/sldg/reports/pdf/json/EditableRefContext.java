@@ -16,6 +16,7 @@ import io.crums.sldg.reports.pdf.CellFormat;
 import io.crums.sldg.reports.pdf.FontSpec;
 import io.crums.sldg.reports.pdf.input.NumberArg;
 import io.crums.sldg.reports.pdf.input.Param;
+import io.crums.util.Maps;
 
 /**
  * The typed maps returned by this implementation are editable and sorted.
@@ -54,7 +55,7 @@ public class EditableRefContext implements RefContext {
   
   @Override
   public Map<String, ByteBuffer> imageRefs() {
-    return imageRefs;
+    return Maps.mapValues(imageRefs, ByteBuffer::slice);
   }
 
   @Override

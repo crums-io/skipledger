@@ -137,6 +137,10 @@ public interface HashLedger extends AutoCloseable {
    * @return (possibly empty) list of trailed row numbers in ascending order with no duplicates.
    */
   default List<TrailedRow> nearestTrails(Collection<Long> rowNumbers) {
+    
+    if (rowNumbers.isEmpty())
+      return List.of();
+    
     var rns = Lists.sortRemoveDups(rowNumbers);
     final var witRns = getTrailedRowNumbers();
 

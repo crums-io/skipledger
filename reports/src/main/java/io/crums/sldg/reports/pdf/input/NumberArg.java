@@ -4,9 +4,15 @@
 package io.crums.sldg.reports.pdf.input;
 
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * A <em>primitive</em> type number, annotated with a name.
@@ -15,6 +21,80 @@ import java.util.function.Supplier;
  */
 @SuppressWarnings("serial")
 public class NumberArg extends Number implements Supplier<Number> {
+  
+  
+  /**
+   * Returns a [param] <em>name</em> to number arg mapping (convenience method
+   * for user input).
+   * 
+   * @throws IllegalArgumentException if {@code args} list has duplicate param names
+   * @see NumberArg#param()
+   * @see Param#name()
+   */
+  public static Map<String, NumberArg> toArgMap(List<NumberArg> args)
+      throws IllegalArgumentException {
+    final int size = args.size();
+    switch (size) {
+    case 0: return Map.of();
+    case 1: return Map.of(args.get(0).param().name(), args.get(0));
+    }
+    var map = new HashMap<String, NumberArg>(size);
+    args.forEach(a -> map.put(a.param().name(), a));
+    
+    // verify no dups
+    if (map.size() != size) {
+      var dups = new ArrayList<String>();
+      for (var arg : args) {
+        var name = arg.param().name();
+        boolean dup = map.remove(name) == null;
+        if (dup)
+          dups.add(name);
+      }
+      throw new IllegalArgumentException("Duplicate arg names: " + dups);
+    }
+    return Collections.unmodifiableMap(map);
+  }
+  
+  
+  
+  /**
+   * Binds the given {@code values} to the given list of number arguments
+   * {@code args}. <em>All required arguments in the given list must be bound by the given
+   * values</em>; otherwise an {@code IllegalArgumentException} is thrown.
+   * 
+   * @param args    settable arguments (some of which may be required)
+   * @param values  map of values set
+   */
+  public static void bindValues(List<NumberArg> args, Map<String, Number> values) {
+    Objects.requireNonNull(args, "null number args list");
+    Objects.requireNonNull(values, "null param-name to number map");
+    
+    var toSet = new HashMap<>(values);
+    
+    Map<Boolean, List<NumberArg>> reqOptPartition =
+        args.stream().collect(Collectors.groupingBy(NumberArg::isRequired));
+    
+    for (var requiredArg : reqOptPartition.getOrDefault(true, List.of())) {
+      var name = requiredArg.param().name();
+      var number = toSet.remove(name);
+      if (number == null)
+        throw new IllegalArgumentException(
+            "missing value for required argument '" + name + "'");
+      requiredArg.set(number);
+    }
+    
+    if (toSet.isEmpty())
+      return;
+    
+    var optArgMap = toArgMap(reqOptPartition.getOrDefault(false, List.of()));
+    for (var entry : toSet.entrySet()) {
+      var numArg = optArgMap.get(entry.getKey());
+      if (numArg == null)
+        throw new IllegalArgumentException(
+            "no number argument found with the named value '" + entry.getKey() + "'");
+      numArg.set(entry.getValue());
+    }
+  }
   
   
   /**
@@ -129,6 +209,12 @@ public class NumberArg extends Number implements Supplier<Number> {
   }
   
   
+  /** @return {@code param().name()} */
+  public String name() {
+    return param.name();
+  }
+  
+  
   /**
    * Returns the wrapped primitive, or defaulted value. Note a
    * defaulted value comes from {@code param().}{@linkplain Param#defaultValue() defaultValue()}.
@@ -172,6 +258,11 @@ public class NumberArg extends Number implements Supplier<Number> {
    */
   public boolean isDefaulted() {
     return value == null;
+  }
+  
+  /** @return {@code param().isRequired()} */
+  public boolean isRequired() {
+    return param.isRequired();
   }
   
   
