@@ -8,7 +8,6 @@ import java.util.Collections;
 import java.util.List;
 
 import io.crums.model.CrumTrail;
-import io.crums.sldg.SkipLedger;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.util.Lists;
 

@@ -3,7 +3,8 @@
  */
 package io.crums.sldg;
 
-import java.util.logging.Logger;
+
+import java.lang.System.Logger;
 
 import io.crums.client.repo.TrailRepo;
 import io.crums.util.hash.Digest;
@@ -17,7 +18,7 @@ public class SldgConstants {
 
   
   /**
-   * Digest used by the libary is staticly defined here. Currently SHA-256.
+   * Digest used by the libary is defined here. Currently SHA-256.
    * 
    * @see Digests#SHA_256.
    */
@@ -93,7 +94,7 @@ public class SldgConstants {
    * @see #LOGGER_NAME
    */
   public static Logger getLogger() {
-    return Logger.getLogger(LOGGER_NAME);
+    return System.getLogger(LOGGER_NAME);
   }
   
   

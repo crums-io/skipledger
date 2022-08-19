@@ -11,7 +11,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.logging.Logger;
 
 import io.crums.io.FileUtils;
 import io.crums.io.Opening;

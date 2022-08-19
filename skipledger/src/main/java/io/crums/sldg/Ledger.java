@@ -6,6 +6,8 @@ package io.crums.sldg;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Iterator;
@@ -14,7 +16,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 import java.util.TreeSet;
-import java.util.logging.Logger;
 
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.packs.MorselPackBuilder;
@@ -70,11 +71,12 @@ public class Ledger implements AutoCloseable {
   /**
    * Logger name. Forks and trims are logged as warnings; fatal errors (e.g. tampered hashes
    * in the skip ledger) are logged before an exception is thrown.
+   * Same as {@linkplain SldgConstants#LOGGER_NAME}.
    * 
    * @see State#FORKED
    * @see State#TRIMMED
    */
-  public final static String LOG_NAME = "sldg";
+  public final static String LOG_NAME = SldgConstants.LOGGER_NAME;
   
   /**
    * The state of a valid (i.e. usable) {@linkplain Ledger} instance whose source-
@@ -400,7 +402,7 @@ public class Ledger implements AutoCloseable {
         msg = "FORK: First-conflict updated from [" + firstConflict + "] to [" + conflict + "]";
       
       firstConflict = conflict;
-      log().warning(msg);
+      log().log(Level.WARNING, msg);
     }
     
     state = State.FORKED;
@@ -1037,11 +1039,11 @@ public class Ledger implements AutoCloseable {
   
   
   /**
-   * @return {@code Logger.getLogger(LOG_NAME)}
-   * @see #LOG_NAME
+   * @return {@code SldgConstants.getLogger()}
+   * @see SldgConstants#getLogger()
    */
   protected Logger log() {
-    return Logger.getLogger(LOG_NAME);
+    return SldgConstants.getLogger();
   }
   
 

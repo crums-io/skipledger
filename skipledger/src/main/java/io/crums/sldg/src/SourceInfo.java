@@ -4,6 +4,7 @@
 package io.crums.sldg.src;
 
 
+import java.lang.System.Logger.Level;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
@@ -116,7 +117,7 @@ public class SourceInfo {
     try {
       return Optional.of(new SimpleDateFormat(dateFormat));
     } catch (IllegalArgumentException iax) {
-      SldgConstants.getLogger().warning("ignoring bad date format pattern: '" + dateFormat + "'");
+      SldgConstants.getLogger().log(Level.WARNING, "ignoring bad date format pattern: '" + dateFormat + "'");
       return Optional.empty();
     }
   }
