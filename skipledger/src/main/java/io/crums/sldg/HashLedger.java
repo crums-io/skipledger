@@ -65,7 +65,7 @@ public interface HashLedger extends AutoCloseable {
    * 
    * @return strictly ascending list of row numbers, possibly empty
    * 
-   * @see #getCrumTrailByIndex(int)
+   * @see #getTrailByIndex(int)
    */
   default List<Long> getTrailedRowNumbers() {
     return new Lists.RandomAccessList<Long>() {

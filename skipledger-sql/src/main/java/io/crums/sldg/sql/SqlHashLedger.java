@@ -468,7 +468,7 @@ public class SqlHashLedger implements HashLedger {
   /**
    * {@inheritDoc}
    * 
-   * <h3>Implementation Note</h3>
+   * <h4>Implementation Note</h4>
    * <p>
    * The SQL implementation performs this in 2 steps. The crumtrails are deleted in the
    * 1st transaction; the skip ledger rows are deleted in a 2nd transaction. It's punishment

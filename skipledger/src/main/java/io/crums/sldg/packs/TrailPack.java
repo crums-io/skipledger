@@ -24,9 +24,10 @@ import io.crums.util.Lists;
  * The serial format is the concatenation of 2 sections, TRAIL_LIST and TRAILS.
  * </p>
  * 
- * <h4>TRAIL_LIST</h4>
- * <p>
+ * <h3>TRAIL_LIST</h3>
+ * 
  * <pre>
+ * 
  *    TRAIL_CNT   := SHORT      // number of crumtrails
  *    
  *    RN          := LONG       // row number
@@ -36,27 +37,23 @@ import io.crums.util.Lists;
  *    
  *    TRAIL_LIST  := TRAIL_CNT [TRAIL_ITEM ^TRAIL_CNT]
  * </pre>
- * </p>
  * 
- * <h4>TRAILS</h4>
+ * <h3>TRAILS</h3>
  * <p>
  * This is just a list of variable-width CRUMTRAILs each of length TRAIL_SIZE.
  * </p>
- * <p>
  * <pre>
  *    CRUMTRAIL   := BYTE ^TRAIL_SIZE      // byte-size of crumtrail
  *    
  *    TRAILS      := CRUMTRAIL ^TRAIL_CNT
  * </pre>
- * </p>
  * 
- * <h4>TRAIL_BAG</h4>
+ * <h3>TRAIL_BAG</h3>
  * 
- * <p>
  * <pre>
+ * 
  *    TRAIL_BAG   := TRAIL_LIST  TRAILS
  * </pre>
- * </p>
  * 
  */
 public class TrailPack implements TrailBag {

@@ -21,16 +21,15 @@ import io.crums.util.Lists;
 /**
  * Base {@linkplain RowBag} implementation. Note this uses no caching/memo-ization.
  * Consequently the cost every full-row lookup is linear in the row number. Not good:
- * validating the pack then is <b>0</b>(n<sup><tiny>2</tiny></sup>). See {@linkplain CachingRowPack}.
+ * validating the pack then is <b>0</b>(n<sup><small>2</small></sup>). See {@linkplain CachingRowPack}.
  * 
- * <p>
- * See the package description for the serial format.
- * </p>
  * <h2>Serial Format</h2>
- * 
- * <h4>Definitions</h4>
  * <p>
+ * Below, the data types are first defined, then the row pack data structure itself.
+ * </p>
+ * <h3>Definitions</h3>
  * <pre>
+ * 
  *    HASH        := BYTE ^32
  *    RN          := LONG
  *    RHASH       := HASH   // hash of entire row (used as the value of a hash pointer)
@@ -39,17 +38,15 @@ import io.crums.util.Lists;
  *                          // being the row's hash [skip] pointers
  *    
  * </pre>
- * <p>
  * 
- * <h4>Structure</h4>
- * <p>
+ * <h3>Structure</h3>
  * <pre>
  *    
  *    I_COUNT     := INT                // number of rows with full info (have input hash)
  *    FULL_RNS    := RN ^ICOUNT         // full info row numbers in ascending order
  *    
  *    // The following is inferred from FULL_RNS
- *    // see {@linkplain Ledger#refOnlyCoverage(java.util.Collection)}
+ *    // see {@linkplain SkipLedger#refOnlyCoverage(java.util.Collection)}
  *    
  *    R_COUNT     := INT                // (INFERRED)
  *     
@@ -61,7 +58,6 @@ import io.crums.util.Lists;
  *    
  *    ROW_BAG     := ICOUNT FULL_RNS HASH_TBL
  * </pre>
- * <p>
  * 
  */
 public class RowPack extends RecurseHashRowPack {

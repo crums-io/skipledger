@@ -46,12 +46,6 @@ import io.crums.sldg.SkipLedger;
  * such events are finite and few (&lt; 62), this optimistic strategy is expected to pay off most of
  * the time.
  * </p>
- * <h4>Simplification Prop</h4>
- * <p>
- * Considered getting rid of the copying in {@linkplain #raiseTreeRoot(int)}. It would still work
- * correctly, but with a large cache, it would unnecessarily lose a lot of work. This being a
- * cache, I've decided to keep it.
- * </p>
  * <h4>State Path Caching Prop</h4>
  * <p>
  * We're specially storing row 1 here because it always lies on the state path. But the same can be

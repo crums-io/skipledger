@@ -18,14 +18,14 @@ import io.crums.util.json.simple.JSONObject;
  * in JSON may reference values defined in a dictionary. The dictionary itself
  * is defined in some part of the larger JSON structure.
  * 
- * <h3>Motivation</h3>
+ * <h2>Motivation</h2>
  * <p>
  * Keep the {@linkplain JsonEntityParser} pattern, but overload each method with
  * a <em>{@code context}</em> parameter: for closure, the super interface methods
  * in {@code JsonEntityParser} methods delegate to their overloaded versions using
  * the {@linkplain #defaultContext()} method.
  * </p>
- * <h4>TODO:</h4>
+ * <h3>Design Note</h3>
  * <p>
  * This idea can be generalized with generics: instead of the application specific
  * {@code RefContext}, use a generic type {@code <C>}. (After all, the interface

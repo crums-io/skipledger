@@ -24,6 +24,7 @@ import io.crums.util.BigShort;
  * 
  * <h2>Salting</h2>
  * <p>
+ * TODO: document how this works (or reference document that does).
  * </p>
  */
 public abstract class ColumnValue implements Serial {
@@ -51,9 +52,9 @@ public abstract class ColumnValue implements Serial {
    * if any. If the object is already an instance of this class, then it is returned as-is;
    * If the given salt buffer is empty, then an unsalted instance is returned.
    * 
-   * <h2>Supported Object Types</h2>
+   * <h4>Supported Object Types</h4>
    * 
-   * <p>
+   * <p>The following object types are recognized and have special hashing rules:</p>
    * <ul>
    * <li>{@code byte[]}. Maximum 64kB.</li>
    * <li>{@code ByteBuffer}. Maximum 64kB.</li>
@@ -63,14 +64,12 @@ public abstract class ColumnValue implements Serial {
    * ensues.</li>
    * <li>{@code null}. Nulls are mapped to a special type and are usually salted.</li>
    * </ul>
-   * </p><p>
+   * <p>
    * Note in addition to the special handling for numbers, the byte-types {@code byte[]} and @code ByteBuffer}
    * specially interpret 32-byte values as hashes. Such hashes are converted to {@linkplain HashValue} instances.
    * </p>
    * 
    * @param obj  either {@code null}, or one of the allowed object types
-   * @param salt
-   * @return
    */
   public static ColumnValue toInstance(Object obj, ByteBuffer salt) {
     if (obj == null) {

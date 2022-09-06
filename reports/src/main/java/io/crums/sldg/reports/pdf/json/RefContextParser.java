@@ -24,30 +24,33 @@ import io.crums.util.json.simple.JSONObject;
  * <p>
  * Order, therefore matters. In the ordered list below, each category may optionally reference
  * objects in the previous categories:
- * </p><p>
+ * </p>
  * <ol>
  * <li>Colors</li>
  * <li>Fonts</li>
  * <li>Cell Formats</li>
  * <li>Cell Data (which may also reference images)</li>
  * </ol>
+ * <p>
  * Image bytes are stored externally and are not represented as JSON. They are designed
  * to be provided programmatically (or via configuration).
  * </p>
- * <h3>User Input</h3>
+ * <h2>User Input</h2>
  * <p>
- * {@linkplain NumberArg}s represent user provided input. (There will be a {@code StringArg}
+ * {@linkplain io.crums.sldg.reports.pdf.input.NumberArg NumberArg}s represent user provided input. (There will be a {@code StringArg}
  * type in a later release.) {@code NumberArg}s are only ever defined in the JSON for a
  * {@linkplain RefContext} and are only <em>referenced</em> (never defined) in other JSON
  * objects.
  * </p><p>
  * The parser does not provide a direct way to build the context object pre-injected
  * with user input. (A development version did.) 2 reasons it doesn't:
+ * </p>
  * <ol>
  * <li>It's the final (built) object's responsibility to interrogate the user for input.</li>
  * <li>It would force a 2-pass JSON build process: one to discover the necessary user input,
  * a second to provide it.</li>
  * </ol>
+ * <p>
  * For these reasons, {@code NumberArgs} are constructed without input (they're intialized to
  * {@code 0} when their param does not provide a default).
  * </p>

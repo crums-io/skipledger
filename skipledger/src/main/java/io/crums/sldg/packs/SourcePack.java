@@ -17,8 +17,8 @@ import io.crums.util.Lists;
  * Immutable {@linkplain SourceBag} implementation.
  * 
  * <h2>Serial Foramt</h2>
- * <p>
  * <pre>
+ * 
  *    SRC_CNT   := INT
  *    
  *    // per row
@@ -32,7 +32,6 @@ import io.crums.util.Lists;
  *    
  *    SRC_PACK  := SRC_CNT ROW ^ [SRC_CNT]
  * </pre>
- * </p>
  * 
  */
 public class SourcePack implements SourceBag {

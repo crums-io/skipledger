@@ -30,7 +30,7 @@ import io.crums.util.Strings;
  * generated the input hashes for select rows (our {@linkplain SourceRow} abstraction). 
  * </p>
  * 
- * <h1>Limits</h2>
+ * <h2>Limits</h2>
  * <p>
  * The maximum theoretical size of a morsel file is 2,147,483,647 bytes, just under 2GB.
  * Anything approaching these sizes is likely to exhaust memory. Adding memory-mapped
@@ -97,7 +97,7 @@ public class MorselFile {
    * Creates a new morsel file at the {@code target} file path using the given {@code builder}.
    * If the target is a path to a non-existent file, then the file is written to the destination
    * as given; if however the target is a path to a directory, then a file with a name generated
-   * from the characteristics of the given {@linkplain builder} is returned.
+   * from the characteristics of the given {@code builder} is returned.
    * 
    * @param target target file or directory; {@code null} is interpreted as the current directory
    * 

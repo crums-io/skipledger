@@ -18,7 +18,7 @@ import io.crums.sldg.src.SourceInfo;
  * name-to-bytes mappings. Certain names and prefixes are reserved for defined types.
  * This base class only knows about one of these: the {@code MetaPack} above.
  * 
- * <h3>Motivation</h3>
+ * <h2>Motivation</h2>
  * <p>
  * Version {@code 0.2} (of the file spec) introduced an optional meta pack describing
  * the columns in the ledger (names, descriptions, units and so on). Version {@code 0.3}, meanwhile,

@@ -111,7 +111,7 @@ public class Filenaming {
   
   
   /**
-   * Generates and returns a filename for the given <tt>path</tt>.
+   * Generates and returns a filename for the given <code>path</code>.
    */
   public String pathFilename(Path path, Format format) {
     Objects.requireNonNull(path, "null path");
@@ -174,8 +174,8 @@ public class Filenaming {
   
   
   /**
-   * Returns a normalized version of the <tt>input</tt> filename in the given
-   * <tt>format</tt> for a {@linkplain Path path}. It's to make user-input reasonable.
+   * Returns a normalized version of the <code>input</code> filename in the given
+   * <code>format</code> for a {@linkplain Path path}. It's to make user-input reasonable.
    */
   public String normalizePathFilename(String input, Format format) {
     return normalizeEnityFilename(input, format, SPATH_EXT);

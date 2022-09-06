@@ -6,11 +6,11 @@
  * <p>
  * A {@linkplain io.crums.sldg.SkipLedger} is a data structure containing
  * redundant information: given the underlying source (a table, a list of lines,
- * whatever), the <em>n</em><sup>th</sup> {@linkplain Row row} can be constructed from
- * scratch in <big>O</big>(<em>n</em>) operations. For this reason, every skip ledger
+ * whatever), the <em>n</em><sup>th</sup> {@linkplain io.crums.sldg.Row row} can be constructed from
+ * scratch in <b>O</b>(<em>n</em>) operations. For this reason, every skip ledger
  * implementation backs the data in some memo-ized from or another. The most basic
  * form this takes is the 2-column model: input-hash, and row-hash. This second
- * column (row-hash) can be understood as a memo-ization of the <big>O</big>(<em>n</em>)
+ * column (row-hash) can be understood as a memo-ization of the <b>O</b>(<em>n</em>)
  * steps it takes to compute the hash of the <em>n</em><sup>th</sup> row.
  * </p>
  * <h2>Offline Hashing</h2>

@@ -26,7 +26,8 @@ import io.crums.util.Lists;
  * of this class for this row number would have as many levels as there are significant
  * digits in the row number (i.e. as written here, or more concretely, 1 + high-bit-position
  * of its 64-bit reprsentation). In our example our frontier has 6 levels.
- * </p><p><pre><b>
+ * </p>
+ * <pre><b>
  *    Level  Row-number</b><code>
  *    
  *      0       101101
@@ -36,7 +37,7 @@ import io.crums.util.Lists;
  *      4       101000
  *      5       100000
  * 
- * </code></pre></p><p>
+ * </code></pre><p>
  * Each of the row numbers at a these levels represents the row with which a next row
  * will connect to, if that next row has a [hash] pointer connecting at that level to a
  * previous row.

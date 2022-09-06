@@ -25,7 +25,8 @@ public final class DoubleValue extends ColumnValue {
   private final double value;
 
   /**
-   * @param type
+   * @param value not a NaN
+   * @param salt  not null; either zero or 32 remaining bytes exactly
    */
   public DoubleValue(double value,  ByteBuffer salt) {
     super(ColumnType.DOUBLE, salt);

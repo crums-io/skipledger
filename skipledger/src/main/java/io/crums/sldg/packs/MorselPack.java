@@ -38,13 +38,11 @@ import io.crums.util.Sets;
  * <em>future</em> capabilities; we don't actually need this right now. (Recall, each
  * of the bags is self-delimiting anyway.)
  * </p>
- * <p>
  * <pre>
  *    PACK_COUNT  := BYTE (current version is 5)
  *    PACK_SIZES  := INT ^PACK_COUNT
  *    MORSEL_PACK := PACK_COUNT PACK_SIZES ROW_PACK TRAIL_PACK SRC_PACK PATH_PACK ASSETS
  * </pre>
- * </p>
  * 
  */
 public final class MorselPack implements MorselBag {

@@ -13,22 +13,23 @@ import java.util.function.Function;
 
 /**
  * A numeric function "specification" using a composition of a tree of {@linkplain NumNode}s.
- * At least one the nodes in the tree must be an {@linkplain NumNode.ArgNode ArgNode}
+ * At least one the nodes in the tree must be an {@linkplain NumNode.ArgLeaf ArgLeaf}
  * instance.
  * 
- * <h3>Quirk</h3>
+ * <h2>Argument Order and Evaluation</h2>
+ * <p>
+ * Arguments are ordered (left to right) by the order of discovery in pre-order traversal.
+ * Evaluation, too, is in pre-order, but that only matters for debugging.
+ * </p>
+ * 
+ * <h2>Quirk</h2>
  * <p>
  * This class does not recognize {@code NumberArg} instances as a special {@code Number}
  * type, so its {@linkplain NumFunc#collectNumberArgs(Collection)} does nothing. The reason
  * why is that it becomes difficult to model both "wired in" numbers (eg supplied from
  * a source row) and those to be supplied by user input.
  * </p>
- * 
- * <h3>Argument Order and Evaluation</h3>
- * <p>
- * Arguments are ordered (left to right) by the order of discovery in pre-order traversal.
- * Evaluation, too, is in pre-order, but that only matters for debugging.
- * </p>
+ * <h2>Single Thread Use Only</h2>
  * <p>
  * <em>Not thread safe!</em>
  * </p>

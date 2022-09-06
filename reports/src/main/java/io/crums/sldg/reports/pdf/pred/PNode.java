@@ -18,15 +18,10 @@ import io.crums.util.Lists;
  * {@linkplain PNode.Branch Branch} and {@linkplain PNode.Leaf Leaf} which inherit
  * from the abstract base type.
  * <p>
- * We have 2 use cases for this:
- * <ol>
- * <li>{@code PNode<SourceRow, ColumnPredicate>}: a predicate tree on 1 or more columns, and</li>
- * <li>{@code PNode<ColumnValue, CellPredicate>}: a predicate tree on an individual column value. </li>
- * </ol>
- * The 2 are related: each instance of the latter tree lives in a leaf instance
- * of the former.
+ * Presently, it has 1 use case: {@code PNode<SourceRow, SourceRowPredicate>} tree.
+ * (A second use case was eliminated/obviated).
  * </p>
- * <h3>Motivation</h3>
+ * <h2>Motivation</h2>
  * <p>
  * This predicate tree is designed to be serializable to JSON. To do that, it needs to
  * expose information about its internal tree structure. If we were only concerned with

@@ -20,7 +20,7 @@ public class SldgConstants {
   /**
    * Digest used by the libary is defined here. Currently SHA-256.
    * 
-   * @see Digests#SHA_256.
+   * @see Digests#SHA_256
    */
   public final static Digest DIGEST = Digests.SHA_256;
   

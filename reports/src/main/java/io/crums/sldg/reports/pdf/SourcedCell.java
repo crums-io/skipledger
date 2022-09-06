@@ -25,11 +25,11 @@ import io.crums.util.Lists;
 
 /**
  * A cell whose data is sourced to one or more {@linkplain SourceRow}s.
- * Instances must first be initialized thru either <ol>
- * <li>{@linkplain #init(SourceRow)}</li>
- * or if <em>{@linkplain #isCompound() compound}</em>,
- * <li>{@linkplain #init(List)}</li>
+ * Instances must first be initialized thru either
  * <ol>
+ * <li>{@linkplain #init(SourceRow)}, or if <em>{@linkplain #isCompound() compound}</em>, then</li>
+ * <li>{@linkplain #init(List)}</li>
+ * </ol>
  * <p>
  * Uninitialized instances are equivalent to blank cells. Instances can
  * be intialized (and reused) multiple times, so in this sense they double as

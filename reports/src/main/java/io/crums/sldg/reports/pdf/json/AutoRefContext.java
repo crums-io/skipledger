@@ -20,7 +20,7 @@ import io.crums.sldg.reports.pdf.FontSpec;
  * Auto discovery {@linkplain EditableRefContext}. Specifically, its {@code findRef(..)}
  * methods return a "present" {@code Optional}, if an object is encountered a second
  * time.
- * <h3>Motivation</h3>
+ * <h2>Motivation</h2>
  * <p>
  * Tho the JSON model for {@code ReportTemplate} is designed to be simple enough to be
  * editable by hand, it's much easier to build a prototype programmatically and let the

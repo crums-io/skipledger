@@ -15,7 +15,7 @@ import io.crums.util.PrimitiveComparator;
  * Arithmetic evaluation tree. The objective is to compose / model functions declaratively
  * and be able to serialize their structure in some format, say JSON.
  * 
- * <h3>Basic Design</h3>
+ * <h2>Basic Design</h2>
  * <p>
  * A function's return value is represented by a tree's root node {@linkplain #value()}.
  * {@code NumNode}s come in 2 flavors, {@linkplain Leaf} and {@linkplain Branch}. {@code Leaf} instances
@@ -28,15 +28,15 @@ import io.crums.util.PrimitiveComparator;
  * ({@code +, -, *, /}). For example, we could add exponentiation. For now, this minimal feature
  * set suffices to express most polynomial expressions not too verbosely.
  * </p>
- * <h3>Non Goals</h3>
+ * <h2>Non Goals</h2>
  * <p>
  * (Listed here so I don't forget and avoid wasting time on these.)
+ * </p>
  * <ul>
  * <li>Spec'ing a new DSL parser. (Rabbit hole.)</li>
  * <li>Efficiency. (It's aimed at <em>entry points</em> in the script / program.)</li>
  * </ul>
- * </p>
- * <h3>Fuzziness</h3>
+ * <h2>Fuzziness</h2>
  * <p>
  * Remember number representations on computers generally don't have mutlipicative inverses
  * (they're not proper fields). Nor are they truly associative (floats and doubles) even under

@@ -22,7 +22,7 @@ import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 
 /**
- * Summary of a witnessing a {@linkplain HashLedger}.
+ * Summary of the witnessing of a {@linkplain HashLedger}.
  */
 public final class WitnessReport {
   
@@ -42,12 +42,13 @@ public final class WitnessReport {
   /**
    * Witnesses unwitnessed rows in the given ledger database and returns a report.
    * 
-   * <h2>Algorithm for which rows are witnessed</h2>
+   * <h4>Algorithm for which rows are witnessed</h4>
    * <p>
-   * By at most ({@linkplain SldgConstants#DEF_TOOTHED_WIT_COUNT}) or 9 unwitnessed
+   * At most 0 ({@linkplain SldgConstants#DEF_TOOTHED_WIT_COUNT DEF_TOOTHED_WIT_COUNT}  + 1) unwitnessed
    * rows are chosen to be witnessed. With the possible exception of the last row,
    * these rows are numbered at multiples of some power of 2. This is motivated by the
    * following:
+   * </p>
    * <ol>
    * <li>Rows with higher powers of 2 show up more commonly in our hash proofs. Therefore
    * a trail for that row enjoys efficiencies for a greater number of use cases.</li>
@@ -55,9 +56,8 @@ public final class WitnessReport {
    * the ledger and getting witnessed), then this scheme allows a stable way to query for
    * witnessed rows. (Recall it's a 2 step process: it takes minutes to retrieve a new crumtrail.)</li>
    * </ol>
-   * </p>
    * 
-   * <h2>Algorithm for which trails (witnessed rows) are stored</h2>
+   * <h4>Algorithm for which trails (witnessed rows) are stored</h4>
    * <p>
    * As a general rule, trails are stored in order of <em>both</em> row number and
    * non-decreasing UTC witness-time. That is, the row number is always increasing, and the time is
@@ -66,14 +66,17 @@ public final class WitnessReport {
    * </p><p>
    * However not all trails are stored in the database. If 2 or more trails share the same
    * witness time, then at most 2 trails with that witness time are stored:
+   * </p>
    * <ol>
    * <li>The trail of the row with the most hash pointers (determined by the row number).</li>
    * <li>The trail of the row with the highest row number.</li>
    * </ol>
+   * <p>
    * In some cases the same row may satisfy both conditions, so that if there are 2 or more rows
    * witnessed at the same time, only 1 them (the last) is stored.
    * </p>
-   * @param includeLast if {@code true}
+   * 
+   * @param includeLast if {@code true}, then the last row is also witnessed
    */
   public static WitnessReport witness(HashLedger hashLedger, boolean includeLast) {
     
@@ -106,8 +109,9 @@ public final class WitnessReport {
   /**
    * Witnesses unwitnessed rows in the given ledger database and returns a report.
    * 
-   * @param db the ledger database.
-   * @param exponent witness rows numbered a multiple of 2<sup>exponent<sup>
+   * @param hashLedger  the ledger database.
+   * @param exponent    witness rows numbered a multiple of 2<sup>exponent</sup>
+   *                    (&ge; 0 and le; 62)
    * @param includeLast if {@code true}, then the last unwitnessed row is also witnessed
    */
   public static WitnessReport witness(HashLedger hashLedger, int exponent, boolean includeLast) {

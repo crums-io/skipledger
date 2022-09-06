@@ -6,7 +6,7 @@ package io.crums.sldg;
 import io.crums.model.CrumsException;
 
 /**
- * Base exception in the <tt>skipledger</tt> module. Mostly thrown
+ * Base exception in the <code>skipledger</code> module. Mostly thrown
  * as a result of data corruption.
  */
 @SuppressWarnings("serial")

@@ -107,7 +107,7 @@ public class ReportTemplate {
    * @param file
    * @param candidates  not-empty list of source rows. If there's a {@linkplain #getQuery() query}
    *                    object, then these are <em>candidate</em> source rows and are filtered by
-   *                    the query object to create a final <em>rowset<em>
+   *                    the query object to create a final <em>rowset</em>
    * @throws IllegalArgumentException if the final rowset is empty
    */
   public void writePdf(File file, List<SourceRow> candidates)

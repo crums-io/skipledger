@@ -19,7 +19,7 @@ import io.crums.util.hash.Digest;
  * This describes a hash proof that the specified rows are indeed from the same ledger with strong
  * constraints on the possible row numbers.
  * 
- * <h3>Validation Guarantee</h3>
+ * <h2>Validation Guarantee</h2>
  * <p>
  * Every instance's hash pointers are checked for validity at construction. Furthermore,
  * every public constructor makes a defensive copy of its row inputs. The upshot of this
@@ -28,7 +28,7 @@ import io.crums.util.hash.Digest;
  * An instance's hashing algorithm ({@linkplain Digest} implementation) is delegated to
  * its {@linkplain Row}s.
  * </p>
- * <h3>Skip Paths</h3>
+ * <h2>Skip Paths</h2>
  * <p>
  * The list of rows linking the highest-numbered row to the lowest-numbered row in a path
  * is not unique. It may be a small or large list. However any path with a large list of rows
@@ -39,7 +39,7 @@ import io.crums.util.hash.Digest;
  * forward: at each step (row) you link to the lowest numbered row your row links to, while minding
  * not to skip beyond the target low-numbered row.)
  * </p>
- * <h3>Performance Note</h3>
+ * <h2>Performance Note</h2>
  * <p>
  * Instances are <em>small</em> objects. Self reminder: there's little point in optimization.
  * Serialization footprint, maybe; clock-cycles NO(!).
@@ -163,8 +163,6 @@ public class Path implements Digest {
    * Determines whether this is a skip path. A skip path describes
    * the shortest possible list of rows connecting the {@linkplain #hiRowNumber()} to
    * the {@linkplain #loRowNumber()}.
-   * 
-   * @see SkipPath
    */
   public final boolean isSkipPath() {
     List<Long> vRowNumbers = SkipLedger.skipPathNumbers(loRowNumber(), hiRowNumber());
@@ -219,13 +217,13 @@ public class Path implements Digest {
   }
   
   /**
-   * Returns the hash of the row with the given <tt>rowNumber</tt>. This is not
+   * Returns the hash of the row with the given <code>rowNumber</code>. This is not
    * just a convenience for getting the {@linkplain Row#hash() hash} of one of the
    * instance's {@linkplain #rows() rows}; it also provides a more sophisticated
    * algorithm so that it can return the hash of <em>any</em> row returned by
    * {@linkplain #rowNumbersCovered()}.
    * 
-   * @throws IllegalArgumentException if <tt>rowNumber</tt> is not a member of the
+   * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
    * set returned by {@linkplain #rowNumbersCovered()}
    */
   public final ByteBuffer getRowHash(long rowNumber) throws IllegalArgumentException {
@@ -252,14 +250,14 @@ public class Path implements Digest {
   
   
   /**
-   * Returns the row with lowest row-number that knows about the given <tt>rowNumber</tt>.
-   * I.e. if this path instance has a row with the given <tt>rowNumber</tt> then that row
+   * Returns the row with lowest row-number that knows about the given <code>rowNumber</code>.
+   * I.e. if this path instance has a row with the given <code>rowNumber</code> then that row
    * is returned. Otherwise, the <em>first</em> row that references the row with given
    * row-number is returned.
    * 
-   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <tt>rowNumber</tt>
+   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <code>rowNumber</code>
    * 
-   * @throws IllegalArgumentException if <tt>rowNumber</tt> is not a member of the
+   * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
    * set returned by {@linkplain #rowNumbersCovered()}
    * 
    * @see #getRowHash(long)

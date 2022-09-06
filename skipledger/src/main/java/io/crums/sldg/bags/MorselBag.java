@@ -11,7 +11,7 @@ import io.crums.sldg.packs.MorselPackBuilder;
  * ({@linkplain RowBag#getFullRowNumbers()} is a superset of rows with
  * information in the other bags.
  * 
- * <h3>TODO</h3>
+ * <h2>TODO</h2>
  * <p>
  * Iterators for traversing trails and such (in lieu of the getXyzIndex methods:
  * see {@linkplain MorselPackBuilder} for use cases).

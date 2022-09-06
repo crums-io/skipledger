@@ -23,17 +23,18 @@ import io.crums.util.json.JsonParsingException;
  * entities. It also doubles as an interface for loading raw image bytes (which I don't
  * want to encode in JSON).
  * 
- * <h3>Motivation</h3>
+ * <h2>Motivation</h2>
  * <p>
  * Many JSON snippets end up being duplicates of others. It would be nice to
  * avoid these duplicates both from a storage size standpoint, but more importantly
  * for the usual benefits of the DRY principle: it will allow one to craft <em>cleaner</em>,
  * maybe semantically more meaningful, templates.
  * </p>
- * <h3>Implementor's Reminder</h3>
+ * <h2>Implementor's Reminder</h2>
  * <p>
  * The interface declaration inherits default implementations for every method. The
  * following are <em>controlling</em>:
+ * </p>
  * <ul>
  * <li>{@linkplain #imageRefs()}</li>
  * <li>{@linkplain #colorRefs()}</li>
@@ -42,7 +43,6 @@ import io.crums.util.json.JsonParsingException;
  * <li>{@linkplain #cellDataRefs()}</li>
  * <li>{@linkplain #numberArgs()}</li>
  * </ul>
- * </p>
  * 
  * @see EditableRefContext
  * 

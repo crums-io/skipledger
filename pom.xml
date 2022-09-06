@@ -9,7 +9,14 @@
 
   <packaging>pom</packaging>
 
-  <name>Ledgers (Root POM)</name>
+  <name>${project.groupId}::${project.artifactId}</name>
+  <url>https://crums.io/project/ledgers</url>
+  
+  <description>
+    Collection of modules and tools for maintaining tamper proof, evolving, historical private ledgers
+    and for differentially revealing (reporting) any of their parts in an efficient, provable way.
+  </description>
+  
   
   <properties>
     <revision>0.5.0-SNAPSHOT</revision>
@@ -17,8 +24,62 @@
     <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
     <flatten.version>1.2.2</flatten.version>
-    <crums.core>1.0.0-SNAPSHOT</crums.core>
+    <crums.core>1.0.0</crums.core>
   </properties>
+  
+  
+
+  <licenses>
+    <license>
+      <name>GNU Affero General Public License, Version 3</name>
+      <url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Babak Farhang</name>
+      <email>babak@crums.io</email>
+      <organization>Crums</organization>
+      <organizationUrl>https://crums.io</organizationUrl>
+    </developer>
+  </developers>
+
+  
+  
+  <scm>
+    <connection>scm:git:git://github.com/crums-io/skipledger.git</connection>
+    <developerConnection>scm:git:ssh://github.com:crums-io/skipledger.git</developerConnection>
+    <url>http://github.com/crums-io/skipledger/tree/master</url>
+  </scm>
+  
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+    
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+    
+  </distributionManagement>
+  
+  
+  
+  
+  
+  
+  <repositories>
+    <!-- For SNAPSHOT releases of dependencies -->
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+  </repositories>
+  
+  
   
   <modules>
     <module>skipledger</module>
@@ -80,6 +141,89 @@
           </execution>
         </executions>
       </plugin>
+      
+      
+      
+
+
+
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <!--
+          Note the following is necessary only if _other_ javadoc errors are present,
+          i.e. unnecessary:
+          
+          <sourceFileExcludes>module-info.java</sourceFileExcludes>
+          
+          -->
+          <!--
+          Following are defaults:
+          
+          <quiet>false</quiet> (not exactly "quiet" when set to true)
+          <failOnWarnings>false</failOnWarnings>
+          <failOnError>true</failOnError>
+          
+          -->
+          
+          <bottom>
+            <![CDATA[
+            <table width="100%">
+            <tr>
+            <td style="text-align: left;">&nbsp;io.crums::]]>${project.artifactId} v${revision}
+            <![CDATA[ <br/>
+            &nbsp;Licensed under the GNU Lesser General Public License v3
+            (<a href="https://www.gnu.org/licenses/lgpl-3.0.txt">LGPL</a>)
+            </td>
+            <td style="text-align: right;"><br/>&copy; 2020-2022 <a href="http://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
+            </tr>
+            </table>
+            ]]>
+          </bottom>
+          
+        </configuration>
+        
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            </execution>
+        </executions>
+      </plugin>
+        
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+        <version>1.6.13</version>
+        <extensions>true</extensions>
+        <configuration>
+          <serverId>ossrh</serverId>
+          <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+          <autoReleaseAfterClose>true</autoReleaseAfterClose>
+        </configuration>
+      </plugin>
+
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>1.5</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      
 
     </plugins>
 
@@ -112,3 +256,7 @@
   </dependencies>
 
 </project>
+
+
+
+

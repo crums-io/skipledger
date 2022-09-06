@@ -42,11 +42,11 @@ import io.crums.util.ticker.Ticker;
  * </p><p>
  * However, an instance will not tolerate (will throw exceptions) if any of the following
  * is detected.
+ * </p>
  * <ol>
  * <li>If the hash-ledger is corrupted (internal consistency broken).</li>
  * <li>If the hash-ledger's first row does not match the source-ledger's first row.</li>
  * </ol>
- * </p>
  * <h2>Single Thread Model</h2>
  * <p>
  * An instance is an <em>oberserver</em> if {@linkplain SourceLedger} state. It cannot
@@ -295,7 +295,7 @@ public class Ledger implements AutoCloseable {
    * then the {@linkplain #getFirstConflict() first conflict} is checked before the
    * first and last rows.
    * 
-   * <h3>Implementation note</h3>
+   * <h4>Implementation note</h4>
    * <p>
    * This method is invoked by the base class's constructor. It may be overridden, so long
    * as the new behavior does not depend on any new fields defined in the subclass (they will

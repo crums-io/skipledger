@@ -11,9 +11,11 @@
   <artifactId>skipledger</artifactId>
   
   
-  <name>Skip Ledger</name>
+  <name>${project.groupId}::${project.artifactId}</name>
   <description>
-    A tamper-proof, append-only ledger with compact, opaque external representation and provable parts.
+    The skip ledger, the base data structure as a commitment scheme for append-only
+    ledgers. Differentially proves any cell value in the ledger using compact
+    packaged proofs called morsels.
   </description>
 
   <build>

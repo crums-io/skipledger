@@ -37,8 +37,8 @@ public abstract class RowHash implements Digest {
 
   /**
    * Returns the number of hash pointers in this row referencing previous rows.
-   * These are called levels, because each successive {@linkplain #prevHash(int) previous hash}
-   * points to a row numbered twice as far away as the level before it.
+   * These are called levels, because each successive {@linkplain #prevRowNumber(int)}
+   * is twice as far away.
    * 
    * @return &ge; 1
    */
@@ -52,7 +52,6 @@ public abstract class RowHash implements Digest {
    * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
    * 
    * @return {@code rowNumber() - (1L << level)}
-   * @see #hash(long)
    */
   public final long prevRowNumber(int level) {
     long rn = rowNumber();

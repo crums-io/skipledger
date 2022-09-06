@@ -14,16 +14,16 @@ import io.crums.sldg.SldgConstants;
 
 /**
  * A value represented by its hash. Since this is a precomputed hash, instances are <em>never
- * salted</em> ({@linkplain #isSalted()} returns {@code false}).
+ * salted</em> ({@linkplain #isSalted()} always returns {@code false}).
  * <p>
  * There are 2 use cases for this class:
- * <ol>
- * <li><strike>When a column value takes too many bytes to be packaged in a morsel.</strike>
- * (No, a better strategy is define a {@code BytesValue} column that is understood to be
- * the hash of the blob. That way, its hash can remain salted.)</li>
- * <li>When a column value is redacted from its row.</li>
- * </ol>
  * </p>
+ * <ol>
+ * <li>When a column value takes too many bytes to be packaged in a morsel.
+ * (Actually, a better strategy is to define a {@code BytesValue} column that is understood to be
+ * the hash of the blob. That way, its hash can remain salted.)</li>
+ * <li>When a column value is redacted from its row. <em>This is its main use.</em></li>
+ * </ol>
  * 
  * @see #getHash(MessageDigest)
  */

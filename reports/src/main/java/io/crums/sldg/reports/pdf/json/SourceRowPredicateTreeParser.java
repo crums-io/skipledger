@@ -12,7 +12,9 @@ import io.crums.util.json.simple.JSONObject;
 import io.crums.sldg.reports.pdf.pred.PNode.Leaf;
 
 /**
- * 
+ * A {@code PNodeParser<SourceRow, SourceRowPredicate>} implementation.
+ * Uses the {@linkplain SourceRowPredicateParser} to create the tree's
+ * leaf nodes.
  */
 public class SourceRowPredicateTreeParser extends PNodeParser<SourceRow, SourceRowPredicate> {
   

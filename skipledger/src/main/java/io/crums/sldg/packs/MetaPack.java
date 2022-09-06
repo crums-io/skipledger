@@ -24,14 +24,13 @@ import io.crums.util.Strings;
  * <p>
  * Excepting its 3-byte header, the serial format is in fact JSON.
  * </p>
- * <h4>Structure</h4>
- * <p>
+ * <h3>Structure</h3>
  * <pre>
+ * 
  *    META_PACK := LEN JSON
  *    LEN := BYTE ^3    // 3-byte unsigned big endian value
  *    JSON := BYTE ^[LEN]
  * </pre>
- * </p>
  * 
  * @see SourceInfoParser for JSON format
  * @see #getSourceInfo()

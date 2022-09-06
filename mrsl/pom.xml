@@ -9,7 +9,7 @@
   
   <artifactId>mrsl</artifactId>
   
-  <name>mrsl CLI</name>
+  <name>${project.groupId}::${project.artifactId}</name>
   
   <description>
     Command line tool for working with morsel files. Verification, output, merges, redactions,

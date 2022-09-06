@@ -57,7 +57,7 @@ public interface SkipTable extends AutoCloseable {
   /**
    * Determines if the instance is empty.
    * 
-   * @return <tt>true</tt> iff {@linkplain #size()} == 0
+   * @return <code>true</code> iff {@linkplain #size()} == 0
    */
   default boolean isEmpty() {
     return size() == 0;

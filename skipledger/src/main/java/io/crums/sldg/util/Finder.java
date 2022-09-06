@@ -46,7 +46,7 @@ public class Finder {
   
 
   /**
-   * Creates an instance with a <tt>ledger</tt>.
+   * Creates an instance with a <code>ledger</code>.
    */
   public Finder(SkipLedger ledger) {
     this.ledger = Objects.requireNonNull(ledger, "null ledger");

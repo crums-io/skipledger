@@ -28,9 +28,10 @@ import io.crums.util.Lists;
  * Excepting pedagogical or niche use cases such as testing, useful {@linkplain SkipLedger}
  * implementations are I/O bound. This construct is designed to minimize that I/O. The use cases
  * envisioned at this time are:
+ * </p>
  * <ol>
  * <li><em>Verifying a source ledger matches its skipledger.</em><p>In order to verify that a
- * sequence of input-hashes from a source ledger (whether from a {@linkplain SourceLedger} or
+ * sequence of input-hashes from a source ledger (whether from a {@linkplain io.crums.sldg.SourceLedger SourceLedger} or
  * another application-defined format) matches the state of a skipledger across a range of row
  * numbers, one loads an instance starting from the previous row number (via {@linkplain
  * #loadFrontier(SkipLedger, long)}) and then runs it forward (consuming the sequence of hashes)
@@ -38,17 +39,18 @@ import io.crums.util.Lists;
  * verifies the frontier's {@linkplain #frontierRow() hi-row} {@linkplain RowHash#hash() hash} matches
  * the skipledger's {@linkplain SkipLedger#rowHash(long) row-hash} at that last row number in
  * the range.</p><br/></li>
+ * 
  * <li><em>Internal use in skipledger write-path.</em><p>Appending rows to a skipledger
  * involves internal look-ups of previous row-hashes, which are themselves I/O bound.
  * Opportunities here:
+ * </p>
  *   <ul>
  *   <li>{@linkplain SkipLedger#appendRows(ByteBuffer)}. When appending <em>en-bloc</em>.</li>
  *   <li>Propose input-hash streaming append function in {@code SkipLedger}. (Not implemented
  *   cuz haven't thought thru the locking.)</li>
  *   </ul>
- * </p></li>
+ * </li>
  * </ol>
- * </p>
  * 
  * <h2>Model &amp; state transitons</h2>
  * <p>

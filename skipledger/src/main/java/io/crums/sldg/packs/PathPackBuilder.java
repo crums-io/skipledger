@@ -33,7 +33,7 @@ public class PathPackBuilder implements PathBag, Serial {
   /**
    * Adds the given path declaration, if it doesn't already exist.
    * <p>
-   * Note adding <em>n</em> of these takes <em>n<sup><tiny>2</tiny></sup></em> operations. We
+   * Note adding <em>n</em> of these takes <em>n</em><sup><small>2</small></sup> operations. We
    * don't expect that many declared paths (our file format maxes out at 64k), but even if usage
    * ever nears that magnitude, we'll need to consider sorting this in order improve performance.
    * </p>

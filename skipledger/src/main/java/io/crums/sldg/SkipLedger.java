@@ -20,11 +20,12 @@ import io.crums.util.Lists;
 import io.crums.util.hash.Digest;
 
 /**
+ * <p>
  * A <em>skip ledger</em> (new terminology). A skip ledger models a tamper proof
  * <a href="https://en.wikipedia.org/wiki/Skip_list">skip list</a>. It's use here
  * is as a tamper proof <em>list</em>, not as a search structure. Here are some of its key
  * differences:
- * <p>
+ * </p>
  * <ol>
  * <li><em>Append only.</em> Items are only ever be appended to the <em>end</em> of the
  * list. (In skip list terms, the items are ordered in the ordered in they appear.)</li>
@@ -40,7 +41,7 @@ import io.crums.util.hash.Digest;
  * <li><em>Efficient verification.</em> Whereas a skip list is efficient at search,
  * a skip ledger's mojo lies in its efficiency in verification. </li>
  * </ol>
- * </p><p>
+ * <p>
  * So a skip ledger is like a tamper proof linked list, but on link steroids. The main
  * advantage it offers over a (singlely) linked tamper proof list is that you don't need
  * to show the whole list (or any substantial part of it) in order to prove an item's position in
@@ -107,7 +108,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * a factor of the row number. For odd row numbers, this is always 1 (since the highest
    * factor here is 2<sup><small>0</small></sup>).</p>
    * 
-   * <h3>Strict Law of Averages</h3>
+   * <h4>Strict Law of Averages</h4>
    * 
    * <p>The <em>average</em> number of skip pointers is <em>always</em> less than 2.
    * Equivalently, the total number of skip pointers up to (and including) a given row
@@ -116,8 +117,6 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * 
    * @param rowNumber &ge; 1
    * @return &ge; 1 (with average value of 2)
-   * 
-   * @see #maxRows(long)
    */
   public static int skipCount(long rowNumber) {
     checkRealRowNumber(rowNumber);
@@ -153,12 +152,12 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   
 
   /**
-   * Throws an <tt>IllegalArgumentException</tt> if the given row number is not &ge; 1.
-   * If the row number is zero, the thrown exception details why row <tt>0</tt> is a bad
+   * Throws an <code>IllegalArgumentException</code> if the given row number is not &ge; 1.
+   * If the row number is zero, the thrown exception details why row <code>0</code> is a bad
    * argument.
    * 
    * @param rowNumber &ge; 1
-   * @throws IllegalArgumentException if <tt>rowNumber &le; 0</tt>
+   * @throws IllegalArgumentException if <code>rowNumber &le; 0</code>
    */
   public static void checkRealRowNumber(long rowNumber) throws IllegalArgumentException {
     
@@ -365,7 +364,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * together using only the given {@code knownRows}.
    * 
    * @param knownRows known (available) row numbers from which the path may be constructed
-   * @param targets target row numbers (must all be contained in {@code knownRows})
+   * @param target    target row numbers (must all be contained in {@code knownRows})
    *                in no particular order, but with no duplicates
    * 
    * @return the path, if found; empty, o.w.
@@ -530,14 +529,14 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * Returns the structural path from a lower
    * (older) row number to a higher (more recent) row number in a ledger.
    * This is just the shortest structural path following the hash pointers in each
-   * row from the <tt>hi</tt> row number to the <tt>lo</tt> one. The returned list
+   * row from the <code>hi</code> row number to the <code>lo</code> one. The returned list
    * however is returned in reverse order, in keeping with the temporal order of
    * ledgers.
    * 
    * @param lo row number &gt; 0
    * @param hi row number &ge; {@code lo}
    * 
-   * @return a monotonically ascending list of numbers from <tt>lo</tt> to </tt>hi</tt>,
+   * @return a monotonically ascending list of numbers from <code>lo</code> to <code>hi</code>,
    *         inclusive
    */
   public static List<Long> skipPathNumbers(long lo, long hi) {
@@ -652,7 +651,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   
   /**
    * Returns the skip-path from row 1 to the row numbered {@linkplain #size() size},
-   * or <tt>null</tt> if this ledger is empty.
+   * or <code>null</code> if this ledger is empty.
    */
   public Path statePath() {
     long size = size();
@@ -663,7 +662,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   
   /**
    * Returns the skip-path (the shortest string of rows) connecting the row with the
-   * given <tt>lo</tt> number from the row with the given <tt>hi</tt> number.
+   * given <code>lo</code> number from the row with the given <code>hi</code> number.
    */
   public Path skipPath(long lo, long hi) {
     if (hi > size())

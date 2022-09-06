@@ -19,8 +19,8 @@ import io.crums.util.Lists;
  * <p>
  * The serial form is a concatenation of variable size {@linkplain PathInfo}s,
  * with the number of these as premable.
- * </p><p>
- * <pre>
+ * </p>
+ * <pre>{@code
  *    PATH_CNT    := SHORT                              // number of declared paths (<= 64k)
  *    
  *    // per PathInfo
@@ -31,8 +31,8 @@ import io.crums.util.Lists;
  *                   
  *    
  *    PATH_PACK   := PATH_CNT [PATH_INFO ^PATH_CNT]     // but note ea PATH_INFO is var-width
+ *    }
  * </pre>
- * </p>
  * 
  */
 public class PathPack implements PathBag {

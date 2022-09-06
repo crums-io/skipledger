@@ -100,7 +100,7 @@ public class ReportAssets {
    * The given {@code reportPath} may be either the subdirectory {@code dir} (in which case
    * it must contain exactly one {@code .json} file), or a path to an actual file.
    * 
-   * <h3>Image References</h3>
+   * <h4>Image References</h4>
    * <p>
    * Images are loaded from the {@code dir/images} subdirectory (if any). Note all files in the
    * subdirectory should be <em>loadable</em> images by the library. (This method does verify

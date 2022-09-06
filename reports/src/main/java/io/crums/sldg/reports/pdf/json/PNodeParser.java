@@ -25,7 +25,7 @@ import io.crums.util.json.simple.JSONObject;
  * structure (the '?' in the pseudo code above) are implemented by a special {@code Number}
  * class {@linkplain NumberArg}.
  * </p>
- * <h3>Use {@code EditableRefContext} on Write-path</h3>
+ * <h2>Use {@code EditableRefContext} on Write-path</h2>
  * <p>
  * On the <em>write</em>-path, the parser recognizes this special {@code Number} implementation
  * and populates (stuffs) the supplied {@linkplain EditableRefContext} with {@code NumberArg}s
@@ -38,15 +38,8 @@ import io.crums.util.json.simple.JSONObject;
  * takes wild card inputs (currently no use case for wild card '?' column numbers). But since
  * the former tree embeds the latter in its leaves, both parsers need an editable context.
  * </p>
- * <h3>Read-path</h3>
- * <p>
- * On the <em>read</em>-path, this parser <em>expects</em> the {@code RefContext} instance to
- * be pre-populated with <em>dynamic</em> (usually user) input. How that's achieved
- * (how it's pre-populate) is not <em>this</em> parser's concern.
- * </p>
  * 
- * @see ColumnValuePredicateParser
- * @see ColumnPredicateParser
+ * @see SourceRowPredicateTreeParser
  */
 public abstract class PNodeParser<T, U extends Predicate<T>>
     implements ContextedParser<PNode<T, U>> {
@@ -101,7 +94,15 @@ public abstract class PNodeParser<T, U extends Predicate<T>>
   }
   
   
-  
+  /**
+   * Injects a leaf node in the JSON representation of the tree.
+   * 
+   * @param pNode   the leaf node
+   * @param jObj    the JSON object the leaf node is directly represented in
+   * @param context used by downstream parsers
+   * 
+   * @see #toLeaf(JSONObject, RefContext)
+   */
   protected abstract void injectLeaf(
       PNode.Leaf<T, U> pNode, JSONObject jObj, RefContext context);
   
@@ -144,6 +145,13 @@ public abstract class PNodeParser<T, U extends Predicate<T>>
   
   
 
+  /**
+   * Deserializes and returns leaf node instance from the given JSON object.
+   * 
+   * @return a {@linkplain PNode.Leaf} instance
+   * 
+   * @see #injectLeaf(PNode.Leaf, JSONObject, RefContext)
+   */
   protected abstract PNode<T, U> toLeaf(JSONObject jObj, RefContext context);
   
   

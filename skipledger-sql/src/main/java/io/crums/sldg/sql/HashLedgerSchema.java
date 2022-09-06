@@ -15,9 +15,10 @@ import io.crums.util.Base64_32;
  * works on most any SQL database. That in turn dumbs it down for now (e.g. no
  * CASCADE ON DELETE or other vendor-specific niceties).
  * 
- * <h1>Schema</h1>
+ * <h2>Schema</h2>
  * <p>
  * There are 3 tables in this design.
+ * </p>
  * <ol>
  * <li><em>skip table</em>. Standalone table recording a sequence of hashes computed
  *     from some user defined table. It models the skip ledger data structure.</li>
@@ -25,21 +26,24 @@ import io.crums.util.Base64_32;
  * <li><em>trail table</em>. Crumtrail (witness) records. Each row references both of
  *     the above tables via FOREIGN KEYs.</li>
  * </ol>
- * </p><p>
+ * <p>
  * Their individual schemas are detailed below.
  * </p>
  * 
- * <h2>Skip table</h2>
+ * <h3>Skip table</h3>
  * <pre>
+ * 
  * {@code CREATE TABLE} <em>skipTable</em>
  *  {@code (row_num BIGINT NOT NULL,
  *   src_hash CHAR(43) NOT NULL,
  *   row_hash CHAR(43) NOT NULL,
  *   PRIMARY KEY (row_num)
- *  )}</pre>
- * <h3>Rationale</h3>
+ *  )}
+ * </pre>
+ * <h4>Rationale</h4>
  * <p>
  * No reason to be married to this schema, but here are the reasons for this design:
+ * </p>
  * <ol>
  * <li>BIGINT row_num type. The hash columns take 43 bytes each, an extra 4 bytes doesn't hurt.
  * Maybe the database can handle this many rows, who knows.</li>
@@ -49,23 +53,24 @@ import io.crums.util.Base64_32;
  * <li>Hash columns as CHAR(43). This is more readable than the BINARY(32) data type. It's encoded
  * in a variant of the Base-64 encoding scheme tailored for 32-byte sequences. See {@linkplain Base64_32}.</li>
  * </ol>
- * </p>
  * 
- * <h2>Trail Chain table</h2>
+ * <h3>Trail Chain table</h3>
  * <p>
  * The Merkle proof in a crumtrail (witness record) contains a proof-chain. This proof chain
  * contains a variable number of SHA-256 hash-nodes. Each hash-node in a proof takes one row
  * in this table.
  * </p>
  * <pre>
+ * 
  * {@code CREATE TABLE} <em>chainTable</em>
  *  {@code (chn_id INT NOT NULL,
  *   n_hash CHAR(43) NOT NULL,
  *   PRIMARY KEY (chn_id)
  *  )}</pre>
  * 
- * <h2>Trail table</h2>
+ * <h3>Trail table</h3>
  * <pre>
+ * 
  * {@code CREATE TABLE} <em>trailTable</em>
  *  {@code (trl_id INT NOT NULL,
  *   row_num BIGINT NOT NULL, // psst, you might wanna index this
@@ -85,14 +90,14 @@ import io.crums.util.Base64_32;
  * length never nears anything close to 128.
  * </p>
  * 
- * <h2>Primary Keys</h2>
+ * <h3>Primary Keys</h3>
  * <p>
  * The primary key column values in each of the above tables range from 1 thru {@code count(*)}.
  * In other words, they're a stand-in for the SQL {@code ROW_NUMBER()} function. This constraint
  * is managed here at the application level, not by the DB.
  * </p>
  * 
- * <h2>No Indexes</p>
+ * <h3>No Indexes</h3>
  * <p>
  * Primary keys aside, no SQL indexes are defined here. Since these are performance related,
  * and there maybe vendor-specific ways of creating them, we kick this can down the road. A DBA
@@ -100,14 +105,16 @@ import io.crums.util.Base64_32;
  * if there are very many crumtrails recorded.)
  * </p>
  * 
- * <h1>Customizations</h1>
+ * <h3>Customizations</h3>
  * <p>
  * Besides their table names (their prefixes, actually), the exact table definitions may be tweaked
  * in one of two ways without any code changes.
+ * </p>
  * <ol>
  * <li>By editing a configuration file.</li>
  * <li>By creating the tables directly on the database.</li>
  * </ol>
+ * <p>
  * Regardless how its done, while you may experiment with their SQL type defs, the column
  * names must obviously remain the same. Also, note the exact SQL syntax only figures at creation
  * time; once the tables are setup, the application cares little about the details. 

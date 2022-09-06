@@ -29,20 +29,20 @@ import io.crums.util.Lists;
  * Every row bag must <em>provably maintain rows from the same ledger.</em> The following
  * rules are designed to ensure this guarantee.
  * </p>
- * <p><ol>
+ * <ol>
  * <li>An empty instance's rows may be <em>initialized</em> either with an existing
  * {@linkplain RowPack row-pack} or a ledger {@linkplain Path path}. This initialization
  * establishes the highest row number in the pack.</li>
  * <li>A row may only ever be <em>added</em> if it is already referenced by an existing row
  * in the bag.</li>
- * </ol></p>
+ * </ol>
  * <p>
  * Note rule (1) involves a degree of trust. Since the hash of the last row in the ledger
  * represents the state of the entire ledger, extending a bag using a higher numbered path
  * necessarily involves trusting the source of the information. We punt on how this done,
  * for now.
  * </p><p>
- * Rule (1) is represenented by the {@linkplain #init(Path)} and {@linkplain #init(RowPack)} methods.
+ * Rule (1) is represenented by the {@linkplain #init(Path)} and {@linkplain #init(RowPack)} methods.<br/>
  * Rule (2) is enforced by the {@linkplain #add(Row)} method.
  * </p>
  * 

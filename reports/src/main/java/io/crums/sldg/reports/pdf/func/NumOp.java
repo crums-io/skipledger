@@ -44,8 +44,6 @@ public enum NumOp implements BinaryOperator<Number> {
    * Applies the operation and returns the result. The returned result uses
    * the same widening conversion rules as the primitives.
    * 
-   * <h4>Fallback behavior for
-   * 
    * @return a {@code Double}, {@code Float}, {@code Long}, or {@code Integer}.
    */
   @Override
