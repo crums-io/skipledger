@@ -21,6 +21,7 @@ Tools for maintaining tamper proof evolving historical private ledgers and for d
     - [Skip Ledger Model](#skip-ledger-model)
     - [Morsel Model](#morsel-model)
 - [Building](#building)
+- [Maven Artifacts](#maven-artifacts)
 - [Changes](#changes)
 - [Roadmap](#roadmap)
 
@@ -214,49 +215,147 @@ The file format is documented [here](./docs/morsel_file_format.txt).
 
 ## Building
 
-Project dependencies are listed in the maven `pom.xml` file. A number of these have no publicly distributed artifacts, and must be installed manually:
+Building is supposed to be easy. Please report any problems.
 
-* [junit-io](https://github.com/gnahraf/junit-io)
-* [merkle-tree](https://github.com/crums-io/merkle-tree)
-* [io-util](https://github.com/crums-io/io-util)
-* [crums-core](https://github.com/crums-io/crums-pub)
+### Requirements
 
-To build to these, clone the above repos (in the suggested order) and invoke
+The build system uses Maven 3 and for now requires JDK 17+. (If you need compiled binaries
+for older versions of Java, do let us know. For now, development tends not to be hamstrung with such
+considerations.)
 
-> mvn clean install -DskipTests=true
+### Maven Incantations
 
-in each of their directories. Omit the last argument above, to include unit tests.
-You are now ready to build this project. In this project's root directory:
+To build this project, clone this repos and invoke
 
-> mvn clean install -DskipTests=true
+```
+  $ mvn clean install -DskipTests
+```
+from the project's root directory. However to run the tests also, you'll need to build and install a
+*test dependency* locally. Clone the [junit-io](https://github.com/gnahraf/junit-io) project and invoke
+
+```
+  $ mvn clean install
+```
+in *that* project's root directory: you can then invoke the same build command in this project's
+directory in order to run the unit tests.
 
 To build the *sldg* and *mrsl* tools:
+```
+  $ cd sldg
+  $ mvn package appassembler:assemble -DskipTests
+  $ cd ../mrsl
+  $ mvn package appassembler:assemble -DskipTests
+```
 
-> cd sldg
-> mvn package appassembler:assemble -DskipTests=true
-> cd ../mrsl
-> mvn package appassembler:assemble -DskipTests=true
+## Maven Artifacts
 
+Release and development (SNAPSHOT) versions of the software are available from Maven Central.
+To develop a
+
+### skipledger
+
+The base module. Defines the hash ledger (a skip ledger annotated with crumtrail
+witness records), the morsel file for packaging proofs, and a data model for hashing arbitrary data from a
+*source ledger*.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+  
+```
+### skipledger-sql
+
+SQL implementation and modeling of a source ledger via an SQL query and backing storage for
+the hash ledger in the relational database.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger-sql</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+  
+```
+### reports
+
+PDF report generator from JSON DSL (the report template).
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>reports</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
+
+The next 2 modules are CLI tools, not libraries. There should be little occasion to include
+these as a dependency; maybe convenient for distribution purposes, however.
+
+### sldg
+
+CLI tool used by ledger owners to monitor, track, and optionally report morsels of their ledger's state.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>sldg</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
+
+### mrsl
+
+CLI tool for verifying and displaying information from standalone `.mrsl` files, generating PDF reports
+from them, as well as manipulating the `.mrsl` files themselves (merging or redacting content from them).
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>mrsl</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
 
 ## Changes
 
-Version `0.0.4` brought a number of usability improvements. 
+Version `0.5.0` is both a maintenance- and *new-feature* release.
 
-- JSON representation of morsel data. Exposes type information about column values, as well as providing programmatic access from other environments than Java.
-- `mrsl submerge`: slices out of pieces of data from a morsel file into a new morsel file. (The owner of
- a morsel may wish to share only a *subset* of the data gathered in their morsel.)
-- Support for customized meta-info for morsels. This info is not validated but helps with usability. For eg, column titles/headings.
+
+### Maintenance
+
+- **JPMS Modularization.** Maven submodules were JPMS modularized (the Java Module System). So were
+its other `io.crums` dependencies. This allows bundling applications with a custom JRE that's smaller
+than a standard runtime.
+- **Maven Central Deployment.** The modules defined in this project (and their dependencies on other
+`io.crums` projects) are now deployed to central.
+
+### New Features
+
+- **Better CLI.** This release uses the *picocli* library for prettier, more intuitive / helpful
+command line interfaces.
+
+- **Report Templates.** `.mrsl` files can now embed a customizable template for generating PDF reports
+from ledger data in a morsel. The idea is to allow the ledger owner create branded documents
+from their ledger entries for such things as bills, receipts, or any other documents they might invent.
+
 
 
 ## Roadmap
 
-The following is planned for the next version `0.5.0`:
+The following are planned for the next releases:
 
-- Modularization/maintenance
-- Executable for *mrsl* tool (native binary)
-- Prototype embedding branded customizations in `.mrsl` files that will allow the *mrsl* tool to generate branded PDF reports from them. This is a bit ambitious to achieve in one release cycle. Design requirements are discovered on dog fooding.
+- Reports:
+    * Add more arguments types that PDF templates can take (right now they're only numeric)
+    * Add template maker tools
+    * Add support for displaying images from the ledger data
+    * Embed `.mrsl` hashes in PDF, so that a standalone PDF can be validated against the current
+    fingerprint of the ledger
+- Package the *mrsl* and *sldg* tools for end-user distribution
 
-Longer term..
+After that..
 
 - Allow adding other optional appendages to morsel files: pub key + signatures, and user (ledger owner) defined legalese docs.
 

@@ -1,6 +1,9 @@
 mrsl Manual
 ========
 
+ *Coming soon: manual for Version 0.5.0*
+
+
 This is a short manual for the *mrsl* tool.  
 Version 0.0.4
 

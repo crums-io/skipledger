@@ -1,6 +1,8 @@
 sldg Manual
 =========
 
+ *Coming soon: manual for Version 0.5.0*
+
 This is a manual / tutorial about using the *sldg* tool.  
 Version 0.0.4
 
