@@ -38,7 +38,7 @@ This then is a modern take on those markings on a stick. It uses cryptographic h
 way (the project's namesake) to construct those markings, as it were. But before drilling down into the details
 of the data structure, it helps to first illustrate what we can do with it.
 
-Version `0.0.4` ships with 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
+There are 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
 update the history of an *operationally append-only* table or view in a relational database. It supports tear outs
 of the table (specific rows) in the form morsel files (`.mrsl` extension). *mrsl*, in turn, is a tool for both reading morsel
 files and manipulating (merging/redacting) them.
@@ -116,7 +116,8 @@ this is not settled API.
 
 ## Data structure
 
-This section concerns the hashing method and data structure used to capture the state of the list in the ledger.
+This section describes the hashing method and data structure used to capture the state of the list in the ledger.
+It is both a cryptographic commitment scheme and an accumulator.
 
 A *skip ledger* (new terminology) is a tamper proof, append-only list of objects represented by their SHA-256 hashes.
 Internally, it models a tamper proof [skip list](https://en.wikipedia.org/wiki/Skip_list ).  It's use here is as a tamper proof *list*,
@@ -240,6 +241,7 @@ in *that* project's root directory: you can then invoke the same build command i
 directory in order to run the unit tests.
 
 To build the *sldg* and *mrsl* tools:
+
 ```
   $ cd sldg
   $ mvn package appassembler:assemble -DskipTests
@@ -249,8 +251,24 @@ To build the *sldg* and *mrsl* tools:
 
 ## Maven Artifacts
 
-Release and development (SNAPSHOT) versions of the software are available from Maven Central.
-To develop a
+Version `0.5.0` will be the first release that becomes available from Maven Central.
+
+### SNAPSHOTs
+
+The latest development version `0.5.0-SNAPSHOT` is available from the *snaphots* repo.
+The POMs already describe its location, but here it is in case you want to use it in another POM file.
+
+```
+  <repositories>
+    <!-- For SNAPSHOT releases -->
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+  </repositories>
+```
+
+Note artifacts in this repo always have the `-SNAPSHOT` moniker appended to their version strings.
 
 ### skipledger
 
