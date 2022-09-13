@@ -16,9 +16,11 @@ import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,6 +33,7 @@ import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.MorselFile;
+import io.crums.sldg.bags.RowBag;
 import io.crums.sldg.json.MorselDumpWriter;
 import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.json.SourceRowParser;
@@ -38,6 +41,8 @@ import io.crums.sldg.json.TrailedRowWriter;
 import io.crums.sldg.packs.MorselPack;
 import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.packs.MorselPackBuilder.MergeResult;
+import io.crums.sldg.packs.RowPack;
+import io.crums.sldg.packs.RowPackBuilder;
 import io.crums.sldg.reports.pdf.ReportAssets;
 import io.crums.sldg.reports.pdf.ReportTemplate;
 import io.crums.sldg.reports.pdf.input.NumberArg;
@@ -46,6 +51,7 @@ import io.crums.sldg.src.DateValue;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.time.TrailedRow;
+import io.crums.util.EasyList;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -66,6 +72,7 @@ import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
+import picocli.CommandLine.Help.Ansi;
 
 
 
@@ -84,6 +91,7 @@ import picocli.CommandLine.Spec;
         Summary.class,
         Info.class,
         State.class,
+        Verify.class,
         ListCmd.class,
         History.class,
         Entry.class,
@@ -112,6 +120,70 @@ public class Mrsl {
     int exitCode = new CommandLine(new Mrsl()).execute(args);
     System.exit(exitCode);
   }
+
+  
+  
+  /**
+   * Invokes {@code System.out.printf(format, args)} after pre-processing
+   * any Jansi-encoded strings in the arguments.
+   * 
+   * @param format
+   * @param args Jansi-encoded string arguments are pre-processed
+   */
+  public static void printf(String format, Object... args) {
+    System.out.printf(format, jansify(args));
+  }
+  
+  
+  /**
+   * Applies <a href="http://en.wikipedia.org/wiki/ANSI_escape_code">ANSI escape codes</a>
+   * to any Jansi-encoded string in the given arguments.
+   * 
+   * @param args
+   * @return the argument array ({@code args}), possibly formatted
+   */
+  public static Object[] jansify(Object[] args) {
+    for (int index = args.length; index-- > 0; ) {
+      if (args[index] instanceof String arg)
+        args[index] = Ansi.AUTO.string(arg);
+    }
+    return args;
+  }
+  
+  
+  /**
+   * Applies <a href="http://en.wikipedia.org/wiki/ANSI_escape_code">ANSI escape codes</a>
+   * to any Jansi-encoded formatting in the given string and return the result.
+   * 
+   * @param s possibly Jansi-encoded string
+   * @return  possibly console-formatted string
+   */
+  public static String jansify(String s) {
+    
+    return Ansi.AUTO.string(s);
+  }
+  
+  
+  static class JansiPrinter extends TablePrint {
+    
+    
+    public JansiPrinter(int... columnWidths) {
+      super(columnWidths);
+    }
+
+    @Override
+    protected String decode(String snippet) {
+      return Ansi.AUTO.string(snippet);
+    }
+
+    @Override
+    protected int length(String snippet) {
+      return Ansi.AUTO.text(snippet).getCJKAdjustedLength();
+    }
+    
+    
+    
+  }
   
   
   
@@ -128,6 +200,7 @@ public class Mrsl {
   }
   
   
+  /** Returns the LHS morsel file (always present). */
   MorselFile getMorselFile() {
     return getMorselFile(morselFile);
   }
@@ -144,6 +217,8 @@ public class Mrsl {
       throw x;
     }
   }
+  
+  
   
   
 }
@@ -977,14 +1052,14 @@ class Merge implements Callable<Integer> {
   
   // TODO: not implemented yet
   
-  @Option(
-      names = "--ig-source-misses",
-      description = {
-          "Ignore (drop) source rows that can't be merged",
-          "(Happens if the source row number is very near",
-          "the morsel's last row number.)"
-      })
-  private boolean igSourceMisses;
+//  @Option(
+//      names = "--ig-source-misses",
+//      description = {
+//          "Ignore (drop) source rows that can't be merged",
+//          "(Happens if the source row number is very near",
+//          "the morsel's last row number.)"
+//      })
+//  private boolean igSourceMisses;
 
   @Override
   public Integer call() {
@@ -1006,7 +1081,7 @@ class Merge implements Callable<Integer> {
         out.println();
       }
       
-      Collections.sort(sources, (a, b) -> compareMorsels(a, b));
+      Collections.sort(sources, Merge::compareMorsels);
       
       auth = sources.remove(sources.size() - 1);
     }
@@ -1086,7 +1161,7 @@ class Merge implements Callable<Integer> {
   
 
   
-  private int compareMorsels(MorselFile a, MorselFile b) {
+  static int compareMorsels(MorselFile a, MorselFile b) {
     MorselPack packA = a.getMorselPack();
     MorselPack packB = b.getMorselPack();
     int comp = Long.compare(packA.hi(), packB.hi());
@@ -1259,8 +1334,149 @@ class Dump implements Callable<Integer> {
   
 }
 
-// TODO
-class Verify {
+@Command(
+    name = Verify.NAME,
+    description = {
+          "Verify left- (LHS) and right-hand-side morsels are from same ledger",
+          "(Another way to find out is to attempt to merge them.)",
+        }
+    )
+// Note this almost copies of the Merge class (not worth factoring out a base type--for now)
+class Verify implements Runnable {
+  
+  final static String NAME = "verify";
+  
+  @ParentCommand
+  private Mrsl mrsl;
+  
+  @Spec
+  private CommandSpec spec;
+  
+  
+  private List<File> morselFiles;
+  
+  @Parameters(
+      paramLabel = "FILES",
+      arity = "1..*",
+      description = "Morsel file[s] to compare")
+  public void setMorselFiles(String[] files) {
+    var argList = new ArgList(files);
+    morselFiles = argList.removeExistingFiles();
+    if (!argList.isEmpty())
+      throw new ParameterException(
+          spec.commandLine(),
+          pluralize("non-existent file", argList.size()) + ": " + argList);
+  }
+
+  @Override
+  public void run() {
+    final int count = this.morselFiles.size() + 1;
+    
+    var out = System.out;
+    
+    var sources = new EasyList<MorselFile>(count);
+    var lhsMorsel = mrsl.getMorselFile();
+    sources.add(lhsMorsel);
+    for (var f : morselFiles)
+      sources.add(mrsl.getMorselFile(f));
+    
+    Collections.sort(sources, Merge::compareMorsels);
+    MorselFile auth;
+    {
+      var top = sources.removeLast();
+      // if the LHS morsel *could be the authority, and it's not
+      // then make it so (just so we can print more meaningful info)
+      if (lhsMorsel != top &&
+          lhsMorsel.getMorselPack().hi() == top.getMorselPack().hi()) {
+        sources.remove(lhsMorsel);
+        sources.add(top);
+        top = lhsMorsel;
+      }
+      auth = top;
+    }
+    
+    
+    var authPack = auth.getMorselPack().getRowPack();
+    List<RowPack> rowPacks = Lists.map(sources, mf -> mf.getMorselPack().getRowPack());
+    
+    
+    final boolean allTied = rowPacks.get(0).hi() == authPack.hi();
+    
+    
+    var rowPackBuilder = new RowPackBuilder();
+    rowPackBuilder.init(authPack);
+    
+    var rnTally = new HashSet<>(authPack.getFullRowNumbers());
+    
+
+    var table = new Mrsl.JansiPrinter(10, 32, 8, 14);
+    
+    for (int index = rowPacks.size(); index-- > 0; ) {
+      var rowPack = rowPacks.get(index);
+      try {
+        rowPackBuilder.addAll(rowPack);
+      } catch (HashConflictException hcx) {
+        table.println("@|bold,fg(red) FAIL|@");
+        out.printf(
+            "%n%s and %s are NOT from the same historical ledger%n(detail: %s)%n",
+            sources.get(index).getFile().getName(),
+            auth.getFile().getName(),
+            hcx.getMessage());
+        return;
+      }
+      
+      rnTally.addAll(rowPack.getFullRowNumbers());
+    }
+
+    // pass.. only question is "what type?"
+    rnTally.removeAll(rowPackBuilder.getFullRowNumbers());
+    
+    boolean aOk = rnTally.isEmpty();
+    
+    table.println(aOk ? "@|bold,fg(green) OK|@" : "@|bold,fg(green) PARTIAL|@");
+    table.print("Hashes are consistent");
+    if (!aOk) {
+      assert !allTied;
+      out.printf("; but the lineage of the following %s%ncannot be established from the last row [%d]:%n",
+          pluralize("row", rnTally.size()),
+          authPack.hi());
+      var missedRns = rnTally.toArray(new Long[rnTally.size()]);
+      Arrays.sort(missedRns);
+      for (var missRn : missedRns)
+        out.println("  " + missRn);
+    } else if (allTied) { // aOK
+      out.printf("%nAll morsels reference ledger [%s] with %d rows%n%n",
+          abbrev(authPack),
+          authPack.hi());
+      return;
+    }
+    
+    out.println();
+    out.println("Lineage by Hi Row #:");
+    table.println();
+    table.setIndentation(2);
+    sources.add(auth);
+    table.printRow("@|bold HI|@", "@|bold MORSEL|@", null, "@|bold HASH|@");
+    for (var m : Lists.reverse(sources)) {
+      table.printRow(
+          m.getMorselPack().hi(),
+          m.getFile().getName(),
+          m == lhsMorsel ? " (LHS)" : null,
+          abbrev(m.getMorselPack()));
+    }
+    out.println();
+  }
+  
+  
+  private String abbrev(RowBag rowPack) {
+    var hash = rowPack.getRow(rowPack.hi()).hash();
+    return
+        IntegralStrings.toHex(hash.slice().limit(3)) +
+        ".." +
+        IntegralStrings.toHex(hash.slice().position(hash.limit() - 3));
+  }
+  
+  
   
 }
 

@@ -24,7 +24,8 @@
     <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
     <flatten.version>1.2.2</flatten.version>
-    <crums.core>1.0.0</crums.core>
+    <crums.util>1.0.1-SNAPSHOT</crums.util>
+    <crums.core>[1.0.0,)</crums.core>
   </properties>
   
   
@@ -231,6 +232,12 @@
 
 
   <dependencies>
+  
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>io-util</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
 
     <dependency>
       <groupId>io.crums</groupId>
