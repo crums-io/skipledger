@@ -1,5 +1,5 @@
 
-Morsel File Format Version 0.2
+Morsel File Format Version 0.3
 ==============================
 
 
@@ -8,6 +8,11 @@ are organized. That information is not provided here. The goal here is to descri
 the skeletal organization of the file. As a result some parts are a bit opaque.
 In particular, sections 2.4 and 2.5, gloss over some details that can otherwise
 be found in the source code.
+
+Version 0.3 introduces a change from 0.2: the last block is now a "named partition"
+called ASSETS below: it allows embedding arbitrary assets in a morsel file. This is
+designed to make the file format less brittle when new features and semantics are
+added. The library currently supports both version 0.2 and 0.3.
 
 
 1. Basic Types & Conventions:
@@ -38,14 +43,16 @@ The exposition below is top-down.
 
 MSRL := [HEADER] [MRSL_PACK]
 
-HEADER := "MRSL  0.2 "                    // (10 bytes) -- we're fussy about the 'MRSL' part
+HEADER := "MRSL  0.3 "                    // (10 bytes) -- we're fussy about the 'MRSL' part
 
 
 2.2 Components
 
-Version 0.2 is organized in 5 parts called "packs".
+Version 0.3 is organized in 5 parts called "packs".
 
-MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK] [META_PACK]
+MRSL_PACK := [PACK_HDR] [ROW_PACK] [TRAIL_PACK] [SOURCE_PACK] [PATH_PACK] [ASSETS]
+
+The last part, ASSETS replaces the META_PACK in version 0.3.
 
 
 2.3 Packs and Sizes
@@ -184,28 +191,35 @@ PATH_META := [PATH_META_SZ] [BYTE] ^ [PATH_META_SZ]
 PATH_META_SZ := [USHORT]
 
 
+2.8 Assets
 
-2.8 MetaPack
+The assets section supports embedding arbitrary, application-specific, named blocks of bytes
+in the morsel.
 
-Excepting its 3-byte header, this is in fact JSON.
+ASSETS := [ASSETS_HEADER] [ASSETS_BLOCK]
+ASSETS_HEADER := [ASSET_COUNT][ASSET_HEADERS]
+ASSET_COUNT := [UINT]
+ASSET_HEADERS := [ASSET_HDR] ^ [ASSET_COUNT]
+ASSET_HDR := [ASSET_BLOCK_SIZE][ASSET_NAME_SIZE][ASSET_NAME]
+ASSET_BLOCK_SIZE := [UINT]
+ASSET_NAME_SIZE := [UINT]
+ASSET_NAME := [BYTE] ^ [ASSET_NAME_SIZE]
+ASSETS_BLOCK := [BYTE] ^ (sum of ASSET_BLOCK_SIZE's)
 
-META_PACK := [META_JSON_SZ] [META_JSON]
-META_JSON_SZ := [BSHORT]
-META_JSON := [BYTE] ^ [META_JSON_SZ]
+The ASSETS_BLOCK is the concatenation of the individual asset's bytes in the order the
+names are declared. (There is no requirement the names be ordered.)
 
-The actual JSON fomat is not documented here. (TODO: document *somewhere*.)
+Presently, there are 2 assets known out-of-the-box: a ledger meta info file, and a DSL to generate
+PDF reports. Both are in fact in JSON. Since the PDF template may reference images (logos, etc.),
+the assets section typically embeds these images also.
 
 
 
 3. Changes
 
-The following were changed in version 0.2:
+The following were changed in version 0.3:
 
-* Meta information (Meta pack) introduced.
-* The maximum byte size of source table-cell (column) values was increased to
-  16,777,215 bytes (was previously 64kB).
-* The maximum number of source rows is now a 4-byte value; it was previously bound
-  at 64k rows.
+* Assets section. Replaces the "meta pack" in 0.2.
 
 
 
