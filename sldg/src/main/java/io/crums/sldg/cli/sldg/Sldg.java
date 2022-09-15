@@ -65,6 +65,7 @@ import picocli.CommandLine.Spec;
     subcommands = {
         HelpCommand.class,
         Setup.class,
+        Create.class,
         Status.class,
         ListCmd.class,
         History.class,
@@ -229,11 +230,23 @@ class Create implements Runnable {
   
   @ParentCommand
   private Sldg sldg;
+  
+  @Spec
+  private CommandSpec spec;
 
   @Override
   public void run() {
     final var out = System.out;
     out.println();
+    boolean overwriteAttempt;
+    try {
+      sldg.getLedger();
+      overwriteAttempt = true;
+    } catch (Exception expected) {
+      overwriteAttempt = false;
+    }
+    if (overwriteAttempt)
+      throw new ParameterException(spec.commandLine(), "Ledger already exists.");
     out.printf("%ncreating backing hash ledger tables (3)%n");
     sldg.createLedger();
     out.printf("%nDone.%n");
@@ -834,7 +847,7 @@ class Rollback implements Runnable {
     else {
       String msg;
       if (conflict == 1L)
-        msg = "Attempt to empty ledger (";
+        msg = "Attempt to empty ledger";
       else
         msg = "Illegal conflict row number: " + conflict;
       throw new ParameterException(spec.commandLine(), msg);
