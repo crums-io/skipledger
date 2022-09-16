@@ -1,15 +1,14 @@
 sldg Manual
 =========
 
- *Coming soon: manual for Version 0.5.0*
-
 This is a manual / tutorial about using the *sldg* tool.  
-Version 0.0.4
+Version 0.5.0
 
 ## Contents
 
 - [Introduction](#introduction)
 - [Configuration](#configuration)
+    - [Example Files](#example-files)
     - [Chinook Sample DB](#chinook-sample-db)
     - [Source Connection](#source-connection)
     - [Hash Connection](#hash-connection)
@@ -26,8 +25,7 @@ Version 0.0.4
     - [witness](#witness)
       - [About Crumtrails](#about-crumtrails)
     - [history](#history)
-    - [make-morsel](#make-morsel)
-    - [state-morsel](#state-morsel)
+    - [morsel](#morsel)
     - [validate](#validate)
       - [Startup Validation](#startup-validation)
     - [rollback](#rollback)
@@ -46,12 +44,17 @@ Ledgers are both *public* and *private*. You keep good books, you might pay audi
 and you might share parts or summaries of them with a select few, or the public.
 
 The goal of *sldg* then is to make tracking an already private, evolving historical ledger easy
-and allow a ledger's owner to later share any slices of the ledger's rows in unimpeachable, tamper proof packages called *morsel*s. 
+and allow a ledger's owner to later share any slices of the ledger's rows in unimpeachable, tamper proof packages called *morsel*s.
+
+
 
 ## Configuration
 
 Each ledger is defined by a configuration file. This uses the Java properties format: it can be named whatever. An example best illustrates how the configuration works.
 
+### Example Files
+
+Example configuration files (and sample outputs) are [available here](https://crums.io/project/ledgers/examples/index.html).
 
 ### Chinook Sample DB
 
@@ -62,7 +65,7 @@ prefer to follow along using another engine, that should work also.
 Here's a listing of a file generated using sldg's interactive *setup* command.  More about that
 command [later](#setup).. The comment lines have been edited out:
 
->
+
     sldg.source.jdbc.url=jdbc\:sqlite\:/Users/babak/play/sqlite_sample/chinook.db
     sldg.source.jdbc.driver=org.sqlite.JDBC
     sldg.source.jdbc.driver.classpath=../sqlite_sample/sqlite-jdbc-3.36.0.2.jar
@@ -81,7 +84,6 @@ We'll revisit each of these lines in order in the sections below.
 The first line (line order doesn't matter, but `setup` always writes them out in this order) defines the JDBC URL for connecting to the database
 where source table or view lives.
 
->
     sldg.source.jdbc.url=jdbc\:sqlite\:/Users/babak/play/sqlite_sample/chinook.db
 
 Most of the time the JDBC URL will point to a database living somewhere on the network, not to a local one as in our example. (Note the synatx:
@@ -90,13 +92,11 @@ colons must be escaped.)
 The second line here defines the JDBC driver name used to connect with JDBC URL. Depending on your environment, this information may be redundant (optional)
 and may be inferrable from the JDBC URL. In most environments, however, you will need to provide it.
 
->
     sldg.source.jdbc.driver=org.sqlite.JDBC
 
 The third line in our example defines the location of the `.jar` file where the named JDBC driver may be found. Again, in some environments
 this may be redundant (optional), but in most cases you'll need to set it.
 
->
     sldg.source.jdbc.driver.classpath=../sqlite_sample/sqlite-jdbc-3.36.0.2.jar
 
 Above, the classpath is defined relative to the location of the configuration file; it may also be set absolutely.
@@ -104,7 +104,6 @@ Above, the classpath is defined relative to the location of the configuration fi
 Name/value connection settings (not shown here) are prefixed with `sldg.source.info.`. For example, `readonly=true` would be written
 as
 
->
     sldg.source.info.readonly=true
 
 ### Hash Connection
@@ -136,9 +135,8 @@ The choice which table or view we use to construct this query is obviously depen
 
 The next 2 lines in the configuration file define the ledger using a view from this table:
 
->
+
     sldg.source.query.size=SELECT count(*) FROM invoice_items AS rcount
->
     sldg.source.query.row=SELECT * FROM (  SELECT ROW_NUMBER() OVER (ORDER BY InvoiceLineId ASC) AS row_index, InvoiceLineId, InvoiceId, TrackId, UnitPrice, Quantity FROM invoice_items) AS snap WHERE row_index \= ?
 
 The *size* query is straight forward: it must be a never-decreasing, non-negative number.
@@ -166,7 +164,6 @@ Each ledger also takes a random 32-byte seed value used for salting individual t
 generated from this seed salt together with the cells row/column coordinates. The purpose of this salting is to prevent anyone guessing what the value of a column must be
 given the hash of its value (so called rainbow attacks). This seed salt is expressed as 64-digit hexadecimal value.
 
->
     sldg.source.salt.seed=06a38261355760acb05fc1607c61786b828c8e98dc4f4698af9324967a
 
 (Note in the above example, the seed salt has been truncated to *fewer* than 64 hex digits--which is invalid, so as to make sure folks don't somehow end up using
@@ -174,8 +171,10 @@ the same seed.)
 
 Without this salting, it would not be possible to safely redact column values in morsels.
 
-_Note the random seed salt is must be kept secret!_ Failing to do so might leak your ledger's secrets. Also, don't lose it: the ledger's hashes
-are useless without it.
+#### Secret
+
+_Note the random seed salt must be kept secret!_  There is never a reason to disclose it to anyone: not even an auditor.
+Failing to do so might leak your ledger's values. Also, **don't lose it**: the ledger's hashes are useless without this secret.
 
 ### Hash Ledger
 
@@ -188,7 +187,7 @@ a ledger with sldg.
 3. *Trail table.* Records crumtrails linking the witnessed hash to that of a row number in the skip ledger. References above 2 tables.
 
 Their table names follow a convention: they share the same prefix which is set by  
->
+
     sldg.hash.table.prefix=invoice_items
 
 in the configuration file. In most cases setting it to the source table name is sensible, but it can be set to something else. The skip-, chain-, and trail
@@ -197,7 +196,6 @@ table names are a concatenation of this prefix with the suffixes `_sldg`, `_sldg
 The next 3 lines (name/value pairs) are in fact *optional.* sldg's *setup* command writes out the default definitions so that if need be
 they may be overridden.
 
->
     sldg.hash.schema.skip=CREATE TABLE invoice_items_sldg (   row_num BIGINT NOT NULL,  src_hash CHAR(43) NOT NULL,  row_hash CHAR(43) NOT NULL,  PRIMARY KEY (row_num) )
     sldg.hash.schema.trail=CREATE TABLE invoice_items_sldg_tr (  trl_id INT NOT NULL,  row_num BIGINT NOT NULL,  utc BIGINT NOT NULL,  mrkl_idx INT NOT NULL,  mrkl_cnt INT NOT NULL,  chain_len INT NOT NULL,  chn_id INT NOT NULL,  PRIMARY KEY (trl_id),  FOREIGN KEY (row_num) REFERENCES invoice_items_sldg(row_num),  FOREIGN KEY (chn_id) REFERENCES invoice_items_sldg_ch(chn_id) )
     sldg.hash.schema.chain=CREATE TABLE invoice_items_sldg_ch (  chn_id INT NOT NULL,  n_hash CHAR(43) NOT NULL,  PRIMARY KEY (chn_id)  )
@@ -208,13 +206,24 @@ This also helps you see the schema. Hopefully, there will be little occassion fo
 
 You may optionally include a path to a file containing meta information about the ledger. For example, it may be set as follows:
 
->
+
     sldg.meta.path=meta/chinook_info.json
 
 This setting directs *sldg* to look into the `meta/` subdirectory (relative to the config file) to find and load the info file. Here's a [chinook_info.json](./chinook_info.json) example. (Note this meta info actually corresponds not to the source query setting `sldg.source.query.row` above, but to the one derived from it in the [ledger design](#source-ledger-query-design) section below.)
 
-If the referenced file parses correctly, it gets included in every morsel created by the [make-morsel](#make-morsel) command. This information is not validated, nor does it otherwise figure in the operation of the ledger.
+If the referenced file parses correctly, it can be embedded into morsels created with the [morsel](#morsel) command. This information is not validated, nor does it otherwise figure in the operation of the ledger.
 
+
+### Report Template
+
+You may optionally include a path to a file (or directory structure) containing the JSON DSL for generating PDF reports from data in a morsel. 
+
+    sldg.template.report.path=report
+
+This a new, developer feature, so some capabilities (and tools to help create the DSL) are missing. Here's a 
+[toy example](https://crums.io/project/ledgers/examples/report/queryTotal.json) for
+the ledger described in this example. See the
+[report module](https://github.com/crums-io/skipledger/tree/main/reports) for more information. 
 
 ## Commands
 
@@ -231,7 +240,7 @@ is to get things started: get the DB connection working, let you inspect what th
 
 Example:
 
->   $ sldg setup
+    $ sldg setup
 
 *All other commands take a configuration file*.
 
@@ -244,14 +253,14 @@ that below), you can still edit the configuration file's source query.
 
 Example:
 
-> $ sldg confs/chinook.conf create
-
+    $ sldg confs/chinook.conf create
 
 
 ### list
 
-The *list* command let's you inspect what sldg see's at a given row number in the source table/view. For example:  
->   $ sldg confs/chinook.conf list 1-5
+The *list* command let's you inspect what sldg see's at a given row number in the source table/view. For example:
+ 
+    $ sldg confs/chinook.conf list 1-5
 
 ### update
 
@@ -261,7 +270,7 @@ hashes are linked, only a small subset of the remaining rows need be witnessed.
 
 Example:
 
->
+
     $ sldg sldgconf/chinook.conf update 100
     
     100 source rows added
@@ -280,7 +289,7 @@ ledger's current hash. The ledger's current hash, is by definition, the hash of 
 
 Example:
 
->
+
     $ sldg sldgconf/chinook.conf status
     
     300 rows recorded in hash ledger
@@ -315,7 +324,7 @@ if you're not adding more rows just yet, invoking *witness* will retrieve the ne
 
 Example:
 
->
+
     $ sldg sldgconf/chinook.conf witness
     
     7 crums submitted; 2 crumtrails (witness records) stored
@@ -339,7 +348,7 @@ This lists all the crumtrails in the ledger.
 
 Example:
 
->
+
     $ sldg sldgconf/chinook.conf history
     
     row #:          64                                            
@@ -386,96 +395,122 @@ Example:
     state witnessed and recorded at 8 rows
 
 The *trail root* here is just shorthand for the "root hash of the tree in the crumtrail's Merkle proof". The *ref URL* is the `crums.io`
-REST URL for looking up past Merkle roots: if you open that URL you should see the trail root value near the top of the returned list.
+REST URL for looking up past Merkle roots: if you open that URL you should see the trail root value near the top of the returned list. (Note, other REST API methods return the proof connecting the witness tree to the previous
+one, however this method was deemed more intuitive from a user perspective.)
 
 
-### make-morsel
+### morsel
 
-The *make-morsel* command allows you to output select rows along with historical information, from the ledger in a compact, unimpeachable, tamper proof file called a morsel. It also allows you to redact specific columns.
+This creates a morsel file. If you don't specify any row numbers, it just creates a *state* morsel.
+For example:
 
-Example:
+    $ sldg sldgconf/chinook.conf morsel -s chinook/
+    State morsel written to chinook/chinook-state-1460.mrsl
 
->
-    $ sldg sldgconf/chinook.conf make-morsel 253-260 redact=8
-    8 rows written to morsel: ./play-260-259-258-257-.mrsl
+As a convenience, if you don't explicitly name the morsel file to be created, it generates a
+hopefully reasonable filename based on the directory it's saved in.
 
-Here the source rows numbered 253 thru 260 were written to the file. However, their 8<sup>th</sup> column `invoices.BillingAddress` was redacted. (Source column numbers start at 1, not zero.)
+To include source rows, include their row numbers. You can also redact values by column-number.
+Like SQL, column-numbers start from 1.
 
-If you supply a file path to a non-existent file, then its written to that file; if the file path is in fact a directory, then a file named after
-[the name of] that directory and the source row numbers is created in that direcory; if no file path is provided, then the current directory is
-assumed as the file path argument. The `.mrsl` extension is recommended but not enforced.
+    $ sldg sldgconf/chinook.conf morsel 1000-1005 -d 8 -s chinook/
+    Source morsel (6 rows) written to chinook/chinook-1005-1004-1003-1002-.mrsl
+
+Here the source rows numbered 1000 thru 1005 were also written to the morsel. However, their 8<sup>th</sup> column
+`invoices.BillingAddress` was redacted.
 
 Inspecting our example file with the [mrsl](./mrsl_manual.md) tool yields
 
->
-    $ mrsl play-260-259-258-257-.mrsl list
-    1                                         
-    2                                         
-    4                                         
-    8                                         
-    16                                        
-    32                                        
-    64                                        
-    128                                       
-    253   S   253 47 1518 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    254   S   254 47 1527 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    255   S   255 47 1536 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    256   S W Sat Oct 23 22:32:56 MDT 2021    256 47 1..                            
-    257   S   257 47 1554 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    258   S   258 47 1563 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    259   S   259 47 1572 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    260   S   260 47 1581 0.99 1 15 Thu Jul 16 00:00:00 MDT 2009 [X] Vancouver BC .. 
-    264                                       
-    272                                       
-    288                                       
-    296                                       
-    300    W  Sat Oct 23 22:32:56 MDT 2021    
-    304                                       
-    320                                       
-    384                                       
-    512                                       
-    768                                       
-    800                                       
+    $ mrsl chinook/chinook-1005-1004-1003-1002-.mrsl list
+    [1]                                        
+    [2]                                        
+    [4]                                        
+    [8]                                        
+    [16]                                       
+    [32]                                       
+    [64]                                       
+    [128]                                      
+    [256]                                      
+    [512]                                      
+    [768]                                      
+    [896]                                      
+    [960]                                      
+    [992]                                      
+    [1000]  S  1000 185 2565 0.99 1 52 Sun Mar 20 00:00:00 MDT 2011 [X] London  Un.. 
+    [1001]  S  1001 186 2571 0.99 1 58 Wed Mar 23 00:00:00 MDT 2011 [X] Delhi  Ind.. 
+    [1002]  S  1002 186 2577 0.99 1 58 Wed Mar 23 00:00:00 MDT 2011 [X] Delhi  Ind.. 
+    [1003]  S  1003 186 2583 0.99 1 58 Wed Mar 23 00:00:00 MDT 2011 [X] Delhi  Ind.. 
+    [1004]  S  1004 186 2589 0.99 1 58 Wed Mar 23 00:00:00 MDT 2011 [X] Delhi  Ind.. 
+    [1005]  S W Mon Nov 29 01:13:53 MST 2021   
+    [1006]                                     
+    [1008]                                     
+    [1024]                                     
+    [1280]                                     
+    [1408]                                     
+    [1440]                                     
+    [1456]                                     
+    [1460]                                     
     
-    27 rows; 2 crumtrails; 8 source-rows.
+    28 rows, 1 crumtrail, 6 source-rows.
 
-Redacted column values are marked as ` [X] `. Running a summary on the morsel, we can see it also contains the hash
-of the last row--i.e. the hash of the ledger when it contained 800 rows:
+Redacted column values are marked as ` [X] `. Running a summary on this last morsel, we can see it also contains the hash
+of the last row--i.e. the hash of the ledger when it contained 1460 rows:
 
-> 
-    $ mrsl play-260-259-258-257-.mrsl sum
->
-    <play-260-259-258-257-.mrsl>
->
+    $ mrsl chinook/chinook-1005-1004-1003-1002-.mrsl sum
+    
+    <chinook-1005-1004-1003-1002-.mrsl>
+     -- Chinook Invoices -- 
+    
     Rows:
-     count:          27                                    
-     # range:        lo: 1                                 hi: 800                  
-     with sources:   8                                     
->
+     count:          28                                    
+     # range:        lo: 1                                 hi: 1460                 
+     with sources:   6                                     
+    
     History:
-     created before: Sat Oct 23 22:32:56 MDT 2021          (row 300)                
->
-    <800-15796914851707b5499604d65cf46189809cb9812155a822d2facba9d1ef264b>
+     witnessed:      Mon Nov 29 01:13:53 MST 2021          (row 1005)               
+    
+    <1460-2aa9fae8075b36358914fcbe22faa5d35c5416586cd5c9e98ed83aea9975284f>
 
-### state-morsel
+The file is about 8k:
 
-This works like *make-morsel* except that it creates *a morsel with no source rows.* Such morsels (called *state* morsels)
-represent a rich fingerprint of the ledger when it had *x*-number of rows: they contain both the hashes of the last row, and
-intermediate rows connecting the last row to the first.
+    $ ls -l chinook/chinook-1005-1004-1003-1002-.mrsl 
+    -rw-r--r--  1 babak  staff  8705 Sep 15 13:20 chinook/chinook-1005-1004-1003-1002-.mrsl
 
-Depending on your ledger and its use cases, you may wish to periodically advertise the state of your ledger as a state morsel.
-How these get distributed, via a website, email is presently not our concern. (The nice thing about tamper proof packagings
-such as morsels is that you don't need to specify how you deliver them--since they can be validated,
-for all we care, they could be delivered with pigeons.)
+It's more than twice the size of the *state* morsel we just created:
 
-Unlike a simple 32-byte hash, a state morsel contains lineage information: new states have to fit into the grooves
-established by earlier state morsels: you can verify whether 2 state morsels conflict.
+    $ ls -l chinook/chinook-state-1460.mrsl
+    -rw-r--r--  1 babak  staff  3995 Sep 15 13:14 chinook/chinook-state-1460.mrsl
 
-Note, by themselves state morsels do not guarantee *authenticity*. Again, think of them as a kind of hash--a *rich* hash.
-Where, how and from whom you got the hash figures in its authenticity. For example, when checking what you downloaded from a mirror site,
-you might verify it against the hash published on the bundle's "official" page over an HTTPS connection. We avoid specifying
-how authentication should work for now, because frankly, there are too many competing way to do it.
+That's because state morsels contain little information. Compare its summary:
 
+    $ mrsl chinook/chinook-state-1460.mrsl sum
+    
+    <chinook-state-1460.mrsl>
+     -- Chinook Invoices -- 
+    
+    Rows:
+     count:          16                                    
+     # range:        lo: 1                                 hi: 1460                 
+     with sources:   0                                     
+    
+    <1460-2aa9fae8075b36358914fcbe22faa5d35c5416586cd5c9e98ed83aea9975284f>
+
+If we removed the ledger's meta file from the configuration, it would be even smaller.
+Since the size of state morsel goes by the logarithm of the number rows in the ledger,
+this file is compact even if the ledger has millions of rows.
+
+For this reason, a ledger's state morsel can be used to record or advertise a snapshot of the
+ledger's state opaquely. Unlike a straight hash, these snapshots (the morsels) are independently
+verifiable to be linked to each other.
+
+#### Embed report template
+
+Report templates are a new developer feature allowing custom branded PDF reports to be independently generated
+from a report DSL embedded in the morsel file. (See the [mrsl report](./mrls_manual.md#report) command.)
+
+To embed the report template (referenced in the configuration) into the morsel you're creating, use the `-r` option. E.g.
+
+    $ sldg sldgconf/chinook.conf morsel 1001-1006 -s chinook/ -r
 
 ### validate
 
@@ -533,7 +568,7 @@ you include in the source view, the more each row can stand on its own in terms 
 
 For example, we might stitch in the shipping address for each invoice item this way:
 
->
+
     sldg.source.query.row=SELECT * FROM (  SELECT ROW_NUMBER() OVER (ORDER BY InvoiceLineId ASC) AS row_index, InvoiceLineId, invoice_items.InvoiceId, TrackId, UnitPrice, Quantity, invoices.CustomerId, invoices.InvoiceDate, invoices.BillingAddress, invoices.BillingCity, invoices.BillingState, invoices.BillingCountry, invoices.BillingPostalCode, invoices.Total FROM invoice_items INNER JOIN invoices ON invoices.InvoiceId = invoice_items.InvoiceId) AS snap WHERE row_index \= ?
 
 So long as you have not yet invoked [update](#update), you can edit the above query in the configuration file and use the [list](#list) command to confirm

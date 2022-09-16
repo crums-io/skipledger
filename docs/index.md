@@ -36,7 +36,7 @@ This then is a modern take on those markings on a stick. It uses cryptographic h
 way (the project's namesake) to construct those markings, as it were. But before drilling down into the details
 of the data structure, it helps to first illustrate what we can do with it.
 
-Version `0.0.4` ships with 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
+There are 2 principal command line tools: *sldg* and *mrsl. sldg* is used to maintain and
 update the history of an *operationally append-only* table or view in a relational database. It supports tear outs
 of the table (specific rows) in the form morsel files (`.mrsl` extension). *mrsl*, in turn, is a tool for both reading morsel
 files and manipulating (merging/redacting) them.
@@ -98,6 +98,9 @@ morsel. It does not assert anything about whether the descendant ledger is autho
 morsel with others. Instead of sharing morsels whole, a user can redact any column values or entire (source) rows from a
 given morsel file.
 
+3. *generate PDF*. A morsel may optionally contain a report template. If it does, the user can generate PDF from it.
+The template can be customized for such applications as billing, receipts, transcripts--or whatever, the ledger owner designs.
+
 
 More information is avaliable in the [mrsl manual](./mrsl_manual.md).
 
@@ -113,7 +116,7 @@ this is not settled API.
 
 ## Data structure
 
-This section concerns the hashing method and data structure used to capture the state of the list in the ledger.
+This section describes the hashing method and data structure used to capture the state of the list in the ledger.
 
 A *skip ledger* (new terminology) is a tamper proof, append-only list of objects represented by their SHA-256 hashes.
 Internally, it models a tamper proof [skip list](https://en.wikipedia.org/wiki/Skip_list ).  It's use here is as a tamper proof *list*,
@@ -202,9 +205,9 @@ In a good many cases, however, we don't need the full row object: therefore the 
 
 ### Morsel Model
 
-Morsels, on the other hand, employ a different storage model. No memo-ization is involved: it's designed to contain
+Morsels, on the other hand, employ a different storage model. No memo-ization is involved: they are designed to contain
 the minimum information necessary to construct the data's hash proofs. Accordingly, a morsel records each row from the
-skip ledger using a single hash cell that is either the row's input hash or, if the row is only referenced
+skip ledger using a *single* hash cell that is either the row's input hash or, if the row is only referenced
 (via one or more hash pointers from higher numbered rows), the row's (final) hash.
 
 The file format is documented [here](./morsel_file_format.txt).
@@ -212,43 +215,164 @@ The file format is documented [here](./morsel_file_format.txt).
 
 ## Building
 
-Project dependencies are listed in the maven `pom.xml` file. A number of these have no publicly distributed artifacts, and must be installed manually:
+Building is supposed to be easy. Please report any problems.
 
-* [junit-io](https://github.com/gnahraf/junit-io)
-* [merkle-tree](https://github.com/crums-io/merkle-tree)
-* [io-util](https://github.com/crums-io/io-util)
-* [crums-core](https://github.com/crums-io/crums-pub)
+### Requirements
 
-To build to these, clone the above repos (in the suggested order) and invoke
+The build system uses Maven 3 and for now requires JDK 17+. (If you need compiled binaries
+for older versions of Java, do let me know. For now, development tends not to be hamstrung with such
+considerations.)
 
-> mvn clean install -DskipTests=true
+### Maven Incantations
 
-in each of their directories. Omit the last argument above, to include unit tests.
+To build this project, clone this repos and invoke
 
+    $ mvn clean install -DskipTests
+
+from the project's root directory. However to run the tests also, you'll need to build and install a
+*test dependency* locally. Clone the [junit-io](https://github.com/gnahraf/junit-io) project and invoke
+
+    $ mvn clean install
+
+in *that* project's root directory: you can then invoke the same build command in this project's
+directory in order to run the unit tests.
+
+To build the *sldg* and *mrsl* tools:
+
+
+    $ cd sldg
+    $ mvn package appassembler:assemble -DskipTests
+    $ cd ../mrsl
+    $ mvn package appassembler:assemble -DskipTests
+
+
+## Maven Artifacts
+
+Version `0.5.0` is the first release that becomes available from Maven Central.
+
+### SNAPSHOTs
+
+The latest development version `0.5.1-SNAPSHOT` is available from the *snaphots* repo.
+The POMs already describe its location, but here it is in case you want to use it in another POM file.
+
+```
+  <repositories>
+    <!-- For SNAPSHOT releases -->
+    <repository>
+      <id>ossrh</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
+  </repositories>
+```
+
+Note artifacts in this repo always have the `-SNAPSHOT` moniker appended to their version strings.
+
+### skipledger
+
+The base module. Defines the hash ledger (a skip ledger annotated with crumtrail
+witness records), the morsel file for packaging proofs, and a data model for hashing arbitrary data from a
+*source ledger*.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+  
+```
+### skipledger-sql
+
+SQL implementation and modeling of a source ledger via an SQL query and backing storage for
+the hash ledger in the relational database.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger-sql</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+  
+```
+### reports
+
+PDF report generator from JSON DSL (the report template).
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>reports</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
+
+The next 2 modules are CLI tools, not libraries. There should be little occasion to include
+these as a dependency; maybe convenient for distribution purposes, however.
+
+### sldg
+
+CLI tool used by ledger owners to monitor, track, and optionally report morsels of their ledger's state.
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>sldg</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
+
+### mrsl
+
+CLI tool for verifying and displaying information from standalone `.mrsl` files, generating PDF reports
+from them, as well as manipulating the `.mrsl` files themselves (merging or redacting content from them).
+
+```
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>mrsl</artifactId>
+      <version>0.5.0</version>
+    </dependency>
+```
 
 ## Changes
 
-Version `0.0.4` brought a number of usability improvements. 
+Version `0.5.0` is both a maintenance- and *new-feature* release.
 
-- JSON representation of morsel data. Exposes type information about column values, as well as providing programmatic access from other environments than Java.
-- `mrsl submerge`: slices out of pieces of data from a morsel file into a new morsel file. (The owner of
- a morsel may wish to share only a *subset* of the data gathered in their morsel.)
-- Support for customized meta-info for morsels. This info is not validated but helps with usability. For eg, column titles/headings.
+
+### Maintenance
+
+- **JPMS Modularization.** Maven submodules were JPMS modularized (the Java Module System). So were
+its other `io.crums` dependencies. This allows bundling applications with a custom JRE that's smaller
+than a standard runtime.
+- **Maven Central Deployment.** The modules defined in this project (and their dependencies on other
+`io.crums` projects) are now deployed to central.
+
+### New Features
+
+- **Better CLI.** This release uses the *picocli* library for prettier, more intuitive / helpful
+command line interfaces.
+
+- **Report Templates.** `.mrsl` files can now embed a customizable template for generating PDF reports
+from ledger data in a morsel. The idea is to allow the ledger owner create branded documents
+from their ledger entries for such things as bills, receipts, or any other documents they might invent.
+
 
 
 ## Roadmap
 
-The following is planned for version `0.0.5`:
+The following are planned for the next releases:
 
-- jpackage release. Installs executables with bundled Java runtimes.
-- Open / close issues. Note to Babak: leave open some not-big, first-time-contributor issues.
-- ?
+- Reports:
+    * Add more arguments types that PDF templates can take (right now they're only numeric)
+    * Add template maker tools
+    * Add support for displaying images from the ledger data
+    * Embed `.mrsl` hashes in PDF, so that a standalone PDF can be validated against the current
+    fingerprint of the ledger
+- Package the *mrsl* and *sldg* tools for end-user distribution
 
+After that..
 
-
-## Docs & API
-
-Presently, most of the documentation is near the code. This is because things move fairly often at early stages, and it's difficult to maintain (or easy to overlook) docs and keep them in synch as code changes.
+- Allow adding other optional appendages to morsel files: pub key + signatures, and user (ledger owner) defined legalese docs.
 
 
 

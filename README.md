@@ -100,6 +100,9 @@ morsel. It does not assert anything about whether the descendant ledger is autho
 morsel with others. Instead of sharing morsels whole, a user can redact any column values or entire (source) rows from a
 given morsel file.
 
+3. *generate PDF*. A morsel may optionally contain a report template. If it does, the user can generate PDF from it.
+The template can be customized for such applications as billing, receipts, transcripts--or whatever, the ledger owner designs.
+
 
 
 More information is avaliable in the [mrsl manual](./docs/mrsl_manual.md).
@@ -205,9 +208,9 @@ In a good many cases, however, we don't need the full row object: therefore the 
 
 ### Morsel Model
 
-Morsels, on the other hand, employ a different storage model. No memo-ization is involved: it's designed to contain
+Morsels, on the other hand, employ a different storage model. No memo-ization is involved: they are designed to contain
 the minimum information necessary to construct the data's hash proofs. Accordingly, a morsel records each row from the
-skip ledger using a single hash cell that is either the row's input hash or, if the row is only referenced
+skip ledger using a *single* hash cell that is either the row's input hash or, if the row is only referenced
 (via one or more hash pointers from higher numbered rows), the row's (final) hash.
 
 
@@ -221,41 +224,39 @@ Building is supposed to be easy. Please report any problems.
 ### Requirements
 
 The build system uses Maven 3 and for now requires JDK 17+. (If you need compiled binaries
-for older versions of Java, do let us know. For now, development tends not to be hamstrung with such
+for older versions of Java, do let me know. For now, development tends not to be hamstrung with such
 considerations.)
 
 ### Maven Incantations
 
 To build this project, clone this repos and invoke
 
-```
-  $ mvn clean install -DskipTests
-```
+    $ mvn clean install -DskipTests
+
 from the project's root directory. However to run the tests also, you'll need to build and install a
 *test dependency* locally. Clone the [junit-io](https://github.com/gnahraf/junit-io) project and invoke
 
-```
-  $ mvn clean install
-```
+    $ mvn clean install
+
 in *that* project's root directory: you can then invoke the same build command in this project's
 directory in order to run the unit tests.
 
 To build the *sldg* and *mrsl* tools:
 
-```
-  $ cd sldg
-  $ mvn package appassembler:assemble -DskipTests
-  $ cd ../mrsl
-  $ mvn package appassembler:assemble -DskipTests
-```
+
+    $ cd sldg
+    $ mvn package appassembler:assemble -DskipTests
+    $ cd ../mrsl
+    $ mvn package appassembler:assemble -DskipTests
+
 
 ## Maven Artifacts
 
-Version `0.5.0` will be the first release that becomes available from Maven Central.
+Version `0.5.0` is the first release that becomes available from Maven Central.
 
 ### SNAPSHOTs
 
-The latest development version `0.5.0-SNAPSHOT` is available from the *snaphots* repo.
+The latest development version `0.5.1-SNAPSHOT` is available from the *snaphots* repo.
 The POMs already describe its location, but here it is in case you want to use it in another POM file.
 
 ```

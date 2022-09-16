@@ -1,11 +1,8 @@
 mrsl Manual
 ========
 
- *Coming soon: manual for Version 0.5.0*
-
-
 This is a short manual for the *mrsl* tool.  
-Version 0.0.4
+Version 0.5.0
 
 ## Contents
 
@@ -15,9 +12,11 @@ Version 0.0.4
     - [sum](#sum)
     - [info](#info)
     - [state](#state)
+    - [verify](#verify)
     - [list](#list)
     - [history](#history)
     - [entry](#entry)
+    - [report](#report)
     - [merge](#merge)
     - [submerge](#submerge)
     - [dump](#dump)
@@ -41,6 +40,10 @@ rainbow attacks and frequency analysis.)
 the hash of a particular row in the ledger (identified by its row number) was witnessed by the `crums.io` service. Since
 the hash of every row in the ledger [also] depends on the hash of every row before it, a crumtrail for a given row number
 establishes the minimum age of that row and *every row before that row number*.
+
+4. *ledger assets*. A morsel may optionally embed standard and/or ledger/application-specific assets. Two types of supporting
+assets are recognized out-of-the-box: one, a meta file describing the ledger itself; two, a template for generating PDF reports
+from the data (source rows) in the morsel. Both these are encoded in JSON.
 
 ### Use Model
 
@@ -71,7 +74,6 @@ This prints a summary of the morsel's contents.
 
 Here's a summary of a *state* morsel:
 
->
     $ mrsl chinook/chinook-state-1230.mrsl sum
     
     <chinook-state-1230.mrsl>
@@ -89,7 +91,6 @@ hash of the ledger when it had exactly 1230 rows, is displayed on the last line.
 
 And here's a summary of a morsel (from the same ledger) with more stuff in it:
 
->
     $ mrsl chinook/chinook-260-259-258-257-.mrsl sum
     
     <chinook-260-259-258-257-.mrsl>
@@ -117,8 +118,8 @@ This outputs *meta* information about the ledger, if present. This is not valida
 
 Example:
 
->
-    $ mrsl chinook/chinook-260-259-258-257-.mrsl info
+
+    mrsl chinook/chinook-260-259-258-257-.mrsl info
     
     Name: 
          Chinook Invoices 
@@ -173,12 +174,13 @@ Example:
       
       Date Format:
           Pattern: EEE, d MMM yyyy HH:mm:ss Z z 
-          Example: Sun, 12 Dec 2021 14:58:04 -0700 MST 
+          Example: Sun, 12 Dec 2021 14:58:04 -0700 MST
+
 
 Note this information is optional, both in whole and in parts. For example, not all columns need be defined--or any, for that matter. The simplest embedded meta file only contains the ledger name. The structure is more evident in JSON:
 
->
-    $ mrsl chinook/chinook-260-259-258-257-.mrsl info -j
+
+    mrsl chinook/chinook-260-259-258-257-.mrsl info -j
     {
       "name": "Chinook Invoices",
       "desc": "Chinook invoice items ledger example. Each invoice contains a list of line-items: each of those line-items is a row in this ledger. Address fields are the customer's billing address when the invoice was filled. See also: https://crums-io.github.io/skipledger/mrsl_manual.html",
@@ -245,11 +247,53 @@ Note this information is optional, both in whole and in parts. For example, not 
       ],
       "date_format": "EEE, d MMM yyyy HH:mm:ss Z z"
     }
-    
+ 
+
 
 ### state
 
 This just prints the last line output by the *sum* command without the brackets.
+
+### verify
+
+Verifies that the hashes of all known rows in a given set of morsel files are the same,
+or otherwise consistent with *some* historical ledger. There are 2 "success" states: `OK` and `PARTIAL`.
+This is because the hash of the last few row numbers in a morsel may not be referenced from a morsel
+capturing the later state of the ledger at a much higher row number. (In most cases use cases, this
+doesn't matter: the rows with source data are usually referenceable from a "higher" morsel, if their
+row numbers are "sufficiently" distant from (less than) the highest row number recorded in the morsel.)
+
+So `PARTIAL` is usual. However, the rows that can't be proven from the morsel with the highest row
+row number are still listed:
+
+    $ mrsl chinook-state-1380.mrsl verify chinook-0.4/chinook-778-777-776-775-.mrsl 
+    PARTIAL
+    Hashes are consistent; but the lineage of the following rows
+    cannot be established from the last row [1380]:
+      1224
+      1228
+      1230
+    
+    Lineage by Hi Row #:
+    
+      HI        MORSEL                                  HASH          
+      1380      chinook-state-1380.mrsl          (LHS)  b208dc..f7ae48 
+      1230      chinook-778-777-776-775-.mrsl           7fc6df..ffeea0 
+    
+In the example above, any row in the morsel `chinook-778-777-776-775-.mrsl`
+numbered less than 1224 is still verifiable from the morsel `chinook-state-1380.mrsl` with the higher row number
+(1380).
+
+#### IMPORTANT NOTE
+
+Verifying that morsels agree this way *does not automatically guarantee the provenance* of (who's ledger)
+the historical ledger they collectively represent. The mechanics of verifying morsels is much the same as, say,
+verifying a download against it's "published" SHA-256 hash: the "provenance" of the download is dependent
+on <em>where</em> (e.g. the web site of record) that SHA-256 hash was published.
+
+*State* morsels act as rich fingerprints and are meant to be advertised (or declared) the same way a
+file's SHA-256 hash is. These morsels are compact (kilobytes in size) and only assert how the hash of the
+last (high) row in them is derived from the hash of earlier rows in the ledger.
 
 ### list
 
@@ -257,10 +301,9 @@ Lists all the rows in the morsel by row number. Witness dates and row source dat
 
 Example:
 
->
-    $ mrsl chinook/chinook-260-259-258-257-.mrsl list
 
->
+    $ mrsl chinook/chinook-260-259-258-257-.mrsl list
+    
     [1]                                        
     [2]                                        
     [4]                                        
@@ -299,7 +342,7 @@ Example:
     [1230]                                     
     
     36 rows, 2 crumtrails, 8 source-rows.
-    
+ 
 
 Rows with source-attachements are marked with `S`; if their hash has been witnessed, then they're marked with a `W` and
 the witness date immediately follows.
@@ -314,7 +357,7 @@ also implies witnessing every row before that row number.
 
 Example:
 
->
+
     $ mrsl chinook/chinook-260-259-258-257-.mrsl history
     
     
@@ -329,7 +372,9 @@ Example:
     300     Sat Oct 23 22:32:56 MDT 2021                                            
             8a1457684b393a346b461ac674eb4e7a617d5aaa6033d703af9f79173092f38f        
             https://crums.io/api/list_roots?utc=1635050186576&count=-4              
-    
+ 
+ 
+  
 The left column indicates the row number witnessed; the right column is a synopsis of the crumtrail:
 
 1. The date witnessed
@@ -345,10 +390,9 @@ numbers--multiples of higher powers of 2, are special and useful to keep around)
 This provides a more detailed listings of source rows (if any). By default, output is in
 text format. Example:
 
->
-    $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260
 
->
+    $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260
+    
     [253]  253 47 1518 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [254]  254 47 1527 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [255]  255 47 1536 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
@@ -357,14 +401,13 @@ text format. Example:
     [258]  258 47 1563 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [259]  259 47 1572 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
     [260]  260 47 1581 0.99 1 15 Thu, 16 Jul 2009 00:00:00 -0600 MDT [X] Vancouver BC Canada V6C 1G8 13.86
-    
+ 
 
 By default, column values are separated by a single whitespace character. Redacted column values are marked with an `[X]`. To include history, let's add the `--time` option. We'll also set the column separator so we can better make out the columns:
 
->
-    $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260 -t sep=%s\|%s
 
->
+    $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253-260 -t --col-sep==" | "
+    
     [253]  | 253 | 47 | 1518 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
     [254]  | 254 | 47 | 1527 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
     [255]  | 255 | 47 | 1536 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
@@ -376,11 +419,12 @@ By default, column values are separated by a single whitespace character. Redact
     [260]  | 260 | 47 | 1581 | 0.99 | 1 | 15 | Thu, 16 Jul 2009 00:00:00 -0600 MDT | [X] | Vancouver | BC | Canada | V6C 1G8 | 13.86
     [300]  | << Witnessed Sat, 23 Oct 2021 22:32:56 -0600 MDT >>
 
+
 Note, if a row is annotated with a crumtrail (witness record), then it may occur twice. Note the `sep=%s\|%s` argument. `%s` is interpreted as a space character. (The `\|` is to escape piping by the shell, which instead transforms it to `|`.) To turn this into *csv* format, you'd do something like `sep=,%s` --which is problematic if a column-value already has a comma in it. 
 
 In JSON, the output is more structured and machine readable. Since it's a good deal more verbose, let's concentrate on a single entry:
 
->
+
     $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253 -j
     [
       {
@@ -472,7 +516,7 @@ The last column in the above table indicates what byte-string is hashed for each
 
 Now on to the simpler `--slim` version of JSON. As previously mentioned, most of the time you won't need the full detail:
 
->
+
     $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253 -js
     [
       {
@@ -499,7 +543,7 @@ In particular, if you know that the ledger's rows uniformly have the same type a
 
 Both JSON formats support the `--time` option. Here it is in *slim* form:
 
->
+
     $ mrsl chinook/chinook-260-259-258-257-.mrsl entry 253 -jst
     [
       {
@@ -530,6 +574,34 @@ Both JSON formats support the `--time` option. Here it is in *slim* form:
     ]
 
 
+### report
+
+A morsel file may optionally contain a report template. When it does, you can generate PDF reports from it.
+To find out if it does, used the `--about` option (shortcut `-a`):
+
+    $ mrsl chinook-800-830-r.mrsl report -a
+    Report template found.
+    
+    Arguments:
+    
+     Name:
+      invoice-id
+    
+    The following value is required (not defaulted):
+      invoice-id
+    It may be supplied either as a name=value pair
+      invoice-id=<value>
+    or without the name (just <value>).
+    
+This example template takes 1 argument. Here the argument is named <em>invoice-id</em>. But since this
+template only takes one argument, the user doesn't need to qualify its value with the name. The purpose of this
+argument is to narrow down which rows from the morsel file make it into the PDF file. (The DSL allows a
+template designer to craft row-predicates that are configured with such arguments.) Here's an example invocation:
+
+    $ mrsl chinook-800-830-r.mrsl report 151 -s=report-151.pdf
+    PDF report written to report-151.pdf
+    
+Here's a [toy PDF report](https://crums.io/project/ledgers/examples/report.pdf).
 
 ### merge
 
@@ -543,7 +615,7 @@ Put another way, we can only ever merge morsels from the same ledger.
 
 Example:
 
->
+
     $ mrsl chinook/*.mrsl merge save=chinook/chinook-merged/
     
     Loading 5 morsels for merge..
@@ -577,7 +649,7 @@ The information you gather in morsels from a 3rd party ledger my contain private
 
 Example:
 
->
+
     $ mrsl submerge chinook/chinook-merged/chinook-merged-778-777-776-775-.mrsl save=chinook/chinook-sub/ redact=8 773-775
     
     3 source rows, 1 crumtrail written to chinook/chinook-sub/chinook-sub-775-774-773.mrsl
@@ -587,7 +659,7 @@ Here only source rows [773] thru [775] were written to the new morsel. The value
 
 ### dump
 
-This command is intended for external programs. With the exception of meta data (see [info](#info)) all the morsel's data is emitted as JSON.
+This command is intended for external programs. With the exception of the morsel's assets (meta info and report template) all of the morsel's data is emitted as JSON.
 
 
 
