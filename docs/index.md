@@ -21,6 +21,7 @@ Tools for maintaining tamper proof evolving historical private ledgers and for d
     - [Skip Ledger Model](#skip-ledger-model)
     - [Morsel Model](#morsel-model)
 - [Building](#building)
+- [Maven Artifacts](#maven-artifacts)
 - [Changes](#changes)
 - [Roadmap](#roadmap)
 
@@ -110,8 +111,7 @@ Underlying the above tools is a fairly modular library that allows other storage
 it includes a direct implementation of the hash ledger on the file system. The *jurno* program demos its use (and was in fact
 used for prototyping).
 
-Much changed since the first version, so from a programmer's perspective, although the code is copiously documented,
-this is not settled API. 
+Maven coordinates for these modules are listed [below](#maven-artifacts). 
 
 
 ## Data structure
