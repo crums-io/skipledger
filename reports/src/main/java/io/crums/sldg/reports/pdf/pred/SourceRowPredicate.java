@@ -59,10 +59,10 @@ public class SourceRowPredicate implements Predicate<SourceRow>, NumberArg.Colle
     }
     
 
-    private final static String CN = Operand.class.getSimpleName();
+//    final static String CN = Operand.class.getSimpleName();
     @Override
     public String toString() {
-      return CN + (num == null ? ("[func=" + func) : ("[num=" + num)) + "]";
+      return Operand.class.getSimpleName() + (num == null ? ("[func=" + func) : ("[num=" + num)) + "]";
     }
   }
   
@@ -148,7 +148,7 @@ public class SourceRowPredicate implements Predicate<SourceRow>, NumberArg.Colle
   }
   
   
-  private final static String CN = SourceRowPredicate.class.getSimpleName();
+  final static String CN = SourceRowPredicate.class.getSimpleName();
 
   @Override
   public String toString() {

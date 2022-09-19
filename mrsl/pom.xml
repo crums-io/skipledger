@@ -69,7 +69,8 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>appassembler-maven-plugin</artifactId>
         <version>2.1.0</version>
-        <configuration> 
+        <configuration>
+          <assembleDirectory>${project.build.directory}/binary</assembleDirectory>
           <repositoryLayout>flat</repositoryLayout>
           <binFolder>bin</binFolder>
           <repositoryName>lib</repositoryName>
@@ -82,6 +83,39 @@
           </programs>
         </configuration>
         
+        <executions>
+          <execution>
+            <id>make-distribution</id>
+            <phase>package</phase>
+            <goals>
+              <goal>assemble</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <attach>false</attach>
+          <appendAssemblyId>false</appendAssemblyId>
+          <descriptors>
+            <descriptor>src/main/assembly/assembly.xml</descriptor>
+          </descriptors>
+          <outputDirectory>${app.distribution.directory}</outputDirectory>
+          <workDirectory>${project.build.directory}/assembly/work</workDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <id>make-distribution</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
 
 <!--
@@ -126,6 +160,8 @@
           </compilerArgs>
         </configuration>
       </plugin>
+      
+      
 
     </plugins>
   </build>
