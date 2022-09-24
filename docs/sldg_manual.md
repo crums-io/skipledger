@@ -230,8 +230,6 @@ the ledger described in this example. See the
 The sldg commands are documented in this section. Some details of the command line arguments may be missing below.
 The aim here is to complement what's already self-document in sldg's own (arguably over-verbose) `-help` listing.
 
-Note, as a rule, command and argument order do not matter.
-
 ### setup
 
 The *setup* command walks you thru setting up a config file. It doesn't actually read or write to the DB, tho it does allow you test whether

@@ -282,7 +282,7 @@ row number are still listed:
     
 In the example above, any row in the right hand side (*not* the LHS) morsel `chinook-778-777-776-775-.mrsl`
 numbered less than 1224 is still verifiable from the morsel `chinook-state-1380.mrsl` with the higher row number
-(1380). If it has source rows numbered less than 1224, then 2 morsels are [mergeable](#merge).
+(1380). If it has source rows numbered less than 1224, then the 2 morsels are [mergeable](#merge).
 
 #### IMPORTANT NOTE
 
