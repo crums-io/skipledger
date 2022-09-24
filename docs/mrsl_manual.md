@@ -280,14 +280,14 @@ row number are still listed:
       1380      chinook-state-1380.mrsl          (LHS)  b208dc..f7ae48 
       1230      chinook-778-777-776-775-.mrsl           7fc6df..ffeea0 
     
-In the example above, any row in the left hand side (LHS) morsel `chinook-778-777-776-775-.mrsl`
+In the example above, any row in the right hand side (*not* the LHS) morsel `chinook-778-777-776-775-.mrsl`
 numbered less than 1224 is still verifiable from the morsel `chinook-state-1380.mrsl` with the higher row number
-(1380). If the LHS has source rows numbered less than 1224, then 2 morsels are [mergeable](#merge).
+(1380). If it has source rows numbered less than 1224, then 2 morsels are [mergeable](#merge).
 
 #### IMPORTANT NOTE
 
-Verifying that morsels agree this way *does not automatically guarantee the provenance* of (who's ledger)
-the historical ledger they collectively represent. The mechanics of verifying morsels is much the same as, say,
+Verifying that morsels agree this way *does not automatically guarantee the provenance* of the historical ledger
+(who's ledger?) they collectively represent. The mechanics of verifying morsels is much the same as, say,
 verifying a download against it's "published" SHA-256 hash: the "provenance" of the download is dependent
 on <em>where</em> (e.g. the web site of record) that SHA-256 hash was published.
 
