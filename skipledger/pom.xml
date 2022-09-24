@@ -11,7 +11,7 @@
   <artifactId>skipledger</artifactId>
   
   
-  <name>${project.groupId}::${project.artifactId}</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   <description>
     The skip ledger, the base data structure as a commitment scheme for append-only
     ledgers. Differentially proves any cell value in the ledger using compact

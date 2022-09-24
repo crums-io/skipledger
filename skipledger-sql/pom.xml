@@ -11,7 +11,7 @@
   
   <artifactId>skipledger-sql</artifactId>
   
-  <name>${project.groupId}::${project.artifactId}</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   <description>
     SQL implementation of the hash ledger. The hash ledger is a skip ledger
     annotatated with crumtrails (witness records). It contains only opaque

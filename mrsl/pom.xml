@@ -9,7 +9,7 @@
   
   <artifactId>mrsl</artifactId>
   
-  <name>${project.groupId}::${project.artifactId}</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   
   <description>
     Command line tool for working with morsel files. Verification, output, merges, redactions,
@@ -20,6 +20,82 @@
   <properties>
     <main.class>io.crums.sldg.cli.mrsl.Mrsl</main.class>
   </properties>
+  
+  
+  <profiles>
+    <!--
+      Experimenting below.
+      
+      On MacOS, the std graalVM native-image tool, fails to build a standalone image
+      if the java.desktop module is referenced. (You don't need a GUI application
+      to depend on java.desktop, a mere reference to java.awt.Color brings it in.)
+      
+      Using LNIK's version works from the command line:
+      
+      https://bell-sw.com/announcements/2022/08/05/liberica-native-image-kit-22-2-0-and-21-3-3-builds-are-out/
+      
+      Here's the maven command
+      
+      mvn -Pnative package
+      
+      *sldg* will have to be jlink'ed, cuz it loads JDBC drivers dynamically.
+      
+      This currently builds a 56MB (!) executable that's not quite right.
+      Doing this from the command line. (See also src/build/README.md )
+    -->
+    <profile>
+      <id>native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.graalvm.buildtools</groupId>
+            <artifactId>native-maven-plugin</artifactId>
+            <version>${native.maven.plugin.version}</version>
+            <extensions>true</extensions>
+            <executions>
+              <execution>
+                <id>build-native</id>
+                <goals>
+                  <goal>build</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+              <execution>
+                <id>test-native</id>
+                <goals>
+                  <goal>test</goal>
+                </goals>
+                <phase>test</phase>
+              </execution>
+            </executions>
+            <configuration>
+              <!-- Got no tests -->
+              <skipNativeTests>true</skipNativeTests>
+              <buildArgs>
+                <arg>-Djava.awt.headless=false</arg>
+              </buildArgs>
+              
+
+              <systemPropertyVariables>
+                <java.awt.headless>false</java.awt.headless>
+              </systemPropertyVariables>
+              
+              <agent>
+                <enabled>true</enabled>
+              </agent>
+              
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+  
+  
+  
+  
+  
+  
   
   <dependencies>
 
@@ -99,6 +175,17 @@
         <artifactId>maven-assembly-plugin</artifactId>
         <version>3.2.0</version>
         <configuration>
+          <archive>
+            <manifest>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+          
+          <descriptorRefs>
+            <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+          
+          <!--
           <attach>false</attach>
           <appendAssemblyId>false</appendAssemblyId>
           <descriptors>
@@ -106,6 +193,8 @@
           </descriptors>
           <outputDirectory>${app.distribution.directory}</outputDirectory>
           <workDirectory>${project.build.directory}/assembly/work</workDirectory>
+          -->
+          
         </configuration>
         <executions>
           <execution>
@@ -118,28 +207,6 @@
         </executions>
       </plugin>
 
-<!--
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy-dependencies</id>
-            <phase>prepare-package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/lib</outputDirectory>
-              <overWriteReleases>false</overWriteReleases>
-              <overWriteSnapshots>false</overWriteSnapshots>
-              <overWriteIfNewer>true</overWriteIfNewer>
-              <includeScope>runtime</includeScope>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
--->
 
 
       <plugin>

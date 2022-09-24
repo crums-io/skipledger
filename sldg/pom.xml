@@ -10,7 +10,7 @@
   
   <artifactId>sldg</artifactId>
   
-  <name>${project.groupId}::${project.artifactId}</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   
   <description>
     Command line tool for maintaining ledgers and emitting ledger morsels from a relational database.

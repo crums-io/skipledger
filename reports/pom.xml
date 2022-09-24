@@ -7,7 +7,7 @@
   </parent>
   <artifactId>reports</artifactId>
 
-  <name>${project.groupId}::${project.artifactId}</name>
+  <name>${project.groupId}:${project.artifactId}</name>
   <description>
     An lightweight JSON template format for generating PDF reports. 
     The goal is to embed customizable, branded templates in morsel files,
