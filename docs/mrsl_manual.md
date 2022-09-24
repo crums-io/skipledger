@@ -57,7 +57,7 @@ that you were promised?
 
 As it turns out, "Chinook Music Corp" periodically publishes the latest state of this "Receivables" ledger as a state morsel
 on their website (the rich-fingerprint thing). This is good: you can verify your morsel indeed came from the same ledger posted
-on the Chinook Music Corp website. (See [merge](#merge).)
+on the Chinook Music Corp website. (See [verify](#verify).)
 
 
 
@@ -280,9 +280,9 @@ row number are still listed:
       1380      chinook-state-1380.mrsl          (LHS)  b208dc..f7ae48 
       1230      chinook-778-777-776-775-.mrsl           7fc6df..ffeea0 
     
-In the example above, any row in the morsel `chinook-778-777-776-775-.mrsl`
+In the example above, any row in the left hand side (LHS) morsel `chinook-778-777-776-775-.mrsl`
 numbered less than 1224 is still verifiable from the morsel `chinook-state-1380.mrsl` with the higher row number
-(1380).
+(1380). If the LHS has source rows numbered less than 1224, then 2 morsels are [mergeable](#merge).
 
 #### IMPORTANT NOTE
 
@@ -420,7 +420,8 @@ By default, column values are separated by a single whitespace character. Redact
     [300]  | << Witnessed Sat, 23 Oct 2021 22:32:56 -0600 MDT >>
 
 
-Note, if a row is annotated with a crumtrail (witness record), then it may occur twice. Note the `sep=%s\|%s` argument. `%s` is interpreted as a space character. (The `\|` is to escape piping by the shell, which instead transforms it to `|`.) To turn this into *csv* format, you'd do something like `sep=,%s` --which is problematic if a column-value already has a comma in it. 
+Note, if a row is annotated with a crumtrail (witness record), then it may occur twice. Note the separator argument can also be expresseed
+with out using quotes `--col-sep=%s\|%s` argument: `%s` is interpreted as a space character. (The `\|` is to escape piping by the shell, which instead transforms it to `|`.) To turn this into *csv* format, you'd do something like `--col-sep=", "` --which is problematic if a column-value already has a comma in it. 
 
 In JSON, the output is more structured and machine readable. Since it's a good deal more verbose, let's concentrate on a single entry:
 
@@ -609,7 +610,7 @@ The *merge* command takes 2 or more morsel files and merges them into one. But y
 any 2 morsels must satisfy the following criteria:
 
 1. The hash of every row (identified by their row number) in both morsels must agree.
-2. The 2 morsels must contain enough information to connect the hash of highest numbered row with that every source row in both morsels.
+2. The 2 morsels must contain enough information to connect the hash of highest numbered row with that of every source row in both morsels.
 
 Put another way, we can only ever merge morsels from the same ledger.
 
