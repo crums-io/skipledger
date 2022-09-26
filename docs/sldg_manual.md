@@ -536,8 +536,8 @@ quick consistency check on row's effective hash.
 
 The upshot of this check is that if that last source row is at all modified it will be noticed immediately (with an uncermonious warning).
 Further, should any already-ledgered source row get deleted, that too will almost certainly get picked up at start up. (To pin point which row was
-deleted, you'll still need to invoke *validate* afterward.) What isn't detect at startup are any changed column values in the midde
-source rows.
+deleted, you'll still need to invoke *validate* afterward.) What isn't detect at startup is any changed column value in a "middle"
+source row.
 
 ### rollback
 
@@ -577,7 +577,9 @@ sldg sees the query as you intended.
 Remember, by including a particular column in the source query, we commit to its value remaining the same forever after.
 The considerations can be subtle. If customers can edit their names after their account was created in the chinook `customers` table, for example,
 then the customer's name cannot be included in the source query; if, on the other hand, names are not editable (not even
-for correcting typos), then the customer's name can be included the source query.
+for correcting typos) then the customer's name can be included the source query. (In real world cases, in order to be able
+to regenerate their books as they existed on a certain date, *existing* ledgers never discard a user's old name--and
+one should be able to construct a query that draws in the user's old name as it existed when the "invoice" was first created.)
 
 As a rule of thumb, aim to *minimize using schema-specific key values and/or identifiers*. The reason why is to avoid
 having to commit to a particular backend schema design. (If you change the backend schema, you want to still be able
