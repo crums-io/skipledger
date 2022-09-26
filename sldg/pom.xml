@@ -77,6 +77,8 @@
               <mainClass>${main.class}</mainClass>
               <id>sldg</id>
             </program>
+            
+            
           </programs>
           
         </configuration>

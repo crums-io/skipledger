@@ -90,6 +90,7 @@
     <module>reports</module>
     <module>sldg</module>
     <module>mrsl</module>
+    <module>b64</module>
   </modules>
   
 
