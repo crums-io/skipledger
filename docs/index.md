@@ -186,8 +186,8 @@ The library uses 2 storage models for ledger data: one for skip ledgers, another
 ### Skip Ledger Model
 
 The skip ledger as depicted in the diagram above contains a lot of redundant information. Indeed, given the source rows, the
-entire structure can be recreated from scratch. We obviously don't want to do this for every row access since accessing *n*
-rows would cost on the order of *n*<sup>2</sup>.
+entire structure can be recreated from scratch. We obviously don't want to do this, since accessing the *n*-th
+row would cost *n* accesses.
 
 At a high level (i.e. ignoring how and where this data is represented), the storage model uses the minimum amount of memo-izaton
 necessary to allow accessing any given row in [more or less] constant time. Each row contains exactly 2 hash cells (SHA-256 values):
