@@ -9,12 +9,16 @@ import static io.crums.sldg.reports.pdf.ReportTemplateTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
+import java.io.PrintStream;
+import java.nio.ByteBuffer;
 
 import org.junit.jupiter.api.Test;
 
 import com.gnahraf.test.IoTestCase;
 
+import io.crums.io.FileUtils;
 import io.crums.util.json.JsonPrinter;
+import io.crums.util.json.simple.parser.JSONParser;
 
 /**
  * Leans on {@linkplain ReportTemplateTest}
@@ -58,7 +62,9 @@ public class ReportTemplateParserTest extends IoTestCase {
   
   
   @Test
-  public void testQueryTotalWithAutoRef2x() {
+  public void testQueryTotalWithAutoRef2x() throws Exception {
+
+    final Object label = new Object() {  };
     
     var report = queryWithTotalInstance();
     
@@ -79,6 +85,13 @@ public class ReportTemplateParserTest extends IoTestCase {
     
     assertEquals(report, genReport);
     
+    var dir = getMethodOutputFilepath(label);
+    
+    assertTrue(dir.mkdirs());
+    File jsonFile = new File(dir, "autoRef2x.json");
+    try (var f = new PrintStream(jsonFile)) {
+      JsonPrinter.println(jReport, f);
+    }
   }
   
   

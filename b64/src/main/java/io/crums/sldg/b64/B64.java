@@ -34,8 +34,9 @@ import picocli.CommandLine.Spec;
     description = {
         "Converts 32-byte values from base64-32 to hexadecimal, or vice versa.",
         "",
-        "base64-32 is a base-64 variant that uses 43 digits to record 32 bytes. The",
+        "A base-64 variant that uses 43 characters to encode 32 bytes. The",
         "hash ledger's SQL schema records SHA-256 hashes using this encoding.",
+        "See also: https://crums-io.github.io/io-util/base64-32.html",
         "",
     }
     )
@@ -54,10 +55,10 @@ public class B64 implements Runnable {
   
   
   @Parameters(
-      arity = "1..",
+      arity = "1..*",
       paramLabel = "VALUE",
       description = {
-          "32-byte value converted from base64-32 to hex, or vice versa",
+          "32-byte value[s] converted from base64-32 to hex, or vice versa",
           "Either @|bold 43|@ base64-32 chars, or @|bold 64|@ hexadecimal chars",
       }
       )

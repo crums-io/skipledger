@@ -46,7 +46,15 @@
     </plugins>
   </build>
 
+  <dependencies>
 
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>crums-core</artifactId>
+      <version>${crums.core}</version>
+    </dependency>
+    
+  </dependencies>
 
 
 </project>

@@ -20,6 +20,9 @@
     <main.class>io.crums.sldg.cli.sldg.Sldg</main.class>
   </properties>
   
+  
+  
+  
   <dependencies>
   
     <dependency>
@@ -68,6 +71,7 @@
         
         <version>2.1.0</version>
         <configuration> 
+          <assembleDirectory>${project.build.directory}/binary</assembleDirectory>
           <repositoryLayout>flat</repositoryLayout>
           <binFolder>bin</binFolder>
           <repositoryName>lib</repositoryName>

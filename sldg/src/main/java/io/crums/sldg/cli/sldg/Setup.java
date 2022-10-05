@@ -5,6 +5,7 @@ import static io.crums.util.Strings.pluralize;
 
 import java.io.Console;
 import java.io.File;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.StringTokenizer;
@@ -14,6 +15,7 @@ import java.util.function.Consumer;
 import io.crums.sldg.sql.ConfigFileBuilder;
 import io.crums.sldg.sql.ConnectionInfo;
 import io.crums.sldg.sql.SqlSourceQuery;
+import io.crums.util.IntegralStrings;
 import io.crums.util.Strings;
 import io.crums.util.cc.ThreadUtils;
 import io.crums.util.main.PrintSupport;
@@ -32,16 +34,17 @@ import picocli.CommandLine.Model.CommandSpec;
 @Command(
     name = Setup.NAME,
     description = {
-        "Interactive ledger definition/configuration file setup",
-        "",
-        "You'll need the following in order to complete this step:",
+        "Ledger definition/configuration file setup",
+        "For interactive mode (the default) you'll need the following:",
         "",
         "  - JDBC connection URL",
         "  - Database access credentials",
         "  - path to JDBC driver jar file",
         "  - Table name, primary-key column name, other column names",
         "    (you can JOIN values from other tables to complete the view later)",
-        ""
+        "",
+        "The @|faint " + Setup.NEW_SEED + "|@ option is non-interacive.",
+        "",
     })
 class Setup implements Runnable {
   
@@ -55,8 +58,22 @@ class Setup implements Runnable {
   
   
 
-  @Option(names = {"-b", "--make-it-brief"}, description = "Skip the preamble, less chatty")
+  @Option(
+      names = {"-b", "--brief"},
+      description = { "Skip the preamble, less chatty", ""}
+      )
   boolean makeItBrief;
+
+  final static String NEW_SEED = "--new-seed";
+  @Option(
+      names = Setup.NEW_SEED,
+      description= {
+          "Print secure random seed for salting ledger and exit.",
+          "Used in config's @|faint sldg.source.salt.seed|@ setting.",
+          "Note the salt seed must be kept @|italic secret|@."
+      }
+      )
+  boolean newSeedSalt;
   
   private ConfigFileBuilder builder;
   private Console console;
@@ -65,6 +82,14 @@ class Setup implements Runnable {
   public void run() {
     if (sldg.getConfigFile() != null)
       throw new ParameterException(spec.commandLine(), "command " + NAME + " takes no arguments");
+    
+    if (newSeedSalt) {
+      var rand = new SecureRandom();
+      byte[] seed = new byte[32];
+      rand.nextBytes(seed);
+      System.out.println(IntegralStrings.toHex(seed));
+      return;
+    }
     console = System.console();
     if (console == null) {
       System.err.printf("[ERROR] command %s invoked without console%n", NAME);

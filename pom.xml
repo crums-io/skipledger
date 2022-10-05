@@ -235,20 +235,14 @@
 
 
   <dependencies>
-  
+
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>io-util</artifactId>
       <version>${crums.util}</version>
     </dependency>
 
-    <dependency>
-      <groupId>io.crums</groupId>
-      <artifactId>crums-core</artifactId>
-      <version>${crums.core}</version>
-    </dependency>
-
-
+    <!-- TEST scope -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

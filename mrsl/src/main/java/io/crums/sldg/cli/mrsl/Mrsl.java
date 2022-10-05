@@ -1101,8 +1101,8 @@ class Merge implements Callable<Integer> {
     int trailsAdded = auth.getMorselPack().trailedRowNumbers().size();
     
     // TODO: not printed ATM
-    int missedSrcs = 0;
-    int missedTrails = 0;
+//    int missedSrcs = 0;
+//    int missedTrails = 0;
     
     for (var morsel : Lists.reverse(sources)) {
       
@@ -1131,8 +1131,8 @@ class Merge implements Callable<Integer> {
         int failedSrcCount = result.failedSrcRns().size();
         int failedTrailCount = result.failedTrailRns().size();
         
-        missedSrcs += failedSrcCount;
-        missedTrails += failedTrailCount;
+//        missedSrcs += failedSrcCount;
+//        missedTrails += failedTrailCount;
         
         out.print("  [WARNING] ");
         if (result.nothingDone())

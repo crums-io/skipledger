@@ -71,16 +71,7 @@
   
   
   
-  
-  
   <dependencies>
-
-    <dependency>
-    <!-- Actually redundant because of *reports* artifact -->
-      <groupId>io.crums</groupId>
-      <artifactId>io-util</artifactId>
-      <version>[1.0.0,)</version>
-    </dependency>
 
     <dependency>
       <groupId>info.picocli</groupId>
@@ -193,7 +184,7 @@
             </path>
           </annotationProcessorPaths>
           <compilerArgs>
-            <arg>-Aproject=io.crums/mrsl</arg>
+            <arg>-Aproject=io.crums/base64-32</arg>
           </compilerArgs>
         </configuration>
       </plugin>
