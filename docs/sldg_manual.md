@@ -1,5 +1,7 @@
-sldg Manual
-=========
+<img src="./logo.png"/>
+
+# sldg Manual
+
 
 This is a manual / tutorial about using the *sldg* tool.  
 Version 0.5.0
@@ -240,7 +242,23 @@ Example:
 
     $ sldg setup
 
-*All other commands take a configuration file*.
+#### --new-seed
+
+Often times you may be using another ledger configuration file as a template for a new one. In that case, you'll need to use a new (*secret!*)
+salt seed in the new configuration. Use this command to generate a new secure random seed.
+
+Example:
+
+    $ sldg setup --new-seed
+    88cec878c60fc2c3030cc0a69bffe36f9a60d88c61764090dfcd08d556f79221
+
+This value would appear as
+
+    sldg.source.salt.seed=88cec878c60fc2c3030cc0a69bffe36f9a60d88c61764090dfcd08d556f79221
+
+in the ledger configuration file.
+
+*Note the commands that follow, all take a configuration file*.
 
 ### create
 

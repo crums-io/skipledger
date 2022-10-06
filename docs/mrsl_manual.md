@@ -1,5 +1,6 @@
-mrsl Manual
-========
+<img src="./logo.png"/>
+
+# mrsl Manual
 
 This is a short manual for the *mrsl* tool.  
 Version 0.5.0
@@ -65,8 +66,6 @@ on the Chinook Music Corp website. (See [verify](#verify).)
 ## Commands
 
 The following is meant to complement the program's `-help` option. None of the commands require a network connection. With the exception of the `dump` command which outputs in JSON, command output defaults to plain text. The reason why is that from a presentation standpoint, tabular data is more intuitive in row-per-line format. Output is switched to JSON using the `--json` option (or `-j`). By default, JSON output is indented; to remove whitespace use the `--pack` option.
-
-Note the command line interface is designed so that argument / options order do not matter. Options (on/off *switches*, really) can be abbreviated using their first letter and where appropriate combined in the usual way (e.g. `-jp` combines `--json` and `--pack`).
 
 ### sum
 

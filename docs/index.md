@@ -1,5 +1,7 @@
-skipledger
-========
+<img src="./logo.png"/>
+
+# skipledger
+
 
 Tools for maintaining tamper proof evolving historical private ledgers and for disclosing any of their parts in an efficient, provable way.
 
