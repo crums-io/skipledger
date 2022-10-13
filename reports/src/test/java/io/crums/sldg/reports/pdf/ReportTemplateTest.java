@@ -57,7 +57,7 @@ public class ReportTemplateTest extends IoTestCase {
   public final static int INVOICE_ID_COL_INDEX = 1;
   
   
-  
+  /** Dynamically created instance (not from JSON). */
   public static ReportTemplate queryWithTotalInstance() {
     
     try {

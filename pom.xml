@@ -24,7 +24,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
     <flatten.version>1.2.2</flatten.version>
-    <crums.util>[1.0.2,)</crums.util>
+    <crums.util>1.0.3-SNAPSHOT</crums.util>
     <crums.core>[1.0.0,)</crums.core>
     <native.maven.plugin.version>0.9.13</native.maven.plugin.version>
     
@@ -91,6 +91,7 @@
     <module>sldg</module>
     <module>mrsl</module>
     <module>b64</module>
+    <module>report-template</module>
   </modules>
   
 

@@ -18,7 +18,12 @@ import io.crums.util.json.JsonUtils;
 import io.crums.util.json.simple.JSONObject;
 
 /**
+ * The {@linkplain ReportTemplate} parser. This is stateful parser; not safe
+ * under concurrent access, particularly on the write path.
  * 
+ * @see #setRefedImages(Map)
+ * @see #setReferences(RefContext)
+ * @see #getReferences()
  */
 public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   
@@ -60,15 +65,23 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   
   
 
-  /** @see #setReferences(RefContext) */
+  /**
+   * Returns the references. After a <em>read</em> operation (eg {@linkplain #toEntity(JSONObject)}
+   * this returns the references that were defined in the JSON; on a <em>write</em> operation
+   * (eg {@code toJsonObject(..)}), these references (which may be set by the user) are used
+   * wherever applicable.
+   * 
+   * @see #setReferences(RefContext)
+   */
   public final RefContext getReferences() {
     return refs;
   }
   
   /**
-   * Sets the reference on the <em>write</em>-path. Some downstream
-   * parsers use this to decide whether to write out the object defintion
-   * or instead write a reference.
+   * Sets the references on the <em>write</em>-path. (On the <em>read</em>-path,
+   * the references are read in and set at the conclusion, so this method has
+   * would have no effect.) Some downstream parsers use this to decide whether
+   * to write out the object defintion or instead write a reference to it.
    * <p>
    * In previous prototypes this lived in the ReportTemplate object itself, but it properly
    * belongs here.
@@ -83,7 +96,7 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   
   /**
    * Sets the referenced images on the <em>read</em>-path. You don't need to
-   * set on the <em>write</em>-path.
+   * set this on the <em>write</em>-path.
    * 
    * @param refedImages
    * @return {@code this}
@@ -135,8 +148,9 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
   public ReportTemplate toEntity(JSONObject jObj) throws JsonParsingException {
     try {
       ReportTemplate report;
+      RefContext context;
       {
-        var context = toRefContext(jObj, refedImages);
+        context = toRefContext(jObj, refedImages);
         var query = toQuery(jObj, context);
         var header = toHeader(jObj, context);
         var subheader = toSubheader(jObj, context);
@@ -155,6 +169,9 @@ public class ReportTemplateParser implements JsonEntityParser<ReportTemplate> {
         report = new ReportTemplate(components, query);
       }
       setPageSpec(report, jObj);
+      
+      // save the context, before returning the object
+      this.refs = context;
       
       return report;
       

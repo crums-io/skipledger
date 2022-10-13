@@ -50,6 +50,12 @@
 
     <dependency>
       <groupId>io.crums</groupId>
+      <artifactId>jsonimple</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.crums</groupId>
       <artifactId>crums-core</artifactId>
       <version>${crums.core}</version>
     </dependency>

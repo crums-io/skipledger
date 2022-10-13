@@ -18,6 +18,7 @@ import com.gnahraf.test.IoTestCase;
 
 import io.crums.io.FileUtils;
 import io.crums.util.json.JsonPrinter;
+import io.crums.util.json.simple.JSONObject;
 import io.crums.util.json.simple.parser.JSONParser;
 
 /**
@@ -39,6 +40,10 @@ public class ReportTemplateParserTest extends IoTestCase {
     var genReport = parser.toEntity(jReport);
     
     assertEquals(report, genReport);
+
+    // 
+    final Object label = new Object() {  };
+    writeToFile(jReport, label);
   }
   
   
@@ -85,13 +90,22 @@ public class ReportTemplateParserTest extends IoTestCase {
     
     assertEquals(report, genReport);
     
+    writeToFile(jReport, label, "autoRef2x.json");
+  }
+  
+  
+  private void writeToFile(JSONObject jObj, Object label) {
+    writeToFile(jObj, label, null);
+  }
+  
+  private void writeToFile(JSONObject jObj, Object label, String filename) {
     var dir = getMethodOutputFilepath(label);
-    
-    assertTrue(dir.mkdirs());
-    File jsonFile = new File(dir, "autoRef2x.json");
-    try (var f = new PrintStream(jsonFile)) {
-      JsonPrinter.println(jReport, f);
-    }
+    dir.mkdirs();
+    assert dir.isDirectory();
+    if (filename == null)
+      filename = method(label) + ".json";
+    var jsonFile = new File(dir, filename);
+    JsonPrinter.write(jObj, jsonFile);
   }
   
   

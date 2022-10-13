@@ -8,8 +8,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +19,6 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfWriter;
 
 import io.crums.sldg.reports.pdf.input.NumberArg;
-import io.crums.sldg.reports.pdf.input.Param;
 import io.crums.sldg.reports.pdf.input.Query;
 import io.crums.sldg.src.SourceRow;
 
@@ -30,7 +27,7 @@ import io.crums.sldg.src.SourceRow;
  */
 public class ReportTemplate {
   
-  
+  /** Presentation components. */
   public record Components(
       Header header,
       Optional<TableTemplate> subHeader,
@@ -97,26 +94,56 @@ public class ReportTemplate {
     this(components, null);
   }
   
+  /**
+   * 
+   * @param components  not null
+   * @param query       optional
+   */
   public ReportTemplate(Components components, Query query) {
     this.components = Objects.requireNonNull(components, "null components");
     this.query = query;
   }
   
   /**
+   * Writes a new PDF file.
    * 
-   * @param file
+   * @param file        new file (parent directory must exist)
    * @param candidates  not-empty list of source rows. If there's a {@linkplain #getQuery() query}
    *                    object, then these are <em>candidate</em> source rows and are filtered by
    *                    the query object to create a final <em>rowset</em>
-   * @throws IllegalArgumentException if the final rowset is empty
+   * @throws IllegalArgumentException
+   *                    if the final <em>rowset</em> is empty
    */
   public void writePdf(File file, List<SourceRow> candidates)
       throws IllegalArgumentException, UncheckedIOException {
     
+    writePdf(file, candidates, true);
+  }
+  
+  /**
+   * Writes an empty PDF file. Empty in this context means a PDF
+   * generated without any dynamic data.
+   * 
+   * @param file        new file (parent directory must exist)
+   * @see #writePdf(File, List)
+   */
+  public void writePdf(File file)
+      throws IllegalArgumentException, UncheckedIOException {
+    
+    writePdf(file, List.of(), false);
+  }
+  
+  
+  /**
+   * 
+   * @param notEmpty    assert {@code candidates} is not empty
+   */
+  private void writePdf(File file, List<SourceRow> candidates, boolean notEmpty) {
     Objects.requireNonNull(file, "null file");
     Objects.requireNonNull(candidates, "null candidate source rows");
     var rowset = query == null ? candidates : query.selectFrom(candidates);
-    if (rowset.isEmpty())
+    
+    if (notEmpty && rowset.isEmpty())
       throw new IllegalArgumentException("empty rowset");
     if (file.exists())
       throw new IllegalArgumentException("cannot overwrite file: " + file);

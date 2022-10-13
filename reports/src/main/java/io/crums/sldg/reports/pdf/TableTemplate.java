@@ -360,13 +360,18 @@ public class TableTemplate {
   
   
   /**
+   * Creates the (implementation specific) PDF table.
    * 
-   * @param rowset
-   * @return
+   * @param rowset not null, but may be empty (for testing / design purposes)
    */
-  public PdfPTable createTable(List<SourceRow> rowset) {
-    if (Objects.requireNonNull(rowset, "null rowset").isEmpty())
-      throw new IllegalArgumentException("empty rowset");
+  PdfPTable createTable(List<SourceRow> rowset) {
+    
+    // I think I can relax the check, empty should be OK..
+    //
+    // if (Objects.requireNonNull(rowset, "null rowset").isEmpty())
+    //   throw new IllegalArgumentException("empty rowset");
+
+    Objects.requireNonNull(rowset, "null rowset");
     
     var table = initPdfTable();
     
