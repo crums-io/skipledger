@@ -104,8 +104,10 @@ public class ReportAssets {
    * <p>
    * Images are loaded from the {@code dir/images} subdirectory (if any). Note all files in the
    * subdirectory should be <em>loadable</em> images by the library. (This method does verify
-   * they can indeed be loaded.) Image filenames are interpreted as reference keys. The filename
-   * extensions make it in as keys, but they do not figure in how an image is loaded.
+   * they can indeed be loaded.) Image filenames are interpreted as reference keys, with the
+   * filename's extension stripped. This is so that <em>you can replace a referenced static image file
+   * with another with the same name but a different extension.</em> For example, you can
+   * replace {@code logo.png} with {@code logo.jpg}.
    * </p>
    * 
    * @param builder    the builder to be updated
@@ -171,12 +173,34 @@ public class ReportAssets {
       else {
         imageRefs = new HashMap<>(Math.max(8, images.length));
         for (var f : images) {
-          imageRefs.put(f.getName(), FileUtils.loadFileToMemory(f));
+          imageRefs.put(imageRef(f), FileUtils.loadFileToMemory(f));
         }
       }
     }
     
     setReport(builder, jReport, imageRefs);
+  }
+  
+  
+  
+  
+  /**
+   * Returns the reference key the given image file assumes in the model.
+   * This is based only on the filename.
+   * 
+   * <h4>Stripped Extension</h4>
+   * <p>
+   * The file's extension (if any) is stripped in order to make editing static images
+   * easier. For example {@code logo.png} can be replaced by {@code logo.jpg}.
+   * </p>
+   * 
+   * @param image not null
+   * @return the filename sans extension
+   */
+  public static String imageRef(File image) {
+    String ref = image.getName();
+    int dot = ref.lastIndexOf('.');
+    return dot > 0 ? ref.substring(0, dot) : ref;
   }
   
   
