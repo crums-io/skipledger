@@ -262,6 +262,21 @@ public class TableTemplate {
     return fixedCells.put(serialIndex, cell);
   }
   
+  
+  /** Removes and returns the cell at the given serial index. */
+  public CellData removeFixedCell(int serialIndex) {
+    return fixedCells.remove(serialIndex);
+  }
+  
+  
+  /** Removes and returns the cell at the given column/row coordinates. */
+  public CellData removeFixedCell(int col, int row) throws IndexOutOfBoundsException {
+    return removeFixedCell(toSerialIndex(col, row));
+  }
+  
+  
+  
+  
   /**
    * Sets the value at the cell with the given (zero-based) column
    * and row coordinates. Equivalent to
