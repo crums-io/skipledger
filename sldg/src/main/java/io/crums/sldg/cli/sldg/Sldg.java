@@ -1101,9 +1101,9 @@ class Morsel implements Callable<Integer> {
     if (report) try {
       sldg.getConfig().getReportPath().ifPresentOrElse(
           f -> ReportAssets.setReport(builder.assetsBuilder(), f),
-          () -> { System.err.println(
+          () -> System.err.println(
               "[WARNING] no valid report path setting '" + ConfigR.REPORT_PATH_PROPERTY +
-              "' found in config file. (Ignored.)"); });
+              "' found in config file. (Ignored.)") );
     } catch (Exception x) {
       // bail
       System.err.println("Report template misconfiguration: " + x.getMessage());
