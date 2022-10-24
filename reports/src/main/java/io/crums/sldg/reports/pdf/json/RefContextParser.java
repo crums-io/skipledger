@@ -121,7 +121,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     if (fontRefs.isEmpty())
       return;
     var jRefs = new JSONObject();
-    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), null, null);
+    var maskedCtx = RefContext.of(null, context.colorRefs(), null, null, null, null);
     for (var e : fontRefs.entrySet())
       jRefs.put(e.getKey(), FontSpecParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(FONTS, jRefs);
@@ -133,7 +133,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
     if (formatRefs.isEmpty())
       return;
     var jRefs = new JSONObject();
-    var maskedCtx = RefContext.of(null, null, null, context.colorRefs(), context.fontRefs(), null);
+    var maskedCtx = RefContext.of(null, context.colorRefs(), context.fontRefs(), null, null, null);
     for (var e : formatRefs.entrySet())
       jRefs.put(e.getKey(), CellFormatParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(CELL_FORMATS, jRefs);
@@ -146,7 +146,7 @@ public class RefContextParser implements JsonEntityParser<RefContext> {
       return;
     var jRefs = new JSONObject();
     var maskedCtx = RefContext.of(
-        null, context.cellFormatRefs(), null, context.colorRefs(), context.fontRefs(), null);
+        null, context.colorRefs(), context.fontRefs(), context.cellFormatRefs(), null, null);
     for (var e : cellRefs.entrySet())
       jRefs.put(e.getKey(), CellDataParser.INSTANCE.toJsonObject(e.getValue(), maskedCtx));
     jObj.put(CELLS, jRefs);

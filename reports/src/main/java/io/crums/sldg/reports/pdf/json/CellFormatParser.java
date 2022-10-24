@@ -47,8 +47,6 @@ public class CellFormatParser implements ContextedParser<CellFormat> {
   public final static String ASCENDER = "ascender";
 
   public final static String DESCENDER = "descender";
-
-  public final static String BORDERS = "borders";
   
   public final static String BG_COLOR = "bgColor";
   

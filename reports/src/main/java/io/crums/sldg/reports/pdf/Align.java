@@ -14,6 +14,10 @@ public class Align {
   
   public final static Align.H DEFAULT_H = H.LEFT;
   public final static Align.V DEFAULT_V = V.MIDDLE; 
+  
+  public interface Defaulted {
+    boolean isDefault();
+  }
 
   // only a namespace
   private Align() {  }
@@ -21,7 +25,7 @@ public class Align {
   /**
    * Horizontal alignment.
    */
-  public enum H {
+  public enum H implements Defaulted {
     LEFT(Element.ALIGN_LEFT),
     CENTER(Element.ALIGN_CENTER),
     RIGHT(Element.ALIGN_RIGHT),
@@ -34,6 +38,7 @@ public class Align {
     public final int code;
 
     
+    @Override
     public boolean isDefault() {
       return this == DEFAULT_H;
     }
@@ -43,7 +48,7 @@ public class Align {
   /**
    * Vertical alignment.
    */
-  public enum V {
+  public enum V implements Defaulted {
     BOTTOM(Element.ALIGN_BOTTOM),
     MIDDLE(Element.ALIGN_MIDDLE),
     TOP(Element.ALIGN_TOP);
@@ -54,7 +59,8 @@ public class Align {
     
     public final int code;
     
-    
+
+    @Override
     public boolean isDefault() {
       return this == DEFAULT_V;
     }

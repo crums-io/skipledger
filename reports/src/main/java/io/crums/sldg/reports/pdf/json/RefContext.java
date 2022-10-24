@@ -102,10 +102,10 @@ public interface RefContext {
   
   public static RefContext of(
       Map<String, ByteBuffer> imageRefs,
-      Map<String, CellFormat> cellFormatRefs,
-      Map<String, CellData>   cellDataRefs,
       Map<String, Color>      colorRefs,
       Map<String, FontSpec>   fontRefs,
+      Map<String, CellFormat> cellFormatRefs,
+      Map<String, CellData>   cellDataRefs,
       Map<String, NumberArg>  numberArgs) {
 
     imageRefs = transformNull(imageRefs);
