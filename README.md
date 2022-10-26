@@ -251,24 +251,7 @@ To build the *sldg* and *mrsl* tools:
 
 ## Maven Artifacts
 
-Version `0.5.0` is the first release that becomes available from Maven Central.
-
-### SNAPSHOTs
-
-The latest development version `0.5.1-SNAPSHOT` is available from the *snaphots* repo.
-The POMs already describe its location, but here it is in case you want to use it in another POM file.
-
-```
-  <repositories>
-    <!-- For SNAPSHOT releases -->
-    <repository>
-      <id>ossrh</id>
-      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
-    </repository>
-  </repositories>
-```
-
-Note artifacts in this repo always have the `-SNAPSHOT` moniker appended to their version strings.
+Libraries are available from Maven Central.
 
 ### skipledger
 
@@ -280,7 +263,7 @@ witness records), the morsel file for packaging proofs, and a data model for has
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>skipledger</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
     </dependency>
   
 ```
@@ -293,7 +276,7 @@ the hash ledger in the relational database.
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>skipledger-sql</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
     </dependency>
   
 ```
@@ -305,7 +288,7 @@ PDF report generator from JSON DSL (the report template).
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>reports</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
     </dependency>
 ```
 
@@ -320,7 +303,7 @@ CLI tool used by ledger owners to monitor, track, and optionally report morsels 
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>sldg</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
     </dependency>
 ```
 
@@ -333,44 +316,33 @@ from them, as well as manipulating the `.mrsl` files themselves (merging or reda
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>mrsl</artifactId>
-      <version>0.5.0</version>
+      <version>0.5.1</version>
     </dependency>
 ```
 
 ## Changes
 
-Version `0.5.0` is both a maintenance- and *new-feature* release.
+Version `0.5.1` contains 2 new CLI tools.
 
+- **base64-32**. Base64/Hex encoder/decoder for 32 byte values. This encoding is used to represent 32-values in our SQL schemas.
+- **report-template**. CLI tool for creating / designing report templates under development. Currently features only visual design. Query and columns auto-filled from morsel data in next releases. (Already possible directly from code.)
 
-### Maintenance
+Other changes:
 
-- **JPMS Modularization.** Maven submodules were JPMS modularized (the Java Module System). So were
-its other `io.crums` dependencies. This allows bundling applications with a custom JRE that's smaller
-than a standard runtime.
-- **Maven Central Deployment.** The modules defined in this project (and their dependencies on other
-`io.crums` projects) are now deployed to central.
-
-### New Features
-
-- **Better CLI.** This release uses the *picocli* library for prettier, more intuitive / helpful
-command line interfaces.
-
-- **Report Templates.** `.mrsl` files can now embed a customizable template for generating PDF reports
-from ledger data in a morsel. The idea is to allow the ledger owner create branded documents
-from their ledger entries for such things as bills, receipts, or any other documents they might invent.
-
+- **sldg setup --new-seed**. Prints a new secure random salt seed. (Useful when defining a new ledger off an existing config file.)
+- *image file-to-key mapping.* Static report images are now keyed without the extension in their filename (i.e. *logo.png* and *logo.jpg* both map to `logo`.)
 
 
 ## Roadmap
 
 The following are planned for the next releases:
 
+- Hashing logs/text; eyeing checkpoints, instead of building full ledgers
 - Reports:
     * Add more arguments types that PDF templates can take (right now they're only numeric)
-    * Add template maker tools
+    * Round out report-template tool
     * Add support for displaying images from the ledger data
-    * Embed `.mrsl` hashes in PDF, so that a standalone PDF can be validated against the current
-    fingerprint of the ledger
+    * Embed `.mrsl` hashes in PDF, so that a standalone PDF can be validated against the current fingerprint of the ledger
 - Package the *mrsl* and *sldg* tools for end-user distribution
 
 After that..
