@@ -323,7 +323,7 @@ from them, as well as manipulating the `.mrsl` files themselves (merging or reda
 
 Version `0.5.1` contains 2 new CLI tools.
 
-- **base64-32**. Base64/Hex encoder/decoder for 32 byte values. This encoding is used to represent 32-values in our SQL schemas.
+- **base64-32**. Base64/Hex encoder/decoder for 32 byte values. This encoding is used to represent 32-byte values in our SQL schemas.
 - **report-template**. CLI tool for creating / designing report templates under development. Currently features only visual design. Query and columns auto-filled from morsel data in next releases. (Already possible directly from code.)
 
 Other changes:
