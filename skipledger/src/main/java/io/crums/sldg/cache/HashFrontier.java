@@ -139,62 +139,6 @@ public class HashFrontier extends Frontier {
   private final RowHash[] levelFrontier;
   
   
-  /**
-   * Creates an instance from the given bag of rows. This is a fall-back constructor,
-   * possibly for a subclass. Prefer the pseudo constructor methods. They're easier
-   * and more efficient.
-   * 
-   * @param frontierRows bag of rows that iterate in level order
-   * 
-   * @throws NullPointerException if argument is {@code null}
-   * @throws IllegalArgumentException if {@code frontierRows} don't form a valid frontier
-   */
-  public HashFrontier(Collection<? extends RowHash> frontierRows) {
-    final int levels = frontierRows.size();
-    if (levels == 0)
-      throw new IllegalArgumentException("empty frontier rows");
-    else if (levels > 64)
-      throw new IllegalArgumentException("frontier rows > 64: " + levels);
-    this.levelFrontier = new RowHash[levels];
-    var fit = frontierRows.iterator();
-    setLevel(0, fit.next());
-    levelFrontier[0] = fit.next();
-    final long rn = levelFrontier[0].rowNumber();
-    if (rn < 1)
-      throw new IllegalArgumentException(
-          "illegal arg and RowHash implementation. Row number: " + rn);
-    int expectedSize = levelCount(rn);
-    if (levels != expectedSize)
-      throw new IllegalArgumentException(
-          "expected frontier size for row [" + rn + "] is " +
-          expectedSize + "; actual given is " + levels);
-    
-    for (int index = 1; index < levels; ++index) {
-      var rowHash = fit.next();
-      setLevel(index, rowHash);
-      
-      // so some more checks..
-      long expectedRn = levelRowNumber(rn, index);
-      if (rowHash.rowNumber() != expectedRn)
-        throw new IllegalArgumentException(
-            "row [" + rowHash.rowNumber() + "] at index " + index +
-            " not a member of frontier " + new Numbers(rn));
-      var prevLevel = levelFrontier[index - 1];
-      if (prevLevel.rowNumber() == expectedRn && !prevLevel.equals(rowHash))
-          throw new IllegalArgumentException(
-              "inconsistent hashes across instances for row [" + expectedRn +
-              "] at level " + index);
-    }
-  }
-  /**
-   * Balks on null.
-   */
-  private void setLevel(int index, RowHash rowHash) {
-    if (rowHash == null)
-      throw new IllegalArgumentException("null RowHash instance at index " + index);
-    this.levelFrontier[index] = rowHash;
-  }
-  
   
   
   /**
