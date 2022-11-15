@@ -256,14 +256,34 @@ public class SourceRow implements Serial {
   }
   
   
+  /**
+   * Returns the row hash. This is the <em>input hash</em> that goes in the
+   * skip ledger.
+   */
   public ByteBuffer rowHash() {
-    MessageDigest digest = DIGEST.newDigest();
-    MessageDigest work = DIGEST.newDigest();
+    return rowHash(null, null);
+  }
+  
+  
+  public ByteBuffer rowHash(MessageDigest work1, MessageDigest work2) {
+    MessageDigest digest = prepare(work1);
+    MessageDigest work = prepare(work2);
+    if (digest == work)
+      throw new IllegalArgumentException("work digests (2) are the same instance: " + digest);
     
     for (var col : columns)
       digest.update(col.getHash(work));
     
     return bufferDigest(digest);
+  }
+  
+  private MessageDigest prepare(MessageDigest work) {
+    if (work == null)
+      return DIGEST.newDigest();
+    if (!work.getAlgorithm().equals(DIGEST.hashAlgo()))
+      throw new IllegalArgumentException("illegal digest algo: " + work);
+    work.reset();
+    return work;
   }
 
   /**

@@ -68,6 +68,24 @@ public class HashFrontier extends Frontier {
   
   
   /**
+   * Stateless instance representing an empty ledger.
+   * This is really a hack, so as to avoid checking for the null instance
+   * (which I don't want). The <em>only</em> method that works on this instance
+   * is {@linkplain HashFrontier#nextFrontier(ByteBuffer, MessageDigest)}.
+   */
+  public final static HashFrontier SENTINEL = new HashFrontier(new RowHash[0]) {
+    @Override
+    public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
+      return firstRow(inputHash, digest);
+    }
+    @Override
+    public long rowNumber() {
+      return 0L;
+    }
+  };
+  
+  
+  /**
    * @return {@code firstRow(inputHash, null)}
    * @see #firstRow(ByteBuffer, MessageDigest)
    */
@@ -88,8 +106,6 @@ public class HashFrontier extends Frontier {
    */
   public static HashFrontier firstRow(ByteBuffer inputHash, MessageDigest digest) {
     inputHash = sliceInput(inputHash);
-    if (inputHash.remaining() != SldgConstants.HASH_WIDTH)
-      throw new IllegalArgumentException("inputHash has invalid remaining bytes: " + inputHash);
     if (digest == null)
       digest = DIGEST.newDigest();
     else
@@ -290,7 +306,7 @@ public class HashFrontier extends Frontier {
   
 
   @Override
-  public final long rowNumber() {
+  public long rowNumber() {
     return levelFrontier[0].rowNumber();
   }
 
