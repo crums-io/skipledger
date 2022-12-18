@@ -20,6 +20,12 @@
       <artifactId>skipledger</artifactId>
       <version>${revision}</version>
     </dependency>
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>io-xp</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
     
   </dependencies>
   
