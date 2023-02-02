@@ -1,60 +1,421 @@
 /*
- * Copyright 2022 Babak Farhang
+ * Copyright 2023 Babak Farhang
  */
 package io.crums.sldg.logs.text;
 
 
 import static org.junit.jupiter.api.Assertions.*;
+import static io.crums.sldg.logs.text.StateHasherTest.*;
 
-import java.util.Random;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
 
+import com.gnahraf.test.IoTestCase;
+
+import io.crums.io.Opening;
+import io.crums.io.channels.ChannelUtils;
+import io.crums.io.sef.SortedLongs;
+import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.src.TableSalt;
+import io.crums.util.Strings;
+import io.crums.util.TaskStack;
 
 /**
  * 
  */
-public class LogHasherTest {
+public class LogHasherTest extends IoTestCase {
+
   
-  final static int HD_NO_BLANK = 9;
-  final static int HD_COMMENT = 3;
+  final static ByteBuffer FHEADER = hBuffer("FT-2");
+  final static ByteBuffer OHEADER = hBuffer("LO-23");
+  
+  final static String FT = "FT";
+  final static String LO = "LO";
+  
+  final static String HD_MOD_OFFSET = "hd-mod_offset.log";
+  final static String HD_MOD_ROW = "hd-mod_row.log";
+  
+  
+  private static ByteBuffer hBuffer(String txt) {
+    return ByteBuffer.wrap(txt.getBytes(Strings.UTF_8)).asReadOnlyBuffer();
+  }
   
   @Test
-  public void testHd() throws Exception {
-    long expectedRows = HD_NO_BLANK;
-    var salter = newSalter(10);
+  public void testHdExpo1() throws Exception {
+    Object label = new Object() { };
+    final int rnExpo = 1;
+    testHd(label, rnExpo, false, null);
+  }
+  
+  @Test
+  public void testHdExpo0() throws Exception {
+    Object label = new Object() { };
+    final int rnExpo = 0;
+    testHd(label, rnExpo, false);
+  }
+  
+  @Test
+  public void testHdExpo2() throws Exception {
+    Object label = new Object() { };
+    final int rnExpo = 2;
+    testHd(label, rnExpo, false);
+  }
+  
+  @Test
+  public void testHdExpo2NoComment() throws Exception {
+    Object label = new Object() { };
+    final int rnExpo = 2;
+    testHd(label, rnExpo, true);
+  }
+  
+
+  
+  private void testHd(
+      Object label, int rnExpo,
+      boolean xComments) throws Exception {
+    testHd(label, rnExpo, xComments, null);
+  }
+  
+  private void testHd(
+      Object label, int rnExpo,
+      boolean xComments,
+      String tokenDelimiters) throws Exception {
     
-    var logHasher = new LogHasher(new RowTokenizer(), salter);
-    try (var in = getClass().getResourceAsStream(LogParserTest.HD_LOG)) {
-      logHasher.appendLog(in);
+    long expectedRows = xComments ? HD_NO_BLANK - HD_COMMENT : HD_NO_BLANK;
+    
+    final File dir = testDir(label);
+    
+    int randSeed = method(label).hashCode();
+    var salter = newSalter(randSeed);
+    
+    var fTable = FrontierTableFile.create(new File(dir,  FT), FHEADER);
+    var rowOffsets = new SortedLongs(
+        createFile(new File(dir, LO), OHEADER),
+        OHEADER.capacity());
+    
+    Predicate<ByteBuffer> cFilter =
+        xComments ? (b) -> b.get(b.position()) == '#' : null;
+    
+    var hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    HashFrontier state;
+    
+    try (var log = getClass().getResourceAsStream(HD_LOG)) {
+      state = hasher.play(log);
     }
-    assertEquals(expectedRows, logHasher.frontier().rowNumber());
+
+    assertEquals(expectedRows, state.rowNumber());
+    
+    long expectedFLs = expectedRows / hasher.rnDelta();
+    
+    assertEquals(expectedFLs, fTable.size());
+    assertEquals(expectedFLs, rowOffsets.size());
+  }
+  
+  
+  
+  @Test
+  public void testPlayHd2xExpo0() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 0;
+    boolean xComments = false;
+    String tokenDelimiters = null;
+    int splitOffset = 169;
+    int lineNo = 7;
+    
+    testPlayHd2x(label, rnExpo, xComments, tokenDelimiters, splitOffset, lineNo);
+  }
+  
+  @Test
+  public void testPlayHd2xExpo0SansC() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 0;
+    boolean xComments = true;
+    
+    testPlayHd2x(label, rnExpo, xComments);
   }
   
   
   @Test
-  public void testHdSansComment() throws Exception {
-    long expectedRows = HD_NO_BLANK - HD_COMMENT;
-    Predicate<String> commentFilter = (s) -> !s.startsWith("#");
-    var salter = newSalter(11);
-    var rowParser = new FilteredRowParser(commentFilter, new RowTokenizer());
-    var logHasher = new LogHasher(rowParser, salter);
-    try (var in = getClass().getResourceAsStream(LogParserTest.HD_LOG)) {
-      logHasher.appendLog(in);
+  public void testPlayHd2xExpo2() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 2;
+    boolean xComments = false;
+    
+    testPlayHd2x(label, rnExpo, xComments);
+  }
+  
+  
+  @Test
+  public void testUpdateHdExpo2() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 2;
+    boolean xComments = false;
+    
+    testUpdateHd(label, rnExpo, xComments);
+  }
+  
+  
+  @Test
+  public void testUpdateHdExpo1NoReplay() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 1;
+    boolean xComments = false;
+    
+    testUpdateHd(label, rnExpo, xComments, true);
+  }
+
+  
+  @Test
+  public void testOffsetConflictOnUpdate() throws Exception {
+    Object label = new Object() { };
+    int rnExpo = 0;
+    final File dir = testDir(label);
+    
+    var salter = newTableSalt(label);
+    
+    var fTable = FrontierTableFile.create(new File(dir,  FT), FHEADER);
+    var rowOffsets = new SortedLongs(
+        createFile(new File(dir, LO), OHEADER),
+        OHEADER.capacity());
+    var hasher = new LogHasher(salter, null, null, rowOffsets, fTable, rnExpo);
+    
+    try (var log = getClass().getResourceAsStream(HD_LOG)) {
+      hasher.play(log);
     }
-    assertEquals(expectedRows, logHasher.frontier().rowNumber());
+    
+    try (var log = getClass().getResourceAsStream(HD_MOD_OFFSET)) {
+      hasher.play(log);
+    } catch (OffsetConflictException expected) {
+      System.out.println(method(label) + ": expected error: " + expected);
+    }
+
+    hasher.close();
+    
   }
   
   
   
-  private TableSalt newSalter(long seed) {
-    byte[] tableSeed = new byte[32];
-    new Random(seed).nextBytes(tableSeed);
-    return new TableSalt(tableSeed);
+  private TableSalt newTableSalt(Object label) {
+    int randSeed = method(label).hashCode();
+    return newSalter(randSeed);
+  }
+  
+  
+  
+  private void testPlayHd2x(
+      Object label, int rnExpo,
+      boolean xComments) throws Exception {
+
+    String tokenDelimiters = null;
+    int splitOffset = 169;
+    int lineNo = 7;
+    
+    testPlayHd2x(label, rnExpo, xComments, tokenDelimiters, splitOffset, lineNo);
+  }
+  
+  private void testPlayHd2x(
+      Object label, int rnExpo,
+      boolean xComments,
+      String tokenDelimiters,
+      int splitOffset,  // expected at 1 beyond EOL
+                        // AND at end of block
+      int splitLineNo) throws Exception {
+    
+
+    final File dir = testDir(label);
+
+    int randSeed = method(label).hashCode();
+    var salter = newSalter(randSeed);
+
+    Predicate<ByteBuffer> cFilter =
+        xComments ? (b) -> b.get(b.position()) == '#' : null;
+    
+    File frontierFile = new File(dir,  FT);
+    File offsetFile = new File(dir, LO);
+    var fTable = FrontierTableFile.create(frontierFile, FHEADER);
+    var rowOffsets = new SortedLongs(
+        createFile(offsetFile, OHEADER),
+        OHEADER.capacity());
+    
+    var hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    
+    File logFile = new File(dir, HD_LOG);
+    copyResourceToFile(logFile, HD_LOG);
+    HashFrontier state;
+    
+    try (var closer = new TaskStack()) {
+      var fc = openReadonly(logFile);
+      closer.pushClose(fc);
+      var trunc = ChannelUtils.truncate(fc, splitOffset);
+      state = hasher.play(trunc);
+    }
+    
+//    System.out.println(state);
+    
+    // close hasher and reopen
+    hasher.close();
+    
+    fTable = FrontierTableFile.loadReadWrite(frontierFile, FHEADER);
+    rowOffsets = new SortedLongs(
+        openReadWrite(offsetFile),
+        OHEADER.capacity());
+    
+    hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    
+    long rc = hasher.endOffsetsRecorded();
+    assert rc > 0;
+    assertEquals(splitOffset, hasher.endOffset(rc - 1));
+    
+    // play the state post the split offset
+    HashFrontier recomputedState;
+    try (var closer = new TaskStack()) {
+      closer.pushClose(hasher);
+      var fc = openReadonly(logFile);
+      closer.pushClose(fc);
+      fc.position(splitOffset);
+      state = hasher.play(fc, state, splitOffset, splitLineNo);
+      
+      recomputedState = new StateHasher(salter, cFilter, tokenDelimiters).play(fc.position(0));
+    }
+    
+    assertEquals(recomputedState, state);
+  }
+  
+  
+
+
+  private void testUpdateHd(
+      Object label, int rnExpo,
+      boolean xComments) throws Exception {
+    
+    testUpdateHd(label, rnExpo, xComments, false);
+  }
+  
+
+  private void testUpdateHd(
+      Object label, int rnExpo,
+      boolean xComments, boolean noReplay) throws Exception {
+    
+
+    String tokenDelimiters = null;
+    int splitOffset = 169;
+
+    final File dir = testDir(label);
+
+    int randSeed = method(label).hashCode();
+    var salter = newSalter(randSeed);
+
+    Predicate<ByteBuffer> cFilter =
+        xComments ? (b) -> b.get(b.position()) == '#' : null;
+    
+    File frontierFile = new File(dir,  FT);
+    File offsetFile = new File(dir, LO);
+    var fTable = FrontierTableFile.create(frontierFile, FHEADER);
+    var rowOffsets = new SortedLongs(
+        createFile(offsetFile, OHEADER),
+        OHEADER.capacity());
+    
+    var hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    
+    File logFile = new File(dir, HD_LOG);
+    copyResourceToFile(logFile, HD_LOG);
+    HashFrontier state;
+    
+    try (var closer = new TaskStack()) {
+      var fc = openReadonly(logFile);
+      closer.pushClose(fc);
+      var trunc = ChannelUtils.truncate(fc, splitOffset);
+      state = hasher.play(trunc);
+    }
+    
+    // close hasher and reopen
+    hasher.close();
+    
+    fTable = FrontierTableFile.loadReadWrite(frontierFile, FHEADER);
+    rowOffsets = new SortedLongs(
+        openReadWrite(offsetFile),
+        OHEADER.capacity());
+    
+    
+    if (noReplay)
+      hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo) {
+          @Override
+          protected int replayLimit() {
+            return 2;
+          }
+        };
+    else
+      hasher = new LogHasher(salter, cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    
+    // play the state post the split offset
+    HashFrontier recomputedState;
+    try (var closer = new TaskStack()) {
+      closer.pushClose(hasher);
+      var fc = openReadonly(logFile);
+      closer.pushClose(fc);
+      
+      state = hasher.update(fc);
+      
+      recomputedState = new StateHasher(salter, cFilter, tokenDelimiters).play(fc.position(0));
+    }
+    
+    assertEquals(recomputedState, state);
+  }
+  
+  
+  
+  
+  
+  
+  
+  private File testDir(Object label) {
+    var dir = getMethodOutputFilepath(label);
+    dir.mkdirs();
+    assert dir.isDirectory();
+    return dir;
+  }
+  
+  
+  private FileChannel createFile(File file, ByteBuffer header) throws IOException {
+    var fc = Opening.CREATE.openChannel(file);
+    ChannelUtils.writeRemaining(fc, 0, header.duplicate());
+    return fc;
+  }
+  
+  private FileChannel openReadonly(File file) throws IOException {
+    return Opening.READ_ONLY.openChannel(file);
+  }
+  
+  private FileChannel openReadWrite(File file) throws IOException {
+    return Opening.READ_WRITE_IF_EXISTS.openChannel(file);
+  }
+  
+  
+  private void copyResourceToFile(File file, String resource) throws IOException {
+    var res = getClass().getResourceAsStream(resource);
+    copyToFile(file, res);
+  }
+  
+  private void copyToFile(File file, InputStream res) throws IOException {
+    try (TaskStack closer = new TaskStack()) {
+      closer.pushClose(res);
+      var fstream = new FileOutputStream(file);
+      closer.pushClose(fstream);
+      byte[] buffer = new byte[4096];
+      while (true) {
+        int len = res.read(buffer);
+        if (len == -1)
+          break;
+        fstream.write(buffer, 0, len);
+      }
+    }
   }
 
 }
-
-

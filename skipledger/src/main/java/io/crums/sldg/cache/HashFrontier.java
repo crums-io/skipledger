@@ -8,14 +8,16 @@ import static io.crums.sldg.SldgConstants.DIGEST;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
+import io.crums.io.Serial;
+import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.Row;
 import io.crums.sldg.RowHash;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
+import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 
 /**
@@ -64,14 +66,16 @@ import io.crums.util.Lists;
  * 
  * @see #firstRow(ByteBuffer, MessageDigest)
  */
-public class HashFrontier extends Frontier {
+public class HashFrontier extends Frontier implements Serial {
   
   
   /**
    * Stateless instance representing an empty ledger.
    * This is really a hack, so as to avoid checking for the null instance
-   * (which I don't want). The <em>only</em> method that works on this instance
-   * is {@linkplain HashFrontier#nextFrontier(ByteBuffer, MessageDigest)}.
+   * (which I don't want). The <em>only</em> methods that work on this instance
+   * are {@linkplain HashFrontier#nextFrontier(ByteBuffer, MessageDigest)}, and
+   * the zero-returning {@linkplain HashFrontier#frontierHash()} and
+   * {@linkplain HashFrontier#rowNumber()} methods.
    */
   public final static HashFrontier SENTINEL = new HashFrontier(new RowHash[0]) {
     @Override
@@ -81,6 +85,10 @@ public class HashFrontier extends Frontier {
     @Override
     public long rowNumber() {
       return 0L;
+    }
+    @Override
+    public ByteBuffer frontierHash() {
+      return DIGEST.sentinelHash();
     }
   };
   
@@ -144,6 +152,16 @@ public class HashFrontier extends Frontier {
     }
     return new HashFrontier(levelFrontier);
   }
+
+  private static ByteBuffer sliceInput(ByteBuffer inputHash) {
+    ByteBuffer input = inputHash.slice();
+    if (input.remaining() != SldgConstants.HASH_WIDTH)
+      throw new IllegalArgumentException("input hash size: " + inputHash);
+    return input;
+  }
+  
+  
+  private final static ByteBuffer SENTINEL_HASH = SldgConstants.DIGEST.sentinelHash();
   
   
   
@@ -155,6 +173,77 @@ public class HashFrontier extends Frontier {
   private final RowHash[] levelFrontier;
   
   
+  /**
+   * @param rowNumber   &ge; 1
+   * @param levelHashes level hashes. Recall the hash at level zero is the
+   *                    hash of row [{@code rowNumber}]
+   * 
+   * @see Frontier#levelCount(long)
+   */
+  public HashFrontier(long rowNumber, ByteBuffer[] levelHashes) {
+    this(rowNumber, Lists.asReadOnlyList(levelHashes));
+  }
+  
+  /**
+   * @param rowNumber   &ge; 1
+   * @param levelHashes level hashes. Recall the hash at level zero is the
+   *                    hash of row [{@code rowNumber}]
+   *
+   * @see Frontier#levelCount(long)
+   */
+  public HashFrontier(long rowNumber, List<ByteBuffer> levelHashes) {
+    SkipLedger.checkRealRowNumber(rowNumber);
+    final int expectedLevels = levelCount(rowNumber);
+    if (levelHashes.size() != expectedLevels)
+      throw new IllegalArgumentException(
+          "expected %d levels for row [%d]; actual %d".formatted(
+              expectedLevels, rowNumber, levelHashes.size()));
+    
+    var deepHash = levelHashes.get(expectedLevels - 1);
+    long deepRn = levelRowNumber(rowNumber, expectedLevels - 1);
+    
+    noSentinel(deepHash, expectedLevels - 1);
+    
+    for (int index = expectedLevels - 1; index-- > 0; ) {
+      long levelRn = levelRowNumber(rowNumber, index);
+      var levelHash = levelHashes.get(index);
+      boolean sameHash = levelHash.equals(deepHash);
+      if (levelRn == deepRn) {
+        if (!sameHash)
+          throw new IllegalArgumentException(
+              "hash conflict for row [%d] at levelHashes[%d]"
+              .formatted(levelRn, index));
+      } else {
+        if (sameHash)
+          throw new IllegalArgumentException(
+              "row [%d] and row [%d] set to the same hash (at levelHashes[%d] " +
+              " for row number %d)"
+              .formatted(deepRn, levelRn, index, rowNumber));
+        noSentinel(levelHash, index);
+        deepRn = levelRn;
+        deepHash = levelHash;
+      }
+    }
+    
+    this.levelFrontier = new RowHash[expectedLevels];
+    levelFrontier[0] = new HashedRow(rowNumber, levelHashes.get(0));
+    long lastRn = rowNumber;
+    for (int index = 1; index < expectedLevels; ++index) {
+      long rn = levelRowNumber(rowNumber, index);
+      if (lastRn == rn)
+        levelFrontier[index] = levelFrontier[index - 1];
+      else {
+        levelFrontier[index] = new HashedRow(rn, levelHashes.get(index));
+        lastRn = rn;
+      }
+    }
+  }
+  
+  private void noSentinel(ByteBuffer hash, int index) {
+    if (hash.equals(SENTINEL_HASH))
+      throw new IllegalArgumentException(
+          "sentinel (zeroes) hash at index [" + index + "]");
+  }
   
   
   /**
@@ -178,6 +267,22 @@ public class HashFrontier extends Frontier {
   
   
   //      M E T H O D S
+  
+
+  @Override
+  public final boolean equals(Object o) {
+    return o instanceof HashFrontier other &&
+        other.rowNumber() == rowNumber() &&
+        other.frontierHash().equals(frontierHash());
+  }
+  
+  
+  
+  @Override
+  public int hashCode() {
+    return frontierHash().hashCode();
+  }
+  
   
   
   
@@ -204,7 +309,7 @@ public class HashFrontier extends Frontier {
    * 
    * @return {@code frontierRow().hash()}
    */
-  public final ByteBuffer frontierHash() {
+  public ByteBuffer frontierHash() {
     return levelFrontier[0].hash();
   }
   
@@ -212,25 +317,18 @@ public class HashFrontier extends Frontier {
   /**
    * Returns the row at the given level.
    * 
-   * @param level &ge; 1 and &lt; {@linkplain #levelCount()}
+   * @param level &ge; 0 and &lt; {@linkplain #levelCount()}
    */
   public RowHash levelRow(int level) {
     return levelFrontier[level];
   }
   
   
-  
+  /** Returns the level rows ordered in <em>decreasing</em> row numbers. */
   public List<? extends RowHash> levelRows() {
     return Lists.asReadOnlyList(levelFrontier);
   }
   
-  
-  private static ByteBuffer sliceInput(ByteBuffer inputHash) {
-    ByteBuffer input = inputHash.slice();
-    if (input.remaining() != SldgConstants.HASH_WIDTH)
-      throw new IllegalArgumentException("input hash size: " + inputHash);
-    return input;
-  }
   
   
   public HashFrontier nextFrontier(ByteBuffer inputHash) {
@@ -296,13 +394,12 @@ public class HashFrontier extends Frontier {
       nextLevels[level] = levelFrontier[level];
     
     // set the remaining levels to *next*, from skipCount - 1 to 0
-    // (that's all 
+    // (that's all folks!)
     for (int level = skipCount; level-- > 0; )
       nextLevels[level] = next;
     
     return new HashFrontier(nextLevels);
   }
-  
   
 
   @Override
@@ -333,5 +430,69 @@ public class HashFrontier extends Frontier {
   }
   
   
+  @Override
+  public String toString() {
+    var hash = frontierHash().limit(4);
+    return "%d:%s..".formatted(rowNumber(), IntegralStrings.toHex(hash));
+  }
+
+
+  @Override
+  public int serialSize() {
+    return levelFrontier.length * SldgConstants.HASH_WIDTH + 8;
+  }
+
+
+  /**
+   * {@inheritDoc}
+   * <p>
+   * Also works on the {@linkplain #SENTINEL} instance.
+   * </p>
+   */
+  @Override
+  public ByteBuffer writeTo(ByteBuffer out) {
+    out.putLong(rowNumber());
+    for (var rowHash : levelFrontier)
+      out.put(rowHash.hash());
+    return out;
+  }
+  
+  /**
+   * Reads and returns an instance from its given serial representation.
+   * 
+   * @param in  positioned at the beginning and advanced on return. May contain 
+   *            additional data (the format is self-delimiting).
+   * @return the read in frontier, possibly the {@linkplain #SENTINEL} instance.
+   * 
+   * @see Serial
+   */
+  public static HashFrontier loadSerial(ByteBuffer in) {
+    long rn = in.getLong();
+    if (rn > 0) {
+      int levels = levelCount(rn);
+      ByteBuffer[] levelHashes = new ByteBuffer[levels];
+      for (int index = 0; index < levels; ++index) {
+        byte[] hash = new byte[SldgConstants.HASH_WIDTH];
+        in.get(hash);
+        levelHashes[index] = ByteBuffer.wrap(hash);
+      }
+      return new HashFrontier(rn, levelHashes);
+    
+    } else if (rn == 0) {
+      return SENTINEL;
+    } else {
+      throw new ByteFormatException("read nonsense row number " + rn);
+    }
+  }
 
 }
+
+
+
+
+
+
+
+
+
+

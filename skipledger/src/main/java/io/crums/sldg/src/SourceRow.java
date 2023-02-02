@@ -259,13 +259,39 @@ public class SourceRow implements Serial {
   /**
    * Returns the row hash. This is the <em>input hash</em> that goes in the
    * skip ledger.
+   * 
+   * @see #rowHash(MessageDigest, MessageDigest)
    */
   public ByteBuffer rowHash() {
     return rowHash(null, null);
   }
   
   
+
+  /**
+   * Returns the row hash. This is the <em>input hash</em> that goes in the
+   * skip ledger.
+   * 
+   * @param work1   SHA-256 work digester
+   * @param work2   SHA-256 work digester
+   * 
+   * @return 32-byte hash
+   */
   public ByteBuffer rowHash(MessageDigest work1, MessageDigest work2) {
+    return rowHash(columns, work1, work2);
+  }
+  
+
+  /**
+   * Returns the hash of the row with the given columns. This is the <em>input hash</em>
+   * that goes in the skip ledger.
+   * 
+   * @param work1   SHA-256 work digester
+   * @param work2   SHA-256 work digester
+   * 
+   * @return 32-byte hash
+   */
+  public static ByteBuffer rowHash(List<ColumnValue> columns, MessageDigest work1, MessageDigest work2) {
     MessageDigest digest = prepare(work1);
     MessageDigest work = prepare(work2);
     if (digest == work)
@@ -277,7 +303,7 @@ public class SourceRow implements Serial {
     return bufferDigest(digest);
   }
   
-  private MessageDigest prepare(MessageDigest work) {
+  private static MessageDigest prepare(MessageDigest work) {
     if (work == null)
       return DIGEST.newDigest();
     if (!work.getAlgorithm().equals(DIGEST.hashAlgo()))
