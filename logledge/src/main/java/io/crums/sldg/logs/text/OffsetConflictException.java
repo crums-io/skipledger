@@ -34,11 +34,15 @@ public class OffsetConflictException extends SldgException {
     this.rowNumber = rowNumber;
     this.expectedOffset = expectedOffset;
     this.actualOffset = actualOffset;
+    
+    if (rowNumber < 1 || expectedOffset < 0 || actualOffset < 0)
+      throw new RuntimeException(
+          "%d:%d:%d".formatted(rowNumber, expectedOffset, actualOffset));
   }
 
 
   
-  public final long getRowNumber() {
+  public final long rowNumber() {
     return rowNumber;
   }
 

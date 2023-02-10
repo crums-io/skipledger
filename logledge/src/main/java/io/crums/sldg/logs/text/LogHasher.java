@@ -4,17 +4,20 @@
 package io.crums.sldg.logs.text;
 
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Objects;
 import java.util.function.Predicate;
 
 import io.crums.io.channels.ChannelUtils;
-import io.crums.io.sef.SortedLongs;
+import io.crums.io.sef.Alf;
 import io.crums.sldg.HashConflictException;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.cache.Frontier;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.src.TableSalt;
@@ -32,7 +35,7 @@ import io.crums.util.TaskStack;
  * <li>Ability to truncate offsets, e.g. when a comment line was added</li>
  * </ol>
  */
-public class LogHasher extends StateHasher implements AutoCloseable {
+public class LogHasher extends StateHasher implements Channel {
 
   
   
@@ -45,7 +48,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
 
   /** EOL (<em>!</em>) offsets. */
-  private final SortedLongs rowOffsets;
+  private final Alf rowOffsets;
   private final FrontierTable frontiers;
   private final long rnMask;
   
@@ -57,7 +60,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
    */
   public LogHasher(
       TableSalt salt, Predicate<ByteBuffer> commentFilter, String tokenDelimiters,
-      SortedLongs rowOffsets, FrontierTable frontiers, int rnExponent) {
+      Alf rowOffsets, FrontierTable frontiers, int rnExponent) {
     
     super(salt, commentFilter, tokenDelimiters);
     
@@ -79,33 +82,73 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
   
   /** Closes the backing storage files (row hashes and offsets). */
+  @Override
   public void close() {
     try (var closer = new TaskStack()) {
       closer.pushCall(() -> { rowOffsets.close(true); return null; });
       closer.pushClose(frontiers);
     }
+  }
+  
+  
+  @Override
+  public boolean isOpen() {
+    return rowOffsets.isOpen();
+  }
+  
+  
+  /**
+   * 
+   * @param rn
+   * @param logChannel
+   */
+  public FrontieredRow getFrontieredRow(long rn, SeekableByteChannel logChannel)
+      throws IOException {
+    SkipLedger.checkRealRowNumber(rn);
+    HashFrontier frontier;
+    final long index;
+    {
+      long preRn = rn - 1;
+      long indexSize = rowOffsets.size();
+      long delta = rnDelta();
+      long lastRn = indexSize * delta; // (may be zero)
+      
+      if (preRn < delta || lastRn == 0)
+        index = -1;
+      else if (preRn > lastRn)
+        index = indexSize - 1;
+      else
+        index = (preRn / delta) - 1;
+      
+    }
+    frontier = index == -1 ? HashFrontier.SENTINEL : frontier(index);
+    long eol = index == -1 ? 0 : rowOffsets.get(index);
     
+    return getFrontieredRow(rn, frontier, logChannel.position(eol));
   }
   
   
   
   
-  public HashFrontier update(SeekableByteChannel logChannel) throws IOException {
+  
+  public State update(SeekableByteChannel logChannel) throws IOException {
     long fsize = frontiers.size();
-    HashFrontier state;
-    if (fsize < replayLimit()) {
+    long osize = rowOffsets.size();
+    
+    State state;
+    if (fsize < replayLimit() || osize < fsize) {
       state = play(logChannel);
     } else {
       state = checkFirstBlock(logChannel);
       // set the state to one before the last block recorded
       long index = fsize - 2;
-      state = readFrontier(index);
+      HashFrontier frontier = readFrontier(index);
       // position the logChannel to the end of this one-before-last block
       // this is why we record the EOL (not start) offset for the row, btw
       long eolOff = rowOffsets.get(index);
       logChannel.position(eolOff);
       long lineNoEst = state.rowNumber() - 1; // minimum (likely greater)
-      state = play(logChannel, state, eolOff, lineNoEst);
+      state = play(logChannel, frontier, eolOff, lineNoEst);
     }
     return state;
   }
@@ -114,7 +157,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
   
   
-  public HashFrontier play(SeekableByteChannel logChannel) throws IOException {
+  public State play(SeekableByteChannel logChannel) throws IOException {
     return play((ReadableByteChannel) logChannel.position(0));
   }
   
@@ -138,7 +181,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
  
   
-  public HashFrontier checkFirstBlock(SeekableByteChannel logChannel) throws IOException {
+  public State checkFirstBlock(SeekableByteChannel logChannel) throws IOException {
     logChannel.position(0);
     long eof = rowOffsets.get(0);
     ReadableByteChannel truncated = ChannelUtils.truncate(logChannel, eof);
@@ -147,9 +190,34 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
 
   
+  public State recoverFromConflict(
+      OffsetConflictException conflict, SeekableByteChannel logChannel)
+          throws IOException {
+    
+    long newSize = trimmedSize(conflict.rowNumber());
+    
+    trimOffsetsRecorded(newSize);
+    
+    return update(logChannel);
+  }
   
   
+  private long trimmedSize(long rn) {
+    return rn / rnDelta() - 1;
+  }
   
+
+  
+  public State recoverFromConflict(
+      RowHashConflictException conflict, SeekableByteChannel logChannel)
+          throws IOException {
+    
+    long newSize = trimmedSize(conflict.rowNumber());
+    
+    trimRecorded(newSize);
+    
+    return update(logChannel);
+  }
   
   
   /**
@@ -180,7 +248,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
       HashFrontier frontier, long offset, long eolOff, long lineNo)
           throws
           IOException,
-          HashConflictException,
+          RowHashConflictException,
           OffsetConflictException,
           IllegalArgumentException {
     
@@ -207,7 +275,7 @@ public class LogHasher extends StateHasher implements AutoCloseable {
       
       var rowHash = frontiers.get(index);
       if (!rowHash.equals(frontier.frontierHash()))
-        throw new HashConflictException(
+        throw new RowHashConflictException(rn,
             "at row [%d] (%d:%d)".formatted(rn, lineNo, offset));
       
     }
@@ -255,6 +323,28 @@ public class LogHasher extends StateHasher implements AutoCloseable {
   
   public long endOffsetChecked(long index) throws IOException {
     return rowOffsets.get(index);
+  }
+  
+  
+  
+  public void trimOffsetsRecorded(long count) {
+    try {
+      rowOffsets.trimSize(count);
+    } catch (IOException iox) {
+      throw new UncheckedIOException(
+          "on " + count + ": " +iox.getMessage(), iox);
+    }
+  }
+  
+  
+  public void trimFrontiersRecorded(long count) {
+    frontiers.trimSize(count);
+  }
+  
+  
+  public void trimRecorded(long count) {
+    trimOffsetsRecorded(count);
+    trimFrontiersRecorded(count);
   }
   
   

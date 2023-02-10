@@ -58,8 +58,9 @@ public interface FrontierTable extends AutoCloseable {
   /**  */
   /**
    * Trims the number of entries in the table to the specified amount.
+   * If the current size is less than the given amount, then no change occurs.
    * 
-   * @param newSize 0 &le; {@code newSize} &le; {@code size()}
+   * @param newSize &ge; 0
    */
   void trimSize(long newSize);
   

@@ -105,6 +105,17 @@ public class FrontierTableFile implements FrontierTable {
   private final FileChannel file;
   private final long zeroOffset;
   private final File path;
+  
+  
+  /**
+   * Constructs an instance with no file path information.
+   * 
+   * @param file          seekable channel
+   * @param zeroOffset    offset at which the rows begin (&ge; 0)
+   */
+  public FrontierTableFile(FileChannel file, long zeroOffset) {
+    this(file, zeroOffset, null);
+  }
 
   /**
    * Full constructor.
@@ -216,9 +227,7 @@ public class FrontierTableFile implements FrontierTable {
         throw new UncheckedIOException(
             "on newSize %d; current size %d".formatted(newSize, size), iox);
       }
-    } else if (newSize > size)
-      throw new IllegalArgumentException(
-          "newSize %d > size %d".formatted(newSize, size));
+    }
   }
 
 

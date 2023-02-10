@@ -6,13 +6,18 @@ package io.crums.sldg.logs.text;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.util.List;
 import java.util.Random;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
 
 import io.crums.sldg.cache.HashFrontier;
+import io.crums.sldg.src.ColumnValue;
+import io.crums.sldg.src.StringValue;
 import io.crums.sldg.src.TableSalt;
 
 
@@ -24,6 +29,9 @@ public class StateHasherTest {
   
   final static int HD_NO_BLANK = 9;
   final static int HD_COMMENT = 3;
+  
+  final static Predicate<ByteBuffer> COMMENT_TEST =
+      (b) -> b.get(b.position()) == '#';
 
   
 
@@ -35,7 +43,7 @@ public class StateHasherTest {
     var hasher = new StateHasher(salter, null, null);
     HashFrontier state;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      state = hasher.play(log);
+      state = hasher.play(log).frontier();
     }
     assertEquals(expectedRows, state.rowNumber());
   }
@@ -49,20 +57,20 @@ public class StateHasherTest {
     var hasher = new StateHasher(salter, null, null);
     HashFrontier expected;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      expected = hasher.play(log);
+      expected = hasher.play(log).frontier();
     }
     assertEquals(expectedRows, expected.rowNumber());
     
     hasher = new StateHasher(salter, null, null) {
       @Override
-      protected ByteBuffer newLineBuffer() {
-        return ByteBuffer.allocate(100);
+      protected int lineBufferSize() {
+        return 100;
       }
     };
     
     HashFrontier state;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      state = hasher.play(log);
+      state = hasher.play(log).frontier();
     }
     
     assertEquals(expected, state);
@@ -74,13 +82,12 @@ public class StateHasherTest {
   @Test
   public void testHdSansComment() throws Exception {
     long expectedRows = HD_NO_BLANK - HD_COMMENT;
-    Predicate<ByteBuffer> commentFilter = (b) -> b.get(b.position()) == '#';
     var salter = newSalter(11);
     
-    var hasher = new StateHasher(salter, commentFilter, null);
+    var hasher = new StateHasher(salter, COMMENT_TEST, null);
     HashFrontier state;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      state = hasher.play(log);
+      state = hasher.play(log).frontier();
     }
     assertEquals(expectedRows, state.rowNumber());
   }
@@ -91,15 +98,32 @@ public class StateHasherTest {
   @Test
   public void testHdSansComment2() throws Exception {
     long expectedRows = HD_NO_BLANK - HD_COMMENT;
-    Predicate<ByteBuffer> commentFilter = (b) -> b.get(b.position()) == '#';
     var salter = newSalter(11);
     var tokenDelimiters = ", \t\f\r\n";
-    var hasher = new StateHasher(salter, commentFilter, tokenDelimiters);
+    var hasher = new StateHasher(salter, COMMENT_TEST, tokenDelimiters);
     HashFrontier state;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      state = hasher.play(log);
+      state = hasher.play(log).frontier();
     }
     assertEquals(expectedRows, state.rowNumber());
+  }
+  
+
+  @Test
+  public void testGetFrontieredRow() throws Exception {
+    long rn = 4;
+    String expectedLine = "Sat on a wall and took a great fall";
+    var salter = newSalter(17);
+    var hasher = new StateHasher(salter, COMMENT_TEST, null);
+    
+    FrontieredRow row;
+    try (var log = getClass().getResourceAsStream(HD_LOG)) {
+      row = hasher.getFrontieredRow(
+          rn, HashFrontier.SENTINEL, Channels.newChannel(log));
+    }
+    
+    assertEquals(rn, row.rowNumber());
+    assertEquals(expectedLine, asText(row.columns()));
   }
   
 
@@ -108,6 +132,16 @@ public class StateHasherTest {
     byte[] tableSeed = new byte[32];
     new Random(seed).nextBytes(tableSeed);
     return new TableSalt(tableSeed);
+  }
+  
+  
+  static String asText(List<ColumnValue> cols) {
+    var line = new StringBuilder();
+    for (var col : cols) {
+      line.append(((StringValue) col).getString()).append(' ');
+    }
+    line.setLength(line.length() - 1);
+    return line.toString();
   }
   
 }
