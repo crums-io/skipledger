@@ -24,6 +24,7 @@ import com.lowagie.text.Image;
 import com.lowagie.text.StandardFonts;
 
 import io.crums.io.FileUtils;
+import io.crums.io.BackedupFile;
 import io.crums.sldg.reports.pdf.Align;
 import io.crums.sldg.reports.pdf.Align.H;
 import io.crums.sldg.reports.pdf.BorderContent;
@@ -144,7 +145,7 @@ class JsonFile {
   
   
   public void write(JSONObject jObj) {
-    var fileCommit = new FileCommit(source);
+    var fileCommit = new BackedupFile(source);
     fileCommit.moveToBackup();
     try {
       
@@ -589,7 +590,7 @@ class Dedup implements Runnable {
   
   @Override
   public void run() {
-    var targetCommit = new FileCommit(getTarget());
+    var targetCommit = new BackedupFile(getTarget());
     try {
       var out = System.out; // for messages only
       
@@ -700,7 +701,7 @@ class Pdf implements Runnable {
         name = name.substring(0, name.length() - 5);
       filename = name + ".pdf";
     }
-    var fileCommit = new FileCommit(new File(source.getParentFile(), filename));
+    var fileCommit = new BackedupFile(new File(source.getParentFile(), filename));
     fileCommit.moveToBackup();
     try {
       
@@ -969,7 +970,7 @@ class Pin implements Runnable {
     table.setFixedCell(col, row, cell);
     
     
-    FileCommit fileCommit = new FileCommit(source);
+    var fileCommit = new BackedupFile(source);
     fileCommit.moveToBackup();
     try {
       
@@ -1061,7 +1062,7 @@ class Unpin implements Runnable {
     // reserialize the report
     var jObj = parser.toJsonObject(report);
 
-    FileCommit fileCommit = new FileCommit(source);
+    var fileCommit = new BackedupFile(source);
     fileCommit.moveToBackup();
     try {
       JsonPrinter.write(jObj, source);
@@ -1115,7 +1116,7 @@ class Rollback implements Runnable {
   @Override
   public void run() {
     var out = System.out;
-    FileCommit fileCommit = new FileCommit(file);
+    var fileCommit = new BackedupFile(file);
     if (fileCommit.rollback()) {
       out.printf("%s %s%n",
           fileCommit.initExists() ? "Rolled back" : "Recovered",
