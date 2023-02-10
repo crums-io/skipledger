@@ -76,6 +76,9 @@ public class HashFrontier extends Frontier implements Serial {
    * are {@linkplain HashFrontier#nextFrontier(ByteBuffer, MessageDigest)}, and
    * the zero-returning {@linkplain HashFrontier#frontierHash()} and
    * {@linkplain HashFrontier#rowNumber()} methods.
+   * <p>
+   * The {@code Serial} interface methods also work on this instance.
+   * </p>
    */
   public final static HashFrontier SENTINEL = new HashFrontier(new RowHash[0]) {
     @Override

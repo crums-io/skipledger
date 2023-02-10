@@ -286,6 +286,12 @@ public class SourceRow implements Serial {
    * Returns the hash of the row with the given columns. This is the <em>input hash</em>
    * that goes in the skip ledger.
    * 
+   * <h4>Note</h4>
+   * <p>
+   * Although the row number is not a parameter, it does figure implicitly when the
+   * columns have been salted using a {@linkplain TableSalt} instance.
+   * </p>
+   * 
    * @param work1   SHA-256 work digester
    * @param work2   SHA-256 work digester
    * 

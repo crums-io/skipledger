@@ -32,6 +32,8 @@ public class TableSalt implements AutoCloseable {
     }
     @Override
     public void close() { }
+    
+    
   };
   
   
@@ -71,6 +73,27 @@ public class TableSalt implements AutoCloseable {
   }
   
   
+  /**
+   * Copy constructor. Copies the seed so that closing one instance
+   * does not zero out its other copies.
+   */
+  public TableSalt(TableSalt copy) {
+    if (copy == NULL_SALT)
+      throw new IllegalArgumentException("NULL_SALT instance cannot be copied");
+    
+    synchronized (Objects.requireNonNull(copy, "null copy")) {
+      if (!copy.isOpen())
+        throw new IllegalArgumentException(
+            "attempt to copy closed instance: " + copy);
+      this.seed = ByteBuffer.allocate(
+          copy.seed.remaining())
+          .put(copy.seed.duplicate())
+          .flip();
+    }
+    this.digest = SldgConstants.DIGEST.newDigest();
+  }
+  
+  
   private TableSalt() {
     seed = null;
     digest = null;
@@ -99,7 +122,7 @@ public class TableSalt implements AutoCloseable {
    * @see #close()
    */
   public synchronized ByteBuffer salt(long row, long col) throws IllegalStateException {
-    if (!seed.hasRemaining())
+    if (!isOpen())
       throw new IllegalStateException("instance is closed");
     digest.reset();
     digest.update(seed.slice());
@@ -117,6 +140,17 @@ public class TableSalt implements AutoCloseable {
   @Override
   public synchronized void close() {
     seed.put(SldgConstants.DIGEST.sentinelHash());
+  }
+  
+  
+  public final boolean isOpen() {
+    return seed.hasRemaining();
+  }
+  
+  
+  @Override
+  public TableSalt clone() {
+    return new TableSalt(this);
   }
 
 }
