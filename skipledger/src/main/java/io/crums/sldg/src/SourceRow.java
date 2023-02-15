@@ -272,13 +272,29 @@ public class SourceRow implements Serial {
    * Returns the row hash. This is the <em>input hash</em> that goes in the
    * skip ledger.
    * 
-   * @param work1   SHA-256 work digester
-   * @param work2   SHA-256 work digester
+   * @param work1   SHA-256 work digester (null OK)
+   * @param work2   SHA-256 work digester (null OK)
    * 
    * @return 32-byte hash
    */
   public ByteBuffer rowHash(MessageDigest work1, MessageDigest work2) {
     return rowHash(columns, work1, work2);
+  }
+
+  /**
+   * Returns the hash of the row with the given columns. This is the <em>input hash</em>
+   * that goes in the skip ledger.
+   * 
+   * <h4>Note</h4>
+   * <p>
+   * Although the row number is not a parameter, it does figure implicitly when the
+   * columns have been salted using a {@linkplain TableSalt} instance.
+   * </p>
+   * 
+   * @return {@code rowHash(columns, null, null)}
+   */
+  public static ByteBuffer rowHash(List<ColumnValue> columns) {
+    return rowHash(columns, null, null);
   }
   
 
@@ -292,12 +308,14 @@ public class SourceRow implements Serial {
    * columns have been salted using a {@linkplain TableSalt} instance.
    * </p>
    * 
-   * @param work1   SHA-256 work digester
-   * @param work2   SHA-256 work digester
+   * @param work1   SHA-256 work digester (null OK)
+   * @param work2   SHA-256 work digester (null OK)
    * 
    * @return 32-byte hash
    */
   public static ByteBuffer rowHash(List<ColumnValue> columns, MessageDigest work1, MessageDigest work2) {
+    if (columns.isEmpty())
+      throw new IllegalArgumentException("empty columns list");
     MessageDigest digest = prepare(work1);
     MessageDigest work = prepare(work2);
     if (digest == work)

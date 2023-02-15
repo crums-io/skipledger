@@ -4,7 +4,6 @@
 package io.crums.sldg.logs.text;
 
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -24,16 +23,9 @@ import io.crums.sldg.src.TableSalt;
 import io.crums.util.TaskStack;
 
 /**
- * Persistent version of {@linkplain StateHasher}.
+ * Persistent version of {@linkplain StateHasher}. Records row hashes
+ * and end-of-row offsets at fixed (block) intervals of row numbers.
  * 
- * <h2>TODO</h2>
- * <p>
- * Recovery from errors.
- * </p>
- * <ol>
- * <li>Ability to truncate frontiers (on errors)</li>
- * <li>Ability to truncate offsets, e.g. when a comment line was added</li>
- * </ol>
  */
 public class LogHasher extends StateHasher implements Channel {
 
@@ -76,7 +68,7 @@ public class LogHasher extends StateHasher implements Channel {
     long osize = rowOffsets.size();
     if (fsize < osize)
       throw new IllegalArgumentException(
-          "frontiers (size=%d) != offsets (size=%d); table sizes mismatch"
+          "frontiers (size=%d) < offsets (size=%d); table sizes mismatch"
           .formatted(fsize, osize));
   }
   
@@ -105,33 +97,48 @@ public class LogHasher extends StateHasher implements Channel {
   public FrontieredRow getFrontieredRow(long rn, SeekableByteChannel logChannel)
       throws IOException {
     SkipLedger.checkRealRowNumber(rn);
-    HashFrontier frontier;
-    final long index;
+    
+    State state;
     {
       long preRn = rn - 1;
       long indexSize = rowOffsets.size();
       long delta = rnDelta();
-      long lastRn = indexSize * delta; // (may be zero)
       
-      if (preRn < delta || lastRn == 0)
-        index = -1;
-      else if (preRn > lastRn)
-        index = indexSize - 1;
-      else
-        index = (preRn / delta) - 1;
       
+      if (indexSize == 0 || preRn < delta) {
+        state = State.EMPTY;
+      } else {
+        long index = (preRn > indexSize * delta ? indexSize : (preRn / delta)) - 1;
+        HashFrontier frontier = frontier(index);
+        long eol = rowOffsets.get(index);
+        state = new State(frontier, eol);
+      }
     }
-    frontier = index == -1 ? HashFrontier.SENTINEL : frontier(index);
-    long eol = index == -1 ? 0 : rowOffsets.get(index);
     
-    return getFrontieredRow(rn, frontier, logChannel.position(eol));
+    return getFrontieredRow(rn, state, logChannel);
   }
   
   
   
   
   
-  public State update(SeekableByteChannel logChannel) throws IOException {
+  
+  
+  
+  /**
+   * Updates and returns the state of the given log stream.
+   * 
+   * @param logChannel  seekable channel
+   *
+   * @throws RowHashConflictException
+   *    if the hash of a given row (ledgered line) conflicts with what's
+   *    already recorded
+   * @throws OffsetConflictException
+   *    if the EOL offset of a given row (ledgered line) conflicts with what's
+   *    already recorded
+   */
+  public State update(SeekableByteChannel logChannel)
+      throws IOException, RowHashConflictException, OffsetConflictException {
     long fsize = frontiers.size();
     long osize = rowOffsets.size();
     
@@ -148,7 +155,7 @@ public class LogHasher extends StateHasher implements Channel {
       long eolOff = rowOffsets.get(index);
       logChannel.position(eolOff);
       long lineNoEst = state.rowNumber() - 1; // minimum (likely greater)
-      state = play(logChannel, frontier, eolOff, lineNoEst);
+      state = play(logChannel, new State(frontier, eolOff, lineNoEst));
     }
     return state;
   }
@@ -180,8 +187,24 @@ public class LogHasher extends StateHasher implements Channel {
   }
   
  
-  
+  /**
+   * Checks the first block recorded (by replaying the stream) and returns its
+   * state. 
+   * 
+   * @param logChannel  seekable stream
+   * @return the state immediately after the first block
+   * @throws IllegalStateException
+   *    if the first block has yet to be recorded
+   * @throws RowHashConflictException
+   *    if the hash of the first row (ledgered line) conflicts with what's
+   *    already recorded
+   * @throws OffsetConflictException
+   *    if the EOL offset of the first row (ledgered line) conflicts with what's
+   *    already recorded
+   */
   public State checkFirstBlock(SeekableByteChannel logChannel) throws IOException {
+    if (rowOffsets.isEmpty())
+      throw new IllegalStateException("empty row offsets, nothing to check");
     logChannel.position(0);
     long eof = rowOffsets.get(0);
     ReadableByteChannel truncated = ChannelUtils.truncate(logChannel, eof);
@@ -349,7 +372,9 @@ public class LogHasher extends StateHasher implements Channel {
   
   
   
-  
+  /**
+   * Returns the row number delta between recorded blocks.
+   */
   public final long rnDelta() {
     return rnMask + 1;
   }
@@ -386,6 +411,21 @@ public class LogHasher extends StateHasher implements Channel {
   
   
   
+  
+  @Override
+  protected State nextStateAhead(State state, long rn) throws IOException {
+    long rnDelta = rnDelta();
+    long index = ((rn - 1) / rnDelta) - 1;
+    if (index == -1 || index >= rowOffsets.size())
+      return state;
+    long lookAheadRn = 1 + index * rnDelta;
+    if (lookAheadRn <= state.rowNumber())
+      return state;
+    
+    long endOffset = rowOffsets.get(index);
+    var frontier = readFrontier(index);
+    return new State(frontier, endOffset);
+  }
   
 
 }

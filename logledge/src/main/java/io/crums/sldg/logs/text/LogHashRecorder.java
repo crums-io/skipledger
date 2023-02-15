@@ -6,10 +6,8 @@ package io.crums.sldg.logs.text;
 
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.security.SecureRandom;
@@ -25,6 +23,7 @@ import io.crums.io.channels.ChannelUtils;
 import io.crums.io.sef.Alf;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SldgConstants;
+import io.crums.sldg.SldgException;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
@@ -136,28 +135,7 @@ public class LogHashRecorder implements AutoCloseable {
     Predicate<ByteBuffer> commentMatcher() {
       if (cPrefix == null)
         return null;
-      byte[] pbytes = Strings.utf8Bytes(cPrefix);
-      
-      if (pbytes.length == 1) {
-        final byte c = pbytes[0];
-        return (b) -> b.get(b.position()) == c;
-      }
-      
-      return new Predicate<ByteBuffer>() {
-        
-        @Override
-        public boolean test(ByteBuffer t) {
-          final int len = pbytes.length;
-          if (t.remaining() < len)
-            return false;
-          int pos = t.position();
-          for (int index = 0; index < len; ++index)
-            if (t.get(pos + index) != pbytes[index])
-              return false;
-          return true;
-        }
-        
-      };
+      return StateHasher.commentPrefixMatcher(cPrefix);
     }
     
     long zeroOffset() {
@@ -280,12 +258,6 @@ public class LogHashRecorder implements AutoCloseable {
   } // OffsetsInfo
   
   
-  
-//  private static State loadState(File file) throws IOException {
-//    try (var ch = Opening.READ_ONLY.openChannel(file)) {
-//      return loadState(ch);
-//    }
-//  }
   
   private static State loadState(FileChannel file) throws IOException {
     int bufferSize = (int) Math.min(8 * 1024, file.size());
@@ -427,6 +399,7 @@ public class LogHashRecorder implements AutoCloseable {
   
   private LogHasher hasher;
   
+  private SldgException error;
   
 
   /**
@@ -547,11 +520,18 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
-  public State update() throws IOException {
+  public State update() throws IOException, OffsetConflictException, RowHashConflictException {
     try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
+      this.error = null;
       State state = hasher.update(logChannel);
       saveState(state);
       return state;
+    } catch (OffsetConflictException ocx) {
+      this.error = ocx;
+      throw ocx;
+    } catch (RowHashConflictException hcx) {
+      this.error = hcx;
+      throw hcx;
     }
   }
   
@@ -573,6 +553,8 @@ public class LogHashRecorder implements AutoCloseable {
     
     // punting on what to do if prev.rowNumber() > state.rowNumber()
     // e.g. below..
+    
+    
 //    
 //    if (prevState.rowNumber() > state.rowNumber()) {
 //      File[] hiStateFiles = getIndexDir().listFiles(new FileFilter() {
@@ -636,6 +618,37 @@ public class LogHashRecorder implements AutoCloseable {
   public void close() {
     hasher.close();
   }
+  
+  
+  
+  public boolean hasError() {
+    return error != null;
+  }
+  
+  
+  
+  public Optional<OffsetConflictException> getOffsetConflict() {
+    return error instanceof OffsetConflictException ocx ?
+        Optional.of(ocx) : Optional.empty();
+  }
+  
+  
+  public Optional<RowHashConflictException> getHashConflict() {
+    return error instanceof RowHashConflictException hcx ?
+        Optional.of(hcx) : Optional.empty();
+  }
+  
+  
+  
+  
+  public void clean() {
+    
+  }
+  
+  
+  
+  
+  
   
 
 }

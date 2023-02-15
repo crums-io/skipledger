@@ -37,11 +37,16 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
     Objects.requireNonNull(frontier, "null hash frontier");
     if (eolOffset < 0)
       throw new IllegalArgumentException("eolOffset: " + eolOffset);
-    if (lineNo < 0)
-      throw new IllegalArgumentException("lineNo: " + eolOffset);
+    if (lineNo < frontier.rowNumber())
+      lineNo = frontier.rowNumber();
     if (lineNo > eolOffset)
       throw new IllegalArgumentException(
           "lineNo %d > eolOffset %d".formatted(lineNo, eolOffset));
+  }
+  
+  
+  public State(HashFrontier frontier, long eolOffset) {
+    this(frontier, eolOffset, frontier.rowNumber());
   }
   
   /** @return {@code frontier.rowNumber()} */
@@ -61,6 +66,8 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
     out.putLong(eolOffset).putLong(lineNo);
     return frontier.writeTo(out);
   }
+  
+  
   
   
   

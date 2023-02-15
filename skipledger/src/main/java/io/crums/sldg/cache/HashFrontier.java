@@ -15,6 +15,7 @@ import io.crums.io.Serial;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.Row;
 import io.crums.sldg.RowHash;
+import io.crums.sldg.SerialRow;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.util.IntegralStrings;
@@ -318,6 +319,16 @@ public class HashFrontier extends Frontier implements Serial {
   
   
   /**
+   * Returns the hash of the row at the given level.
+   * 
+   * @param level &ge; 0 and &lt; {@linkplain #levelCount()}
+   */
+  public ByteBuffer levelHash(int level) {
+    return levelFrontier[level].hash();
+  }
+  
+  
+  /**
    * Returns the row at the given level.
    * 
    * @param level &ge; 0 and &lt; {@linkplain #levelCount()}
@@ -332,13 +343,75 @@ public class HashFrontier extends Frontier implements Serial {
     return Lists.asReadOnlyList(levelFrontier);
   }
   
+  /**
+   * Returns the next (full) row using the next row's input hash.
+   * <p>
+   * Note, an instance cannot produce it's own full row: it doesn't
+   * keep track of its row's <em>input hashes</em>--only the rows'
+   * <em>final hashes</em> (the hash of the entire row).
+   * </p>
+   * 
+   * @param inputHash 32-byte value (SHA-256)
+   * @return the next row (it's row number will be one greater than the
+   *      this instance's {@linkplain #rowNumber()}
+   * @see #nextFrontier(ByteBuffer)
+   */
+  public Row nextRow(ByteBuffer inputHash) {
+    inputHash = sliceInput(inputHash);
+    final long rn = rowNumber() + 1;
+    
+    final int skipCount = SkipLedger.skipCount(rn);
+    
+    assert skipCount != levelFrontier.length; // cuz there can't be 2 top levels
+    
+    // check to see if we need to expand (relatively rare)
+    final boolean expand = skipCount > levelFrontier.length;
+    
+    assert !expand || this == SENTINEL || (skipCount == levelFrontier.length + 1 && rn == 2 * tail());
+    
+    var data = ByteBuffer.allocate(
+        SldgConstants.HASH_WIDTH * (1 + skipCount));
+    
+    data.put(inputHash);
+    
+    int maxLevel = expand ? levelFrontier.length : skipCount;
+    for (int index = 0; index < maxLevel; ++index)
+      data.put(levelFrontier[index].hash());
+    if (expand)
+      data.put(DIGEST.sentinelHash());
+    
+    assert !data.hasRemaining();
+    
+    data.flip();
+    return new SerialRow(rn, data);
+  }
   
   
+  
+
+  /**
+   * Calculates and returns the next frontier using the given input hash
+   * for the next row.
+   * 
+   * @param inputHash 32-byte value (SHA-256)
+   * 
+   * @return resultant frontier after adding the row with the given {@code inputHash}
+   * @see #nextRow(ByteBuffer)
+   */
   public HashFrontier nextFrontier(ByteBuffer inputHash) {
     return nextFrontier(inputHash, null);
   }
   
-  
+  /**
+   * Calculates and returns the next frontier using the given input hash
+   * for the next row.
+   * 
+   * @param inputHash 32-byte value (SHA-256)
+   * @param digest    optional SHA-256 work instance or {@code null}
+   * 
+   * @return resultant frontier after adding the row with the given {@code inputHash}
+   * @see #nextRow(ByteBuffer)
+   */
   public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
     
     inputHash = sliceInput(inputHash);

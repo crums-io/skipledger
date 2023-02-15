@@ -8,9 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static io.crums.sldg.logs.text.StateHasherTest.*;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.function.Predicate;
@@ -406,7 +404,7 @@ public class LogHasherTest extends IoTestCase {
       var fc = openReadonly(logFile);
       closer.pushClose(fc);
       fc.position(splitOffset);
-      state = hasher.play(fc, state, splitOffset, splitLineNo).frontier();
+      state = hasher.play(fc, new State(state, splitOffset, splitLineNo)).frontier();
       
       var stateHasher = new StateHasher(salter.clone(), cFilter, tokenDelimiters);
       recomputedState = stateHasher.play(fc.position(0)).frontier();
@@ -524,30 +522,30 @@ public class LogHasherTest extends IoTestCase {
   }
   
   
-  private File copyResource(File dir, String resource) throws IOException {
-    File copy = new File(dir, resource);
-    copyResourceToFile(copy, resource);
-    return copy;
-  }
-  
-  private void copyResourceToFile(File file, String resource) throws IOException {
-    var res = getClass().getResourceAsStream(resource);
-    copyToFile(file, res);
-  }
-  
-  private void copyToFile(File file, InputStream res) throws IOException {
-    try (TaskStack closer = new TaskStack()) {
-      closer.pushClose(res);
-      var fstream = new FileOutputStream(file);
-      closer.pushClose(fstream);
-      byte[] buffer = new byte[4096];
-      while (true) {
-        int len = res.read(buffer);
-        if (len == -1)
-          break;
-        fstream.write(buffer, 0, len);
-      }
-    }
-  }
+//  private File copyResource(File dir, String resource) throws IOException {
+//    File copy = new File(dir, resource);
+//    copyResourceToFile(copy, resource);
+//    return copy;
+//  }
+//  
+//  private void copyResourceToFile(File file, String resource) throws IOException {
+//    var res = getClass().getResourceAsStream(resource);
+//    copyToFile(file, res);
+//  }
+//  
+//  private void copyToFile(File file, InputStream res) throws IOException {
+//    try (TaskStack closer = new TaskStack()) {
+//      closer.pushClose(res);
+//      var fstream = new FileOutputStream(file);
+//      closer.pushClose(fstream);
+//      byte[] buffer = new byte[4096];
+//      while (true) {
+//        int len = res.read(buffer);
+//        if (len == -1)
+//          break;
+//        fstream.write(buffer, 0, len);
+//      }
+//    }
+//  }
 
 }

@@ -11,6 +11,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,9 @@ import java.util.StringTokenizer;
 import java.util.function.Predicate;
 
 import io.crums.io.Opening;
+import io.crums.sldg.Path;
+import io.crums.sldg.Row;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.src.ColumnValue;
@@ -28,15 +32,16 @@ import io.crums.sldg.src.NullValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
 import io.crums.sldg.src.TableSalt;
+import io.crums.util.Lists;
 import io.crums.util.Strings;
 
 /**
- * A state-less log hasher and parser.
+ * A stateless log hasher and parser.
  * 
  * <h2>Model</h2>
  * <p>
  * Instead of returning a simple hash of the log, this returns a
- * {@linkplain HashFrontier} object representing the current state of the log.
+ * {@linkplain State} object representing the current state of the log.
  * This is designed to allow continuously appending a log and incrementally
  * updating the hash representation of its state.
  * </p>
@@ -48,27 +53,78 @@ import io.crums.util.Strings;
  * the position of the stream argument). However, it does contain a few hooks
  * that a subclass can exploit to record work and so on.
  * </p><p>
- * 
+ * Also, even tho "stateless", <em>instances are not safe under concurrent access.</em>
+ * This is because, for efficiency, each instance sports a couple of state-ful
+ * SHA-256 digesters. Use the {@linkplain #StateHasher(StateHasher) copy constructor}
+ * for concurrent scenarios.
  * </p>
  */
 public class StateHasher {
+  
+  
+  /**
+   * Creates and returns a simple, prefix-based, comment-matching predicate.
+   * 
+   * @param cPrefix comment prefix (e.g. "{@code //}" or "{@code #}")
+   * 
+   * @return {@code (b) -> false} if {@code cPrefix} is empty or {@code null};
+   *         prefix-matching predicate, otherwise.
+   */
+  public static Predicate<ByteBuffer> commentPrefixMatcher(String cPrefix) {
+    
+    if (cPrefix == null || cPrefix.isEmpty())
+      return (b) -> false;
+
+    byte[] pbytes = Strings.utf8Bytes(cPrefix);
+    
+    if (pbytes.length == 1) {
+      final byte c = pbytes[0];
+      return (b) -> b.get(b.position()) == c;
+    }
+    
+    return new Predicate<ByteBuffer>() {
+      
+      @Override
+      public boolean test(ByteBuffer t) {
+        final int len = pbytes.length;
+        if (t.remaining() < len)
+          return false;
+        int pos = t.position();
+        for (int index = 0; index < len; ++index)
+          if (t.get(pos + index) != pbytes[index])
+            return false;
+        return true;
+      }
+      
+    };
+  }
 
 
   private final MessageDigest work = SldgConstants.DIGEST.newDigest();
   private final MessageDigest work2 = SldgConstants.DIGEST.newDigest();
 
   private final TableSalt salter;
-  private final Predicate<ByteBuffer> commentFilter;
+  private final Predicate<ByteBuffer> commentMatcher;
   private final String tokenDelimiters;
+  
+  
+  
 
   /**
+   * Full constructor.
    * 
+   * @param salt            required salter
+   * @param commentMatcher  optional comment matcher (may be {@code null})
+   * @param tokenDelimiters optional token delimiter chars (if {@code null}
+   *                        then whitespace delimited tokens)
+   * 
+   * @see #commentPrefixMatcher(String)
    */
   public StateHasher(
-      TableSalt salt, Predicate<ByteBuffer> commentFilter, String tokenDelimiters) {
+      TableSalt salt, Predicate<ByteBuffer> commentMatcher, String tokenDelimiters) {
     
     this.salter = Objects.requireNonNull(salt, "null salter");
-    this.commentFilter = commentFilter;
+    this.commentMatcher = commentMatcher;
     if (tokenDelimiters != null && tokenDelimiters.isEmpty())
       tokenDelimiters = null;
     this.tokenDelimiters = tokenDelimiters;
@@ -82,13 +138,26 @@ public class StateHasher {
   }
   
   
-  
+  /**
+   * Copy construtor. All fields, except for the internal digesters
+   * are shared. (This assumes the {@linkplain #commentMatcher()} predicate
+   * is stateless.)
+   */
   public StateHasher(StateHasher copy) {
     this.salter = copy.salter;
-    this.commentFilter = copy.commentFilter;
+    this.commentMatcher = copy.commentMatcher;
     this.tokenDelimiters = copy.tokenDelimiters;
   }
   
+  
+  /**
+   * No comment, whitespace delimited tokenizer constructor.
+   * 
+   * @param salt required salter
+   */
+  public StateHasher(TableSalt salt) {
+    this(salt, null, null);
+  }
   
   
   
@@ -98,7 +167,7 @@ public class StateHasher {
   
   
   public Optional<Predicate<ByteBuffer>> commentMatcher() {
-    return Optional.ofNullable(commentFilter);
+    return Optional.ofNullable(commentMatcher);
   }
   
   
@@ -142,12 +211,14 @@ public class StateHasher {
    *                    that goes in the skip ledger
    * @param offset      offset the row (line) begins in the log (inc.)
    * @param endOffset   end offset row ends (exc.)
+   * @param lineNo      number of {@code '\n'} chars preceding this row
    * 
    * @see #advanceByLine(ByteBuffer, HashFrontier, long, long)
    * @see FrontieredRow
    */
   protected void observeRow(
-      HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash, long offset, long endOffset) {
+      HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+      long offset, long endOffset, long lineNo) {
   }
   
   
@@ -198,7 +269,7 @@ public class StateHasher {
    * <p>
    * The base implementation hash no side effects: it's a pure computation.
    * However, if the line of text does form a ledgered row, then
-   * {@linkplain #observeRow(HashFrontier, List, ByteBuffer, long, long)} is invoked, and if that method
+   * {@linkplain #observeRow(HashFrontier, List, ByteBuffer, long, long, long)} is invoked, and if that method
    * is overridden (a noop, by default), then there may be side effects.
    * </p>
    * 
@@ -211,7 +282,7 @@ public class StateHasher {
    */
   protected HashFrontier advanceByLine(
       ByteBuffer text, HashFrontier frontier, long offset, long lineNo) {
-    if (commentFilter != null && commentFilter.test(text))
+    if (commentMatcher != null && commentMatcher.test(text))
       return frontier;
     
     long endOffset = offset + text.remaining();
@@ -248,14 +319,14 @@ public class StateHasher {
     
     var inputHash = SourceRow.rowHash(columns, work, work2);
     
-    observeRow(frontier, columns, inputHash, offset, endOffset);
+    observeRow(frontier, columns, inputHash, offset, endOffset, lineNo);
     
     return frontier.nextFrontier(inputHash);
   }
   
   
   
-  
+  /** Plays the given file and returns its state. */
   public State play(File file) throws IOException {
     try (ReadableByteChannel ch = Opening.READ_ONLY.openChannel(file)) {
       return play(ch);
@@ -270,34 +341,25 @@ public class StateHasher {
     return play(Channels.newChannel(log));
   }
   
-  
+  /** Plays the given log stream and returns its state. */
   public State play(ReadableByteChannel logChannel) throws IOException {
     return play(logChannel, State.EMPTY);
   }
   
-  
-  public State play(
-      ReadableByteChannel logChannel, HashFrontier frontier, long offset, long lineNo)
-          throws IOException {
-    
-    return play(logChannel, new State(frontier, offset, lineNo), lineNo);
-  }
 
   
   
-  public State play(ReadableByteChannel logChannel, State state) throws IOException {
-    return play(logChannel, state, 0L);
-  }
   
   
   
   public State play(
-      ReadableByteChannel logChannel, State state, long lineNo)
+      ReadableByteChannel logChannel, State state)
           throws IOException {
     
     
     HashFrontier frontier = state.frontier();
     long offset = state.eolOffset();
+    long lineNo = state.lineNo();
     
     Objects.requireNonNull(logChannel, "null log channel");
     Objects.requireNonNull(frontier, "null hash frontier");
@@ -354,6 +416,34 @@ public class StateHasher {
   }
   
   
+  /**
+   * Plays the given log and returns the specified row.
+   * 
+   * @param rn          target row number
+   * @param state       state <em>before</em> {@code rn}; {@code state.eolOffset}
+   *                    expected to be absolute
+   * @param logChannel  seekable byte stream
+   * 
+   * @return everything to know about the given row
+   * 
+   * @throws IOException
+   *    if an I/O error occurs on reading the log
+   * @throws IllegalArgumentException
+   *    if {@code rn <= frontier.rowNumber()}
+   * @throws NoSuchElementException
+   *    if the target row number is never reached
+   */
+  public FrontieredRow getFrontieredRow(
+      long rn, State state, SeekableByteChannel logChannel)
+          throws IOException, IllegalArgumentException, NoSuchElementException {
+
+    if (state.eolOffset() == -1)
+      throw new IllegalArgumentException("EOL offset not set: " + state);
+    
+    logChannel.position(state.eolOffset());
+    
+    return getFrontieredRow(rn, state, (ReadableByteChannel) logChannel);
+  }
   
   
   
@@ -364,20 +454,21 @@ public class StateHasher {
    * frontier row number}.
    * 
    * @param rn         target row number
-   * @param frontier   state <em>before</em> {@code rn}
-   * @param logChannel positioned at end of row [{@code frontier.rowNumber()}]
+   * @param state      state <em>before</em> target row, i.e. {@code state.rowNumber() < rn}
+   * @param logChannel positioned at end of state row [{@code state.rowNumber()}]
+   * 
    * @return not null
    * @throws IOException
-   * @throws IllegalArgumentException if {@code rn <= frontier.rowNumber()}
+   * @throws IllegalArgumentException if {@code rn <= state.rowNumber()}
    * @throws NoSuchElementException if the target row number is never reached
    */
   public FrontieredRow getFrontieredRow(
-      long rn, HashFrontier frontier, ReadableByteChannel logChannel)
+      long rn, State state, ReadableByteChannel logChannel)
           throws IOException, IllegalArgumentException, NoSuchElementException {
     
-    if (rn <= frontier.rowNumber())
+    if (rn <= state.rowNumber())
       throw new IllegalArgumentException(
-          "row number %d <= frontier %d".formatted(rn, frontier.rowNumber()));
+          "row [%d] <= state [%d]".formatted(rn, state.rowNumber()));
     
     
     class Collector extends StateHasher {
@@ -391,9 +482,10 @@ public class StateHasher {
       }
       @Override
       protected void observeRow(
-          HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash, long offset, long endOff) {
+          HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+          long offset, long endOff, long lineNo) {
         if (preFrontier.rowNumber() + 1 == rn) {
-          this.row = new FrontieredRow(cols, preFrontier, endOff);
+          this.row = new FrontieredRow(cols, preFrontier, endOff, lineNo);
         }
       }
       
@@ -403,14 +495,91 @@ public class StateHasher {
     }
     
     Collector c = new Collector();
-    var finalFrontier = c.play(logChannel, frontier, 0, 0);
+    var rState = c.play(logChannel, state);
     
     if (c.failed())
       throw new NoSuchElementException(
-          "row [%d] > final row [%d]".formatted(rn, finalFrontier.rowNumber()));
+          "row [%d] never reached; final row [%d]".formatted(rn, rState.rowNumber()));
     
     return c.row;
   }
+  
+  
+
+  /**
+   * Returns the specified list of ordered rows.
+   * 
+   * @param rns   ascending list of row numbers &ge; 1
+   * @param log   seekable log stream
+   * 
+   * @throws NoSuchElementException
+   *    if the {@code log} stream has too few rows
+   */
+  public List<Row> getRows(List<Long> rns, SeekableByteChannel log)
+      throws IOException, NoSuchElementException {
+    if (rns.isEmpty())
+      return List.of();
+    if (rns.get(0) < 1)
+      throw new IllegalArgumentException("rns [0]: " + rns.get(0));
+    
+    Row[] rows = new Row[rns.size()];
+    
+    State state = State.EMPTY;
+    
+    for (int index = 0; index < rows.length; ++index) {
+      long rn = rns.get(index);
+      if (rn <= state.rowNumber())
+        throw new IllegalArgumentException(
+            "out-of-sequence/illegal row number %d <= last %d (at index %d)"
+            .formatted(rn, state.rowNumber(), index));
+      
+      state = nextStateAhead(state, rn);
+      
+      var fr = getFrontieredRow(rn, state, log);
+      rows[index] = fr.row();
+      state = fr.toState();
+    }
+    
+    return Lists.asReadOnlyList(rows);
+  }
+  
+  
+  /**
+   * Returns the next saved state ahead of row number {@code rn}, if any;
+   * {@code state}, otherwise.
+   * 
+   * @param state fallback state
+   * @param rn    target row number (&gt; {@code state.rowNumber()})
+   * @return      next state with row number &ge; {@code state.rowNumber()}
+   *              <em>and</em> &lt; {@code rn}
+   */
+  protected State nextStateAhead(State state, long rn) throws IOException {
+    return state;
+  }
+  
+  
+  
+  /**
+   * Returns the ledger skip path connecting the specified rows.
+   * 
+   * @param loRn    &ge; 1
+   * @param hiRn    &ge; {@code loRn}
+   * @param log     seekable log stream
+   * @return        not null
+   * 
+   * @throws NoSuchElementException
+   *    if there are fewer ledgerable rows in the {@code log} stream than {@code hiRn}
+   */
+  public Path getPath(long loRn, long hiRn, SeekableByteChannel log)
+      throws IOException, NoSuchElementException {
+    
+    var rns = SkipLedger.skipPathNumbers(loRn, hiRn);
+    var rows = getRows(rns, log);
+    return new Path(rows);
+  }
+  
+  
+  
 
   
   private int eol(ByteBuffer buffer) {
