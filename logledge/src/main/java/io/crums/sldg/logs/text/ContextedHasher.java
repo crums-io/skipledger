@@ -1,0 +1,233 @@
+/*
+ * Copyright 2023 Babak Farhang
+ */
+package io.crums.sldg.logs.text;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
+
+import io.crums.sldg.cache.HashFrontier;
+import io.crums.sldg.src.ColumnValue;
+
+/**
+ * Insead of overriding {@linkplain StateHasher}, you implement a
+ * {@linkplain Context}. I want to mixin capabilities, and class hierarchies
+ * get in the way. We'll see if this pans out.
+ */
+public class ContextedHasher extends StateHasher {
+  
+  /**
+   * Overridable methods and callbacks defined in {@linkplain StateHasher}
+   * defined here as a sort of SPI. You can also implement your behaviorial
+   * side effects here. Can be stateful (e.g. {@linkplain #stopPlay()}).
+   * 
+   * @see ContextArray
+   */
+  public interface Context {
+    /**
+     * Controls the maximum number of bytes in a line. Defaults to 8k.
+     * Invoked once per {@linkplain StateHasher#play(java.nio.channels.ReadableByteChannel, State)
+     * play}.
+     */
+    default int lineBufferSize() {
+      return 8192;
+    }
+    /** Do empty lines count? Defaults to {@code false}. */
+    default boolean allowEmptyLines() {
+      return false;
+    }
+    /** Should the parsing (play) stop? Defaults to {@code false}. */
+    default boolean stopPlay() {
+      return false;
+    }
+    /** Observes the row about to be ledgered. Defaults to noop. */
+    default void observeRow(
+        HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+        long offset, long endOffset, long lineNo)
+            throws IOException {  }
+    /** Observes the ledger line (it's hash in the skip ledger). Defaults to noop. */
+    default void observeLedgeredLine(
+        HashFrontier frontier, long offset, long eolOff, long lineNo)
+            throws IOException {  }
+    /**
+     * Returns the next saved state ahead of row number {@code rn}, if any;
+     * {@code state}, otherwise. Defaults to returning the given fallback.
+     * 
+     * @param state fallback state
+     * @param rn    target row number (&gt; {@code state.rowNumber()})
+     * @return      next state with row number &ge; {@code state.rowNumber()}
+     *              <em>and</em> &lt; {@code rn}
+     */
+    default State nextStateAhead(State state, long rn) throws IOException {
+      return state;
+    }
+    /** Observes the end state (of play). Defaults to noop. */
+    default void observeEndState(State state) throws IOException {  }
+  }
+  
+  
+  
+  protected final Context context;
+  
+
+  /**
+   * Promotion constructor.
+   * 
+   * @param promote
+   */
+  public ContextedHasher(StateHasher promote, Context context) {
+    super(promote);
+    this.context = Objects.requireNonNull(context, "null context");
+  }
+
+  @Override
+  protected int lineBufferSize() {
+    return context.lineBufferSize();
+  }
+
+  @Override
+  protected void observeRow(HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash, long offset,
+      long endOffset, long lineNo)
+          throws IOException {
+    context.observeRow(preFrontier, cols, inputHash, offset, endOffset, lineNo);
+  }
+
+  @Override
+  protected boolean allowEmptyLines() {
+    return context.allowEmptyLines();
+  }
+
+  @Override
+  protected void observeLedgeredLine(HashFrontier frontier, long offset, long eolOff, long lineNo) throws IOException {
+    context.observeLedgeredLine(frontier, offset, eolOff, lineNo);
+  }
+
+  @Override
+  protected boolean stopPlay() {
+    return context.stopPlay();
+  }
+
+  @Override
+  protected void observeEndState(State state) throws IOException {
+    context.observeEndState(state);
+  }
+  
+  
+  
+  
+  @Override
+  protected State nextStateAhead(State state, long rn) throws IOException {
+    return context.nextStateAhead(state, rn);
+  }
+
+
+
+
+
+
+  /**
+   * Utility for mashing / queuing a bunch of contexts together.
+   */
+  public static class ContextArray implements Context {
+    
+    private final Context[] array;
+    
+    /**
+     * @param array not empty, not null
+     */
+    public ContextArray(Context[] array) {
+      final int len = array.length;
+      if (len == 0)
+        throw new IllegalArgumentException("empty array");
+      
+      this.array = new Context[len];
+      for (int i = len; i-- > 0;)
+        this.array[i] = Objects.requireNonNull(array[i], "at index " + i);
+    }
+
+    /** The maximum any one wants. */
+    @Override
+    public int lineBufferSize() {
+      return
+          Stream.of(array).map(Context::lineBufferSize)
+          .max((a, b) -> a.compareTo(b)).get();
+    }
+
+    /** Any one says we do, we do. */
+    @Override
+    public boolean allowEmptyLines() {
+      int i = array.length;
+      while (i-- > 0 && !array[i].allowEmptyLines());
+      return i != -1;
+    }
+
+    /** Any one says stop, we stop. */
+    @Override
+    public boolean stopPlay() {
+      int i = array.length;
+      while (i-- > 0 && !array[i].stopPlay());
+      return i != -1;
+    }
+    
+    
+
+    /** <p> Returns the best state by chaining inputs to outputs.</p>{@inheritDoc} 
+     * @throws IOException */
+    @Override
+    public State nextStateAhead(State state, long rn) throws IOException {
+      for (int i = 0; i < array.length; ++i)
+        state = array[i].nextStateAhead(state, rn);
+      if (state.rowNumber() >= rn)
+        throw new RuntimeException(
+            "state row number >= rn %d; state: %s"
+            .formatted(rn, state.toString()));
+      return state;
+    }
+
+    /** Observes first to last. 
+     * @throws IOException */
+    @Override
+    public void observeRow(
+        HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+        long offset,
+        long endOffset, long lineNo)
+            throws IOException {
+      
+      for (int i = 0; i < array.length; ++i)
+        array[i].observeRow(
+            preFrontier, cols, inputHash, offset, endOffset, lineNo);
+    }
+
+    /** Observes first to last. 
+     * @throws IOException */
+    @Override
+    public void observeLedgeredLine(
+        HashFrontier frontier, long offset, long eolOff, long lineNo)
+            throws IOException {
+      
+      for (int i = 0; i < array.length; ++i)
+        array[i].observeLedgeredLine(frontier, offset, eolOff, lineNo);
+    }
+    
+    
+    @Override
+    public void observeEndState(State state) throws IOException {
+      for (int i = 0; i < array.length; ++i)
+        array[i].observeEndState(state);
+    }
+    
+  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 
+}

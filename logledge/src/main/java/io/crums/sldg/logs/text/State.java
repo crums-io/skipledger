@@ -49,7 +49,7 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
     this(frontier, eolOffset, frontier.rowNumber());
   }
   
-  /** @return {@code frontier.rowNumber()} */
+  /** @return {@code frontier().rowNumber()} */
   public long rowNumber() {
     return frontier.rowNumber();
   }
@@ -61,6 +61,13 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
   }
 
 
+  /**
+   * <p>Writes the EOL offset and line number (8 bytes each)
+   * followed by the serial representation of {@linkplain HashFrontier}.
+   * </p>
+   * {@inheritDoc}
+   * @see HashFrontier#writeTo(ByteBuffer)
+   */
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
     out.putLong(eolOffset).putLong(lineNo);

@@ -122,15 +122,15 @@ public class StateHasherTest extends IoTestCase {
   
 
   @Test
-  public void testGetFrontieredRow() throws Exception {
+  public void testGetFullRow() throws Exception {
     long rn = 4;
     String expectedLine = "Sat on a wall and took a great fall";
     var salter = newSalter(17);
     var hasher = new StateHasher(salter, COMMENT_TEST, null);
     
-    FrontieredRow row;
+    FullRow row;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
-      row = hasher.getFrontieredRow(
+      row = hasher.getFullRow(
           rn, State.EMPTY, Channels.newChannel(log));
     }
     

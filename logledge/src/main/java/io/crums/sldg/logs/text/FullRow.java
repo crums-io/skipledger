@@ -16,8 +16,9 @@ import io.crums.sldg.cache.HashFrontier;
 /**
  * A row with backing data. Each instance contains sufficient information
  * to create the source row, the [skip] ledgered row, the hash frontier
- * both before the source row was added and after. The end-of-line
- * (end-of-row) offset is mostly informational and is not self-validating.
+ * both before the source row was added and after. The line no. and EOL
+ * (end-of-row) offset are mostly informational and are not self-validating.
+ * 
  * 
  * @param columns     not null, not empty row columns
  * @param preFrontier the hash frontier <em>before</em> the row with the given
@@ -33,13 +34,13 @@ import io.crums.sldg.cache.HashFrontier;
  * @see #rowHash()
  * @see #row()
  */
-public record FrontieredRow(
+public record FullRow(
     List<ColumnValue> columns,
     HashFrontier preFrontier,
     long eolOffset,
     long lineNo) {
 
-  public FrontieredRow {
+  public FullRow {
     Objects.requireNonNull(preFrontier, "null preFrontier");
     if (columns.isEmpty())
       throw new IllegalArgumentException("empty columns");
@@ -105,8 +106,8 @@ public record FrontieredRow(
   
   
   /** Sets and returns a copy of this instance with the given EOL offset. */
-  FrontieredRow eolOffset(long eol) {
-    return new FrontieredRow(columns, preFrontier, eol, lineNo);
+  FullRow eolOffset(long eol) {
+    return new FullRow(columns, preFrontier, eol, lineNo);
   }
   
   

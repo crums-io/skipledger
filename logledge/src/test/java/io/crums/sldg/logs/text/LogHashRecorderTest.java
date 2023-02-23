@@ -66,7 +66,6 @@ public class LogHashRecorderTest extends IoTestCase {
       hasher = hashRecorder.stateHasher();
     }
     
-//    System.out.println(state);
     
     BackedupFile backup = new BackedupFile(log);
     backup.moveToBackup();
@@ -93,13 +92,35 @@ public class LogHashRecorderTest extends IoTestCase {
     
     File dir = testDir(label);
     
-    File log = copyResource(dir, HD_LOG);
+    
+//    File log = copyResource(dir, HD_LOG);
+    File log = new File(dir, HD_LOG);
+    copyResourceToFile(log, HD_LOG, LogHasherTest.HD_SPLIT_OFFSET);
+    
     
     State state;
+    StateHasher hasher;
     try (var hashRecorder = new LogHashRecorder(log, "#", null, dex)) {
+      state = hashRecorder.update();
+      hasher = hashRecorder.stateHasher();
+    }
+
+    
+    BackedupFile backup = new BackedupFile(log);
+    backup.moveToBackup();
+    StateHasherTest.copyResourceToFile(log, HD_LOG);
+    
+    
+    try (var hashRecorder = new LogHashRecorder(log, false)) {
+      var prevState = hashRecorder.getState().get();
+      assertEquals(state, prevState);
+      
       state = hashRecorder.update();
     }
     
+    State expected = hasher.play(log);
+    
+    assertEquals(expected, state);
     assertEquals(HD_SANS_COMMENT, state.rowNumber());
   }
 

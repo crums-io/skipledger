@@ -8,10 +8,14 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.System.Logger;
+import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.function.Predicate;
@@ -31,19 +35,25 @@ import io.crums.util.TaskStack;
 
 /**
  * <p>
- * Convention for the tracking files for a log file. Given a file, say
- * {@code acme-2023.log}, its tracking files are found in a sibling directory
- * {@code .sldg.acme-2023.log} containing the files {@code fhash} and {@code eor}.
+ * Convention for the tracking files associated with the target log file.
+ * Given a target file, say {@code acme-2023.log}, its tracking files are
+ * found in a sibling directory {@code .sldg.acme-2023.log} containing an
+ * {@code fhash} file specifying hashing and parsing rules, optionally an
+ * {@code eor} file recording end-of-line (row) offsets, and (if anything
+ * has been recorded) one or more {@code .fstate} files.
  * </p>
  * <h2>Frontiers File</h2>
  * <p>
- * The file {@code fhash} contains the (skip ledger) row hashes for row numbers at some fixed
+ * The file {@code fhash} begins with a header that defines the parsing rules for the
+ * log (text) file (token char delimiters and comment-line prefixes)
+ * as well as the seed salt used in hashing tokens. Following the header, the
+ * file may optionally include (skip ledger) row hashes for row numbers at some fixed
  * multiple of a power of 2, the so called delta exponent (dex).
  * </p>
  * <h3>Header</h3>
  * <p>
  * The header contains info about the dex, the table salt (secret!),
- * and optionally the token delimiters. It is formed from the byte
+ * and optionally, comment-line prefix and token delimiters. It is formed from the byte
  * sequence {@code <magic unused dex salt cpLen delLen cpchars delchars>} where
  * </p>
  * <pre>
@@ -56,12 +66,21 @@ import io.crums.util.TaskStack;
  * cpChars := BYTE^cpLen
  * delChars := BYTE^delLen
  * </pre>
- * <p>Only the last 2 items {@code cpChars delChars} are variable length.
+ * <p>Only the last 2 items {@code cpChars delChars} are variable length. If only
+ * <em>state</em> files are to be used to track the log's state, then set {@code dex}
+ * to 64.
+ * </p>
+ * <h3>Data (Row Hashes)</h3>
+ * <p>
+ * Row hashes (if any) are written to a fixed-width (32-byte) table immediately following
+ * the above header. Since the header is variable length, byte alignment may not be
+ * ideal (but, so what).
  * </p>
  * <h2>Offsets File</h2>
  * <p>
- * The file {@code eor} contains the end-of-row (EOL) file offsets for row numbers
- * at some fixed multiple of a power of 2, the so called delta exponent (dex).
+ * If the {@code dex} value of the preceding file {@code fhash} is less than 64,
+ * then the {@code eor} file containing the end-of-row (EOL) file offsets for row numbers
+ * that are multiples of 2<sup>{@code dex}</sup> is also created.
  * Presently, the dex for this file must match that written in the frontiers file:
  * specified here, so that in the future, it may conceivably be more fine-grained.
  * </p>
@@ -75,6 +94,26 @@ import io.crums.util.TaskStack;
  * unused := BYTE^2
  * dex := BYTE
  * </pre>
+ * <h2>State Files</h2>
+ * <p>
+ * State files record the hash of a log up to a certain line (row). If data written to
+ * the target log file is never modified and is only ever appended to, then updating
+ * the state only involves playing the log forward from the (ending) offset recorded
+ * in the last state file.
+ * </p>
+ * <h3>Header</h3>
+ * <p>
+ * The header contains fixed length byte sequence {@code <magic unused>} where
+ * </p>
+ * <pre>
+ * magic := 'fstate'
+ * unused := BYTE^2
+ * </pre>
+ * <h3>Data</h3>
+ * <p>
+ * A serial representation of the {@linkplain State} is written out following
+ * the header. See {@linkplain State#writeTo(ByteBuffer)}.
+ * </p>
  */
 public class LogHashRecorder implements AutoCloseable {
   
@@ -86,7 +125,7 @@ public class LogHashRecorder implements AutoCloseable {
   public final static String OFFSETS_FILE = "eor";
   
   public final static String STATE_PREFIX = "_";
-  public final static String STATE_POSTFIX = ".state";
+  public final static String STATE_POSTFIX = ".fstate";
 
   private final static String FRONTIERS_MAGIC = FRONTIERS_FILE;
   private final static String OFFSETS_MAGIC = OFFSETS_FILE;
@@ -132,6 +171,11 @@ public class LogHashRecorder implements AutoCloseable {
     }
     
     
+    StateHasher stateHasher() {
+      return new StateHasher(salter, commentMatcher(), delimiters);
+    }
+    
+    
     Predicate<ByteBuffer> commentMatcher() {
       if (cPrefix == null)
         return null;
@@ -144,6 +188,11 @@ public class LogHashRecorder implements AutoCloseable {
       int delimitersLen = delimiters == null ?
           0 : Strings.utf8Bytes(delimiters).length;
       return FRONTIERS_FIXED_HDR_LEN + commentPrefixLen + delimitersLen;
+    }
+    
+    
+    boolean stateOnly() {
+      return dex == NO_DEX;
     }
     
     
@@ -270,9 +319,21 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
+  
+  private static State loadState(File file) throws IOException {
+    try (var fc = Opening.READ_ONLY.openChannel(file)) {
+      return loadState(fc);
+    }
+  }
+  
+  
   private static void saveState(File file, State state) throws IOException {
+    if (file.exists() && loadState(file).equals(state))
+      return;
+    
     BackedupFile backup = new BackedupFile(file);
     backup.moveToBackup();
+    
     var ch = Opening.CREATE.openChannel(file);
     try (ch) {
       
@@ -335,8 +396,11 @@ public class LogHashRecorder implements AutoCloseable {
     return work.position(work.position() + UNUSED_PAD);
   }
   
+  
+  public final static int NO_DEX = 63;
+  
   private static void checkDex(int dex) {
-    if (dex < 0 || dex > 63)
+    if (dex < 0 || dex > NO_DEX)
       throw new IllegalArgumentException("dex out-of-bounds: " + dex);
   }
   
@@ -354,12 +418,16 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
-  private final static FileFilter STATE_FILE_FILTER = new FileFilter() {
-    @Override
-    public boolean accept(File pathname) {
-      return inferStateRn(pathname) != -1L;
-    }
-  };
+  private static FileFilter newStateFileFilter(long minRowNumber) {
+    if (minRowNumber < 0)
+      throw new IllegalArgumentException(
+          "min row number %d < 0".formatted(minRowNumber));
+    
+    return (f) -> inferStateRn(f) >= minRowNumber;
+  }
+  
+  
+  private final static FileFilter STATE_FILE_FILTER = newStateFileFilter(0L);
   
   
   private final static Comparator<File> STATE_FILE_COMP = new Comparator<File>() {
@@ -379,11 +447,19 @@ public class LogHashRecorder implements AutoCloseable {
         STATE_PREFIX.length(),
         name.length() - STATE_POSTFIX.length());
     try {
+      
       return Long.parseLong(rn);
     
     } catch (NumberFormatException ignore) {
+      sysLogger().log(Level.TRACE, "failed parsing no. in funky name: " + name);
       return -1L;
     }
+  }
+  
+  
+  
+  private static Logger sysLogger() {
+    return System.getLogger(LOGNAME);
   }
   
   
@@ -397,9 +473,29 @@ public class LogHashRecorder implements AutoCloseable {
   
   private final File log;
   
+  private final FrontiersInfo config;
+  
   private LogHasher hasher;
   
   private SldgException error;
+  
+  
+
+
+  /**
+   * Creates a <em>new</em> peristence instance for the given {@code log} file
+   * using the given settings. Only state files are recorded.
+   * 
+   * @param log         the log / journal
+   * @param cPrefix     lines starting with this prefix are ignored.
+   *                    May be {@code null}.
+   * @param delimiters  token delimiters (used by {@code StringTokenizer}).
+   *                    May be {@code null}.
+   */
+  public LogHashRecorder(File log, String cPrefix, String delimiters)
+      throws IOException {
+    this(log, cPrefix, delimiters, NO_DEX);
+  }
   
 
   /**
@@ -414,7 +510,6 @@ public class LogHashRecorder implements AutoCloseable {
    *                    May be {@code null}.
    * @param dex         delta exponent. Row hashes and offsets are recorded for
    *                    row numbers that are a multiple of 2<sup>dex</sup>.
-   * @throws IOException
    */
   public LogHashRecorder(File log, String cPrefix, String delimiters, int dex)
       throws IOException {
@@ -427,22 +522,30 @@ public class LogHashRecorder implements AutoCloseable {
       var ff = Opening.CREATE.openChannel(frontiersFile());
       onFail.pushClose(ff);
       
-      var fInfo = FrontiersInfo.create(ff, dex, cPrefix, delimiters);
+      this.config = FrontiersInfo.create(ff, dex, cPrefix, delimiters);
       
-      var off = Opening.CREATE.openChannel(offsetsFile());
-      onFail.pushClose(off);
+      if (config.stateOnly()) {
+        
+        ff.close();
       
-      var oInfo = OffsetsInfo.create(off, dex);
-      var fTable = new FrontierTableFile(ff, fInfo.zeroOffset());
-      var rowOffsets = new Alf(off, oInfo.zeroOffset());
+      } else {
+
+        var off = Opening.CREATE.openChannel(offsetsFile());
+        onFail.pushClose(off);
+        
+        var oInfo = OffsetsInfo.create(off, dex);
+        var fTable = new FrontierTableFile(ff, config.zeroOffset());
+        var rowOffsets = new Alf(off, oInfo.zeroOffset());
+        
+        this.hasher = new LogHasher(
+            config.salter(),
+            config.commentMatcher(),
+            config.delimiters(),
+            rowOffsets,
+            fTable,
+            config.dex());
+      }
       
-      this.hasher = new LogHasher(
-          fInfo.salter(),
-          fInfo.commentMatcher(),
-          fInfo.delimiters(),
-          rowOffsets,
-          fTable,
-          fInfo.dex());
       
       onFail.clear();
     }
@@ -471,28 +574,35 @@ public class LogHashRecorder implements AutoCloseable {
       var fFile = mode.openChannel(frontiersFile());
       onFail.pushClose(fFile);
       
-      var fInfo = FrontiersInfo.load(fFile);
-      var fTable = new FrontierTableFile(fFile, fInfo.zeroOffset(), null);
+      this.config = FrontiersInfo.load(fFile);
       
-      var oFile = mode.openChannel(offsetsFile());
-      onFail.pushClose(oFile);
+      if (config.stateOnly()) {
+        fFile.close();
       
-      var oInfo = OffsetsInfo.load(oFile);
-      
-      if (fInfo.dex() != oInfo.dex())
-        throw new IllegalArgumentException(
-            "dex mismatch: %d (frontiers) vs. %d (offests)"
-            .formatted(fInfo.dex(), oInfo.dex()));
-      
-      var rowOffsets = new Alf(oFile, oInfo.zeroOffset());
-      
-      this.hasher = new LogHasher(
-          fInfo.salter(),
-          fInfo.commentMatcher(),
-          fInfo.delimiters(),
-          rowOffsets,
-          fTable,
-          fInfo.dex());
+      } else {
+        var fTable = new FrontierTableFile(fFile, config.zeroOffset(), null);
+        
+        var oFile = mode.openChannel(offsetsFile());
+        onFail.pushClose(oFile);
+        
+        var oInfo = OffsetsInfo.load(oFile);
+        
+        if (config.dex() != oInfo.dex())
+          throw new IllegalArgumentException(
+              "dex mismatch: %d (frontiers) vs. %d (offests)"
+              .formatted(config.dex(), oInfo.dex()));
+        
+        var rowOffsets = new Alf(oFile, oInfo.zeroOffset());
+        
+        this.hasher = new LogHasher(
+            config.salter(),
+            config.commentMatcher(),
+            config.delimiters(),
+            rowOffsets,
+            fTable,
+            config.dex());
+        
+      }
       
       onFail.clear();
     }
@@ -523,55 +633,90 @@ public class LogHashRecorder implements AutoCloseable {
   public State update() throws IOException, OffsetConflictException, RowHashConflictException {
     try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
       this.error = null;
-      State state = hasher.update(logChannel);
-      saveState(state);
+      
+      
+      State state;
+      if (config.stateOnly()) {
+        State preState = getState().orElse(State.EMPTY);
+        state = config.stateHasher().play(logChannel, preState);
+      } else {
+        state = hasher.update(logChannel);
+      }
+      saveState(state, true);
       return state;
-    } catch (OffsetConflictException ocx) {
-      this.error = ocx;
-      throw ocx;
-    } catch (RowHashConflictException hcx) {
-      this.error = hcx;
-      throw hcx;
+    
+    } catch (SldgException error) {
+      this.error = error;
+      throw error;
     }
   }
   
   
   
-  public StateHasher stateHasher() {
-    return new StateHasher(hasher);
-  }
   
   
   
-  private void saveState(State state) throws IOException {
+//  public State verify() 
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  private void saveState(State state, boolean top) throws IOException {
+
     var prev = getState();
-    if (prev.isPresent() && prev.get().equals(state))
-      return;
+    
+    if (prev.isPresent()) {
+      State prevState = prev.get();
+      long prn = prevState.rowNumber();
+      if (prn == state.rowNumber()) {
+        
+        if (prevState.equals(state))
+          return;
+        
+        if (!top) {
+          if (!prevState.frontier().equals(state.frontier()))
+            throw new RowHashConflictException(prn);
+          if (prevState.eolOffset() != state.eolOffset())
+            throw new OffsetConflictException(
+                prn, prevState.eolOffset(), state.eolOffset());
+          else
+            throw new OffsetConflictException(
+                prn, prevState.lineNo(), state.lineNo(),
+                "line no.s for row [%d] don't match: expected %d; %d actual"
+                .formatted(prn, prevState.lineNo(), state.lineNo()));
+        }
+      }
+    }
     
     File file = stateFile(state);
     saveState(file, state);
     
-    // punting on what to do if prev.rowNumber() > state.rowNumber()
-    // e.g. below..
+    if (!top || prev.isEmpty() || prev.get().rowNumber() <= state.rowNumber())
+      return;
     
     
-//    
-//    if (prevState.rowNumber() > state.rowNumber()) {
-//      File[] hiStateFiles = getIndexDir().listFiles(new FileFilter() {
-//        @Override
-//        public boolean accept(File pathname) {
-//          return inferStateRn(file) > state.rowNumber();
-//        }
-//      });
-//    }
-    
-    
+    for (var stateFile : listStateFiles(false, state.rowNumber() + 1)) {
+      new BackedupFile(stateFile).moveToBackup();
+    }
   }
   
   
-//  private void warn(String msg) {
-//    System.getLogger(LOGNAME).log(Level.WARNING, msg);
-//  }
+  
+  
+  
+  
   
   
   private File stateFile(State state) {
@@ -589,15 +734,43 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
+  /**
+   * Returns the list of state files in order of row number.
+   * 
+   * @return {@code listStateFiles(true, 0)}
+   */
+  public List<File> listStateFiles() {
+    return listStateFiles(true, 0);
+  }
+  
+  
+  /**
+   * Returns the list of state files.
+   * 
+   * @param sort          if {@code true} then sorted by row number
+   * @param minRowNumber  the minimum row number (&ge; 0)
+   * @return not null.
+   */
+  public List<File> listStateFiles(boolean sort, long minRowNumber) {
+    File[] stateFiles = getIndexDir().listFiles(newStateFileFilter(minRowNumber));
+    if (stateFiles == null)
+      return List.of();
+    if (sort && stateFiles.length > 1)
+      Arrays.sort(stateFiles, STATE_FILE_COMP);
+    return Lists.asReadOnlyList(stateFiles);
+  }
+  
+  
   
   public Optional<State> getState() {
+    
     var stateFile = stateFile();
     if (stateFile.isEmpty())
       return Optional.empty();
     
-    try (var ch = Opening.READ_ONLY.openChannel(stateFile.get())) {
+    try {
       
-      return Optional.of( loadState(ch) );
+      return Optional.of( loadState(stateFile.get()) );
       
     } catch (IOException iox) {
       throw new UncheckedIOException(
@@ -613,10 +786,18 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   
+  public StateHasher stateHasher() {
+    return config.stateHasher();
+  }
+  
+  
+  
+  
   
   @Override
   public void close() {
-    hasher.close();
+    if (hasher != null)
+      hasher.close();
   }
   
   
@@ -642,7 +823,12 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   public void clean() {
-    
+    File[] backups = getIndexDir().listFiles((f) -> f.getName().startsWith("~"));
+    if (backups == null || backups.length == 0)
+      return;
+    for (var f : backups)
+      if (!f.delete())
+        sysLogger().log(Level.WARNING, "failed to remove " + f);
   }
   
   

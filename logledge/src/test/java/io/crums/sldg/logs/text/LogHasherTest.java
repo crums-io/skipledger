@@ -296,7 +296,7 @@ public class LogHasherTest extends IoTestCase {
   
   
   @Test
-  public void testGetFrontieredRow() throws Exception {
+  public void testGetFullRow() throws Exception {
     Object label = new Object() { };
     int rnExpo = 1;
     final File dir = testDir(label);
@@ -313,10 +313,10 @@ public class LogHasherTest extends IoTestCase {
     long rn = 4;
     String expectedLine = "Sat on a wall and took a great fall";
     
-    FrontieredRow row;
+    FullRow row;
     try (var log = openReadonly(logFile)) {
       hasher.play(log);
-      row = hasher.getFrontieredRow(rn, log);
+      row = hasher.getFullRow(rn, log);
       hasher.close();
     }
     

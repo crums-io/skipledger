@@ -53,8 +53,8 @@ import io.crums.util.Strings;
  * the position of the stream argument). However, it does contain a few hooks
  * that a subclass can exploit to record work and so on.
  * </p><p>
- * Also, even tho "stateless", <em>instances are not safe under concurrent access.</em>
- * This is because, for efficiency, each instance sports a couple of state-ful
+ * Also, even tho "stateless", <em>concurrent access is synchronized</em>.
+ * This is because, for efficiency, each instance sports a couple of stateful
  * SHA-256 digesters. Use the {@linkplain #StateHasher(StateHasher) copy constructor}
  * for concurrent scenarios.
  * </p>
@@ -175,14 +175,12 @@ public class StateHasher {
     return Optional.ofNullable(tokenDelimiters);
   }
   
-
-  
-  private ByteBuffer newLineBuffer() {
-    return ByteBuffer.allocate(lineBufferSize());
-  }
   
 
-  /** Returns the max number of bytes per line. Defaults to 8k. Override to increase. */
+  /**
+   * Returns the max number of bytes per line. Defaults to 8k. Override to increase.
+   * Invoked once at the beginning of {@linkplain #play(ReadableByteChannel, State) play}.
+   */
   protected int lineBufferSize() {
     return 8192;
   }
@@ -214,11 +212,11 @@ public class StateHasher {
    * @param lineNo      number of {@code '\n'} chars preceding this row
    * 
    * @see #advanceByLine(ByteBuffer, HashFrontier, long, long)
-   * @see FrontieredRow
+   * @see FullRow
    */
   protected void observeRow(
       HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
-      long offset, long endOffset, long lineNo) {
+      long offset, long endOffset, long lineNo) throws IOException {
   }
   
   
@@ -280,8 +278,8 @@ public class StateHasher {
    * 
    * @return          state of the ledger <em>after</em> this line of text
    */
-  protected HashFrontier advanceByLine(
-      ByteBuffer text, HashFrontier frontier, long offset, long lineNo) {
+  protected final HashFrontier advanceByLine(
+      ByteBuffer text, HashFrontier frontier, long offset, long lineNo) throws IOException {
     if (commentMatcher != null && commentMatcher.test(text))
       return frontier;
     
@@ -342,17 +340,45 @@ public class StateHasher {
   }
   
   /** Plays the given log stream and returns its state. */
-  public State play(ReadableByteChannel logChannel) throws IOException {
+  public final State play(ReadableByteChannel logChannel) throws IOException {
     return play(logChannel, State.EMPTY);
   }
   
 
   
+
+  /** Plays the given seekable stream from the beginning are returns its state. */
+  public final State play(SeekableByteChannel logChannel) throws IOException {
+    return play((ReadableByteChannel) logChannel.position(0));
+  }
+
+  
+  /** Plays the given seekable stream, starting from the given state. */
+  public final State play(SeekableByteChannel logChannel, State state)
+          throws IOException {
+    logChannel.position(state.eolOffset());
+    return play((ReadableByteChannel) logChannel, state);
+  }
   
   
-  
-  
-  public State play(
+  /**
+   * Plays the log assuming it's starting from the given state.
+   * Invokes the callback methods listed below.
+   * 
+   * @param logChannel  log stream (assumed to be positioned at
+   *                    {@code state.eolOffset()}
+   * @param state       the starting state
+   * @return            the resultant state once the end of the
+   *                    {@code logChannel} is reached
+   *                    
+   * @see #lineBufferSize()
+   * @see #allowEmptyLines()
+   * @see #observeRow(HashFrontier, List, ByteBuffer, long, long, long)
+   * @see #observeLedgeredLine(HashFrontier, long, long, long)
+   * @see #observeEndState(State)
+   * @see #nextStateAhead(State, long)
+   */
+  public final synchronized State play(
       ReadableByteChannel logChannel, State state)
           throws IOException {
     
@@ -365,7 +391,7 @@ public class StateHasher {
     Objects.requireNonNull(frontier, "null hash frontier");
     
     
-    ByteBuffer lineBuffer = newLineBuffer();
+    ByteBuffer lineBuffer = ByteBuffer.allocate(lineBufferSize());
 
     int eol = loadLine(lineBuffer, logChannel);
     
@@ -407,8 +433,17 @@ public class StateHasher {
         eol = loadLine(lineBuffer, logChannel);
       }
     }
-    return new State(frontier, lendOff, lineNo);
+    state = new State(frontier, lendOff, lineNo);
+    observeEndState(state);
+    return state;
   }
+  
+  
+  /**
+   * End state callback invoked by {@linkplain #play(ReadableByteChannel, State)}.
+   * Defaults to noop.
+   */
+  protected void observeEndState(State state) throws IOException {  }
   
   /** Stop play short circuit method. Defaults to {@code false}. */
   protected boolean stopPlay() {
@@ -416,8 +451,18 @@ public class StateHasher {
   }
   
   
+  
+  public FullRow getFullRow(long rn, SeekableByteChannel logChannel)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    return getFullRow(rn, State.EMPTY, logChannel);
+  }
+  
   /**
-   * Plays the given log and returns the specified row.
+   * Plays the given log and returns the specified row. Invokes the
+   * {@linkplain #nextStateAhead(State, long)} lookup method, positions
+   * the stream and returns
+   * {@linkplain #getFullRow(long, State, ReadableByteChannel)}.
    * 
    * @param rn          target row number
    * @param state       state <em>before</em> {@code rn}; {@code state.eolOffset}
@@ -433,25 +478,25 @@ public class StateHasher {
    * @throws NoSuchElementException
    *    if the target row number is never reached
    */
-  public FrontieredRow getFrontieredRow(
+  public FullRow getFullRow(
       long rn, State state, SeekableByteChannel logChannel)
           throws IOException, IllegalArgumentException, NoSuchElementException {
 
-    if (state.eolOffset() == -1)
-      throw new IllegalArgumentException("EOL offset not set: " + state);
-    
+    synchronized (this) {
+      state = nextStateAhead(state, rn);
+    }
     logChannel.position(state.eolOffset());
     
-    return getFrontieredRow(rn, state, (ReadableByteChannel) logChannel);
+    return getFullRow(rn, state, (ReadableByteChannel) logChannel);
   }
   
   
   
   /**
-   * Plays the given log forward and returns a {@linkplain FrontieredRow}
+   * Plays the given log forward and returns a {@linkplain FullRow}
    * for the given row number. The given log channel is assumed to be positioned at the
-   * beginning of content following the {@linkplain HashFrontier#rowNumber()
-   * frontier row number}.
+   * beginning of content following the {@linkplain State#rowNumber()
+   * state row number}.
    * 
    * @param rn         target row number
    * @param state      state <em>before</em> target row, i.e. {@code state.rowNumber() < rn}
@@ -462,7 +507,7 @@ public class StateHasher {
    * @throws IllegalArgumentException if {@code rn <= state.rowNumber()}
    * @throws NoSuchElementException if the target row number is never reached
    */
-  public FrontieredRow getFrontieredRow(
+  public FullRow getFullRow(
       long rn, State state, ReadableByteChannel logChannel)
           throws IOException, IllegalArgumentException, NoSuchElementException {
     
@@ -472,7 +517,7 @@ public class StateHasher {
     
     
     class Collector extends StateHasher {
-      FrontieredRow row;
+      FullRow row;
       Collector() {
         super(StateHasher.this);
       }
@@ -485,7 +530,7 @@ public class StateHasher {
           HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
           long offset, long endOff, long lineNo) {
         if (preFrontier.rowNumber() + 1 == rn) {
-          this.row = new FrontieredRow(cols, preFrontier, endOff, lineNo);
+          this.row = new FullRow(cols, preFrontier, endOff, lineNo);
         }
       }
       
@@ -533,9 +578,7 @@ public class StateHasher {
             "out-of-sequence/illegal row number %d <= last %d (at index %d)"
             .formatted(rn, state.rowNumber(), index));
       
-      state = nextStateAhead(state, rn);
-      
-      var fr = getFrontieredRow(rn, state, log);
+      var fr = getFullRow(rn, state, log);
       rows[index] = fr.row();
       state = fr.toState();
     }
@@ -546,7 +589,9 @@ public class StateHasher {
   
   /**
    * Returns the next saved state ahead of row number {@code rn}, if any;
-   * {@code state}, otherwise.
+   * {@code state}, otherwise. This a look-ahead hook for a subclass that
+   * implements it: if an instance has a saved state with a higher row number
+   * that is still ahead of {@code rn}, then it should return that instance.
    * 
    * @param state fallback state
    * @param rn    target row number (&gt; {@code state.rowNumber()})
