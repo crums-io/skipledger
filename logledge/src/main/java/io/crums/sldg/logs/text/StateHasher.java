@@ -14,6 +14,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -58,6 +59,8 @@ import io.crums.util.Strings;
  * SHA-256 digesters. Use the {@linkplain #StateHasher(StateHasher) copy constructor}
  * for concurrent scenarios.
  * </p>
+ * 
+ * @see ContextedHasher
  */
 public class StateHasher {
   
@@ -160,7 +163,11 @@ public class StateHasher {
   }
   
   
-  
+  /**
+   * The salter. Each word counts as a column (cell) value.
+   * Each word's hash is salted using this salter. 
+   * @return
+   */
   public TableSalt salter() {
     return salter;
   }
@@ -187,10 +194,11 @@ public class StateHasher {
   
 
   /** Returns the tokenizer using the given {@code line}. */
-  protected StringTokenizer newTokens(String line) {
-    return tokenDelimiters == null ?
+  protected Iterator<?> newTokens(String line) {
+    var tokenizer = tokenDelimiters == null ?
         new StringTokenizer(line) :
           new StringTokenizer(line, tokenDelimiters);
+    return tokenizer.asIterator();
   }
   
 
@@ -203,10 +211,6 @@ public class StateHasher {
    * @param preFrontier hash frontier <em>before</em> new row is created
    *                    the row's number is one greater than the pre-frontier's
    * @param cols        the row's column values (not empty)
-   * @param inputHash   resultant <em>input hash</em> (from {@linkplain
-   *                    SourceRow#rowHash(List, MessageDigest, MessageDigest)
-   *                    SourceRow.rowHash(cols, null, null)})
-   *                    that goes in the skip ledger
    * @param offset      offset the row (line) begins in the log (inc.)
    * @param endOffset   end offset row ends (exc.)
    * @param lineNo      number of {@code '\n'} chars preceding this row
@@ -215,7 +219,7 @@ public class StateHasher {
    * @see FullRow
    */
   protected void observeRow(
-      HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+      HashFrontier preFrontier, List<ColumnValue> cols,
       long offset, long endOffset, long lineNo) throws IOException {
   }
   
@@ -237,25 +241,22 @@ public class StateHasher {
    * Invoked after a row (line) is ledgered. A subclass can optionally
    * record this state. The base implementation is a noop.
    * 
-   * @param frontier  state of the ledger up to (and including) the row
-   *                  (The row number can be inferred from this argument.)
+   * @param fro       state of the ledger up to (and including) the row
    * @param offset    the starting offset of the row in the stream (inclusive)
-   * @param eolOff    the ending offset of the row in the stream (exclusive)
-   * @param lineNo    line number (informational only, not used)
    */
-  protected void observeLedgeredLine(
-      HashFrontier frontier, long offset, long eolOff, long lineNo) throws IOException {
+  protected void observeLedgeredLine(Fro fro, long offset) throws IOException {
+//      HashFrontier frontier, long offset, long eolOff, long lineNo) throws IOException {
   
   }
   
   
 
   /**
+   * FIXME doc
    * <p>
    * Observes the given line of {@code text} and if it forms a ledger row
-   * computes and returns the next {@linkplain HashFrontier hash frontier}
-   * following the given {@code frontier}; if the text doesn't form a ledger
-   * row, the given frontier is returned.
+   * computes the source row's hash (the input hash in the skip ledger)
+   * and returns it.
    * </p><p>
    * 2 factors contribute to whether the given text counts as a ledger row:
    * <p>
@@ -267,27 +268,27 @@ public class StateHasher {
    * <p>
    * The base implementation hash no side effects: it's a pure computation.
    * However, if the line of text does form a ledgered row, then
-   * {@linkplain #observeRow(HashFrontier, List, ByteBuffer, long, long, long)} is invoked, and if that method
+   * {@linkplain #observeRow(HashFrontier, List, long, long, long)} is invoked, and if that method
    * is overridden (a noop, by default), then there may be side effects.
    * </p>
    * 
    * @param text      line of text (usually not empty since trailing {@code '\n'} is included)
-   * @param frontier  state of the ledger <em>before</em> this line of text
+   * @param frontier  hash state of the ledger <em>before</em> this line of text
    * @param offset    the starting offset of {@code text}
    * @param lineNo    informational only (not used in logic)
    * 
-   * @return          state of the ledger <em>after</em> this line of text
+   * @return          the input hash if this line of text forms a row; {@code null} o.w.
    */
-  protected final HashFrontier advanceByLine(
+  protected final ByteBuffer advanceByLine(
       ByteBuffer text, HashFrontier frontier, long offset, long lineNo) throws IOException {
     if (commentMatcher != null && commentMatcher.test(text))
-      return frontier;
+      return null;
     
     long endOffset = offset + text.remaining();
     var line = Strings.utf8String(text);
     
     if (line.isBlank() && !allowEmptyLines())
-      return frontier;
+      return null;
     
     var tokenizer = newTokens(line);
 
@@ -295,12 +296,12 @@ public class StateHasher {
     
     List<ColumnValue> columns;
     
-    if (!tokenizer.hasMoreTokens()) {
+    if (!tokenizer.hasNext()) {
       
       if (allowEmptyLines())
         columns = List.of(new NullValue(salter.salt(rn, 1)));
       else
-        return frontier;
+        return null;
     
     } else {
     
@@ -310,16 +311,15 @@ public class StateHasher {
       do {
         columns.add(
             new StringValue(
-                tokenizer.nextToken(),
+                tokenizer.next().toString(),
                 salter.salt(rn, ++colNo)));
-      } while (tokenizer.hasMoreTokens());
+      } while (tokenizer.hasNext());
     }
     
     var inputHash = SourceRow.rowHash(columns, work, work2);
     
-    observeRow(frontier, columns, inputHash, offset, endOffset, lineNo);
-    
-    return frontier.nextFrontier(inputHash);
+    observeRow(frontier, columns, offset, endOffset, lineNo);
+    return inputHash;
   }
   
   
@@ -373,31 +373,28 @@ public class StateHasher {
    *                    
    * @see #lineBufferSize()
    * @see #allowEmptyLines()
-   * @see #observeRow(HashFrontier, List, ByteBuffer, long, long, long)
-   * @see #observeLedgeredLine(HashFrontier, long, long, long)
-   * @see #observeEndState(State)
+   * @see #observeLedgeredLine(Fro, long)
+   * @see #observeEndState(Fro)
    * @see #nextStateAhead(State, long)
    */
   public final synchronized State play(
       ReadableByteChannel logChannel, State state)
           throws IOException {
     
-    
-    HashFrontier frontier = state.frontier();
     long offset = state.eolOffset();
     long lineNo = state.lineNo();
     
-    Objects.requireNonNull(logChannel, "null log channel");
-    Objects.requireNonNull(frontier, "null hash frontier");
     
     
     ByteBuffer lineBuffer = ByteBuffer.allocate(lineBufferSize());
 
     int eol = loadLine(lineBuffer, logChannel);
     
-    long lendOff = offset;
+    Fro fro = null;
     
     while (eol != 0 && !stopPlay()) {
+      
+      ++lineNo;
       
       final int loadedLimit = lineBuffer.limit();
       
@@ -405,19 +402,16 @@ public class StateHasher {
       
       final long endOff = offset + lineBuffer.remaining();
       
-      final HashFrontier oldFrontier = frontier;
+      ByteBuffer inputHash = advanceByLine(lineBuffer, state.frontier(), offset, lineNo);
       
-      frontier = advanceByLine(lineBuffer, oldFrontier, offset, lineNo);
-      
-      if (frontier != oldFrontier) {
-        assert frontier.rowNumber() == oldFrontier.rowNumber() + 1;
+      if (inputHash != null) {
         
-        observeLedgeredLine(frontier, offset, endOff, lineNo);
-        lendOff = endOff;
+        fro = new Fro(state, inputHash, endOff, lineNo);
+        state = fro.state();
+        observeLedgeredLine(fro, offset);
       }
       
       offset = endOff;
-      ++lineNo;
       
       if (loadedLimit > eol) {
         lineBuffer.limit(loadedLimit).position(eol);
@@ -433,8 +427,8 @@ public class StateHasher {
         eol = loadLine(lineBuffer, logChannel);
       }
     }
-    state = new State(frontier, lendOff, lineNo);
-    observeEndState(state);
+    if (fro != null)
+      observeEndState(fro);
     return state;
   }
   
@@ -443,7 +437,7 @@ public class StateHasher {
    * End state callback invoked by {@linkplain #play(ReadableByteChannel, State)}.
    * Defaults to noop.
    */
-  protected void observeEndState(State state) throws IOException {  }
+  protected void observeEndState(Fro fro) throws IOException {  }
   
   /** Stop play short circuit method. Defaults to {@code false}. */
   protected boolean stopPlay() {
@@ -527,7 +521,7 @@ public class StateHasher {
       }
       @Override
       protected void observeRow(
-          HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+          HashFrontier preFrontier, List<ColumnValue> cols,
           long offset, long endOff, long lineNo) {
         if (preFrontier.rowNumber() + 1 == rn) {
           this.row = new FullRow(cols, preFrontier, endOff, lineNo);

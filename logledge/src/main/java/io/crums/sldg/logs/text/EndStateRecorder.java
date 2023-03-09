@@ -4,7 +4,11 @@
 package io.crums.sldg.logs.text;
 
 
-import static io.crums.sldg.logs.text.LogledgeConstants.*;
+import static io.crums.sldg.logs.text.LogledgeConstants.STATE_MAGIC;
+import static io.crums.sldg.logs.text.LogledgeConstants.STATE_POSTFIX;
+import static io.crums.sldg.logs.text.LogledgeConstants.STATE_PREFIX;
+import static io.crums.sldg.logs.text.LogledgeConstants.UNUSED_PAD;
+import static io.crums.sldg.logs.text.LogledgeConstants.sysLogger;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -22,7 +26,6 @@ import io.crums.io.BackedupFile;
 import io.crums.io.Opening;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.ByteFormatException;
-import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.logs.text.ContextedHasher.Context;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
@@ -34,7 +37,7 @@ import io.crums.util.Strings;
  * on playback, if there are any conflicts, they are reported via
  * {@linkplain OffsetConflictException} or {@linkplain RowHashConflictException}.
  * 
- * @see #observeEndState(State)
+ * @see #observeEndState(Fro)
  */
 public class EndStateRecorder implements Context {
   
@@ -82,8 +85,8 @@ public class EndStateRecorder implements Context {
   
 
 
-  private static String stateFilename(State state) {
-    return stateFilename( state.rowNumber() );
+  private static String stateFilename(Fro fro) {
+    return stateFilename( fro.rowNumber() );
   }
 
   private static String stateFilename(long rn) {
@@ -111,10 +114,10 @@ public class EndStateRecorder implements Context {
   
   
   
-  public Optional<State> loadState(long rn) throws IOException {
+  public Optional<Fro> loadState(long rn) throws IOException {
     File stateFile = new File(dir, stateFilename(rn));
     return stateFile.exists() ?
-        Optional.of( loadState(stateFile) ) :
+        Optional.of( loadFro(stateFile) ) :
           Optional.empty(); 
   }
   
@@ -136,10 +139,9 @@ public class EndStateRecorder implements Context {
    *    does not match
    */
   @Override
-  public void observeLedgeredLine(
-      HashFrontier frontier, long offset, long eolOff, long lineNo)
+  public void observeLedgeredLine(Fro fro, long eolOff)
           throws IOException, OffsetConflictException, RowHashConflictException {
-    long rn = frontier.rowNumber();
+    long rn = fro.rowNumber();
     
     if (nextStateCheck == -1) {
       nextStateCheck =
@@ -148,19 +150,21 @@ public class EndStateRecorder implements Context {
     }
     
     if (nextStateCheck == rn) {
-      State recorded = loadState( new File(dir, stateFilename(rn)) );
-      State observed = new State(frontier, eolOff, lineNo);
+      // FIXME
+      Fro recorded = loadFro( new File(dir, stateFilename(rn)) );
+      State observed = fro.state();
       nextStateCheck = -1;
-      if (recorded.equals(observed))
+      if (recorded.state().equals(observed))
         return;
       
       boolean offsetsEqual = recorded.eolOffset() == observed.eolOffset();
       boolean hashesEqual = recorded.frontier().equals(observed.frontier());
       
       if (!offsetsEqual) {
-        if (hashesEqual && repairOffsets)
-          save(observed);
-        else
+        if (hashesEqual && repairOffsets) {
+          // FIXME
+//          save(observed);
+        } else
           throw new OffsetConflictException(
               rn, recorded.eolOffset(), observed.eolOffset());
       
@@ -174,6 +178,8 @@ public class EndStateRecorder implements Context {
       }
     }
   }
+  
+  
 
 
   @Override
@@ -189,7 +195,7 @@ public class EndStateRecorder implements Context {
    * @throws IllegalArgumentException
    *         if the file name implies a false row number
    */
-  public static State loadState(File stateFile) {
+  public static Fro loadFro(File stateFile) {
     long inferredRn = inferStateRn(stateFile);
     ByteBuffer buffer;
     try (var fc = Opening.READ_ONLY.openChannel(stateFile)) {
@@ -204,7 +210,7 @@ public class EndStateRecorder implements Context {
 
     assertMagic(buffer);
     buffer.position(buffer.position() + UNUSED_PAD);
-    State state = State.loadSerial(buffer);
+    Fro state = Fro.loadSerial(buffer);
     if (state.rowNumber() != inferredRn && inferredRn != -1)
       throw new IllegalArgumentException(
           "file-naming (%s) hanky panky: inferred state RN %d; actual %d"
@@ -261,33 +267,53 @@ public class EndStateRecorder implements Context {
     var stateFiles = listStateFiles();
     if (stateFiles.isEmpty())
       return state;
-    int candidateIndex;
-    {
-      List<Long> stateRns = Lists.map(
-          stateFiles, EndStateRecorder::inferStateRn);
-      int index = Collections.binarySearch(stateRns, rn);
-      if (index < 0)
-        index = -1 - index;
-      candidateIndex = index - 1;
-    }
     
-    if (candidateIndex != -1) {
-      State candidate = loadState(stateFiles.get(candidateIndex));
-      if (candidate.rowNumber() > state.rowNumber()) {
-        assert candidate.rowNumber() < rn;
-        return candidate;
+    State candidate = null;
+    int index;
+    {
+      List<Long> stateRns = Lists.map(stateFiles, EndStateRecorder::inferStateRn);
+      index = Collections.binarySearch(stateRns, rn);
+      if (index >= 0) {
+        candidate = loadFro(stateFiles.get(index)).preState();
+      } else {
+        int insertIndex = -1 - index;
+        index = insertIndex - 1;
+        if (index >= 0)
+          candidate = loadFro(stateFiles.get(index)).state();
+        else
+          return state;
       }
     }
-    return state;
+    
+    
+    // candidate != null;
+    
+    if (candidate.rowNumber() == state.rowNumber()) {
+      if (!candidate.fuzzyEquals(state)) {
+        if (candidate.eolOffset() != state.eolOffset())
+          throw new OffsetConflictException(
+              state.rowNumber(), candidate.eolOffset(), state.eolOffset());
+        assert !candidate.frontier().equals(state.frontier());
+        throw new RowHashConflictException(
+            rn, "state %s row hash conflicts with that recorded in %s"
+            .formatted(state.toString(), stateFiles.get(index).getName()));
+      }
+      return state;
+    }
+    
+    return candidate.rowNumber() <= state.rowNumber() ? state : candidate;
+    
   }
+  
+  
 
 
   /**
    * Saves the end {@code state} on observing it.
    */
   @Override
-  public void observeEndState(State state) throws IOException {
-    save(state);
+  public void observeEndState(Fro fro) throws IOException {
+    save(fro);
   }
   
   
@@ -300,17 +326,26 @@ public class EndStateRecorder implements Context {
   
   
   
+  public Optional<Fro> getFro() {
+    var files = listStateFiles();
+    return files.isEmpty() ?
+        Optional.empty() :
+          Optional.of(loadFro(files.get(files.size() - 1)));
+  }
+  
+  
+  
   /**
    * Saves the given {@code state} at its expected file path.
    * If the file already exists, and is different from what's
    * about to be written, then the exisitng file is first moved
    * out of the way.
    */
-  public void save(State state) throws IOException {
-    File stateFile = new File(dir, stateFilename(state));
+  public void save(Fro fro) throws IOException {
+    File stateFile = new File(dir, stateFilename(fro));
     if (stateFile.exists()) {
       try {
-        if (loadState(stateFile).equals(state))
+        if (loadFro(stateFile).equals(fro))
           return;
       } catch (Exception x) {
         sysLogger().log(
@@ -328,7 +363,7 @@ public class EndStateRecorder implements Context {
       buffer.put(Strings.utf8Bytes(STATE_MAGIC));
       for (int bytes = UNUSED_PAD; bytes-- > 0;)
         buffer.put((byte) 0);
-      state.writeTo(buffer).flip();
+      fro.writeTo(buffer).flip();
       ChannelUtils.writeRemaining(ch, 0L, buffer);
     
     } catch (Exception x) {

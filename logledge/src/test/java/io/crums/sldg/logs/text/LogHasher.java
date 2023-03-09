@@ -16,15 +16,15 @@ import java.util.function.Predicate;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.io.sef.Alf;
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.SkipLedger;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.src.TableSalt;
 
 /**
+ * 
  * Persistent version of {@linkplain StateHasher}. Records row hashes
  * and end-of-row offsets at fixed (block) intervals of row numbers.
- * <h2>TODO</h2>
- * <p>Find me a better name.</p>
+ * Moved to the test branch since much of its funtionality was refactored
+ * into {@linkplain BlockRecorder}.
  */
 public class LogHasher extends ContextedHasher implements Channel {
   

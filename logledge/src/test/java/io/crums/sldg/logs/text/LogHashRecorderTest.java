@@ -61,6 +61,7 @@ public class LogHashRecorderTest extends IoTestCase {
     
     State state;
     StateHasher hasher;
+    
     try (var hashRecorder = new LogHashRecorder(log, null, null, dex)) {
       state = hashRecorder.update();
       hasher = hashRecorder.stateHasher();

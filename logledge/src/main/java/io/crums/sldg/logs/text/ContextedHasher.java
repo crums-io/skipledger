@@ -3,8 +3,8 @@
  */
 package io.crums.sldg.logs.text;
 
+
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -45,13 +45,12 @@ public class ContextedHasher extends StateHasher {
     }
     /** Observes the row about to be ledgered. Defaults to noop. */
     default void observeRow(
-        HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
+        HashFrontier preFrontier, List<ColumnValue> cols,
         long offset, long endOffset, long lineNo)
             throws IOException {  }
     /** Observes the ledger line (it's hash in the skip ledger). Defaults to noop. */
-    default void observeLedgeredLine(
-        HashFrontier frontier, long offset, long eolOff, long lineNo)
-            throws IOException {  }
+    default void observeLedgeredLine(Fro frontier, long offset)
+        throws IOException {  }
     /**
      * Returns the next saved state ahead of row number {@code rn}, if any;
      * {@code state}, otherwise. Defaults to returning the given fallback.
@@ -65,7 +64,7 @@ public class ContextedHasher extends StateHasher {
       return state;
     }
     /** Observes the end state (of play). Defaults to noop. */
-    default void observeEndState(State state) throws IOException {  }
+    default void observeEndState(Fro fro) throws IOException {  }
   }
   
   
@@ -78,9 +77,12 @@ public class ContextedHasher extends StateHasher {
    * 
    * @param promote
    */
-  public ContextedHasher(StateHasher promote, Context context) {
+  public ContextedHasher(StateHasher promote, Context... context) {
     super(promote);
-    this.context = Objects.requireNonNull(context, "null context");
+    this.context =
+        context.length == 1 ?
+            Objects.requireNonNull(context[0], "null context") :
+              new ContextArray(context);
   }
 
   @Override
@@ -89,20 +91,21 @@ public class ContextedHasher extends StateHasher {
   }
 
   @Override
-  protected void observeRow(HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash, long offset,
-      long endOffset, long lineNo)
+  protected void observeRow(HashFrontier preFrontier, List<ColumnValue> cols,
+      long offset, long endOffset, long lineNo)
           throws IOException {
-    context.observeRow(preFrontier, cols, inputHash, offset, endOffset, lineNo);
+    context.observeRow(preFrontier, cols, offset, endOffset, lineNo);
   }
 
+  
   @Override
   protected boolean allowEmptyLines() {
     return context.allowEmptyLines();
   }
 
   @Override
-  protected void observeLedgeredLine(HashFrontier frontier, long offset, long eolOff, long lineNo) throws IOException {
-    context.observeLedgeredLine(frontier, offset, eolOff, lineNo);
+  protected void observeLedgeredLine(Fro fro, long offset) throws IOException {
+    context.observeLedgeredLine(fro, offset);
   }
 
   @Override
@@ -111,8 +114,8 @@ public class ContextedHasher extends StateHasher {
   }
 
   @Override
-  protected void observeEndState(State state) throws IOException {
-    context.observeEndState(state);
+  protected void observeEndState(Fro fro) throws IOException {
+    context.observeEndState(fro);
   }
   
   
@@ -191,32 +194,29 @@ public class ContextedHasher extends StateHasher {
      * @throws IOException */
     @Override
     public void observeRow(
-        HashFrontier preFrontier, List<ColumnValue> cols, ByteBuffer inputHash,
-        long offset,
-        long endOffset, long lineNo)
+        HashFrontier preFrontier, List<ColumnValue> cols,
+        long offset, long endOffset, long lineNo)
             throws IOException {
       
       for (int i = 0; i < array.length; ++i)
         array[i].observeRow(
-            preFrontier, cols, inputHash, offset, endOffset, lineNo);
+            preFrontier, cols, offset, endOffset, lineNo);
     }
 
     /** Observes first to last. 
      * @throws IOException */
     @Override
-    public void observeLedgeredLine(
-        HashFrontier frontier, long offset, long eolOff, long lineNo)
-            throws IOException {
+    public void observeLedgeredLine(Fro fro, long offset) throws IOException {
       
       for (int i = 0; i < array.length; ++i)
-        array[i].observeLedgeredLine(frontier, offset, eolOff, lineNo);
+        array[i].observeLedgeredLine(fro, offset);
     }
     
     
     @Override
-    public void observeEndState(State state) throws IOException {
+    public void observeEndState(Fro fro) throws IOException {
       for (int i = 0; i < array.length; ++i)
-        array[i].observeEndState(state);
+        array[i].observeEndState(fro);
     }
     
   }

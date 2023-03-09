@@ -16,9 +16,10 @@ import io.crums.sldg.cache.HashFrontier;
 import io.crums.util.TaskStack;
 
 /**
- * <p>Records state information at fixed row intervals (the block). The fixed interval
- * is configurable, but must equal a power of 2. Every row numbered a muliple of the
- * interval has its {@linkplain State ledger state} information saved.
+ * <p>
+ * Records state information at fixed row number intervals (the block). The delta
+ * (interval)is configured to be a power of 2. Every row numbered a muliple of the
+ * delta has its {@linkplain State ledger state} information saved.
  * </p>
  * <h2>Design</h2>
  * <p>
@@ -26,7 +27,7 @@ import io.crums.util.TaskStack;
  * the other to store end-of-row (EOL) offsets. Because the block sizes are a power
  * of 2, the {@linkplain HashFrontier} for every row numbered at the block
  * boundary can be looked up. Combined with the row's end-of-row offset, the log
- * can be played forward starting at the beginning of every block.
+ * can be played forward starting at the beginning of any block.
  * </p><p>
  * Packaged as a {@linkplain ContextedHasher.Context} implementation so it
  * can be mixed in with other capabilities.
@@ -39,8 +40,8 @@ public class BlockRecorder implements
   
 
   private final FrontierTable frontiers;
-  /** EOL (<em>!</em>) offsets. The offsets rows end at (exc). */
-  private final Alf rowOffsets;
+  
+  private final Alf rowOffsets; // EOL offsets. The offsets rows end at (exc)
   private final long rnMask;
   
   
@@ -123,16 +124,14 @@ public class BlockRecorder implements
    * 
    * <h4>Side Effects</h4>
    * <p>
-   * If the row number (as specified by {@code frontier}) is a multiple of
+   * If the row number (as specified by {@code fro}) is a multiple of
    * {@linkplain #rnDelta()}, then both the row hash and the EOL offset into the
    * log stream are either appended, or if already recorded, checked for
    * conflicts.
    * </p>
    * 
-   * @param frontier      the state of the ledger up to the given row
+   * @param fro           the state of the ledger up to the given row
    * @param offset        the <em>start</em> offset of the row's source text (not used)
-   * @param eolOff        the <em>EOL</em> offset of the rows's source text
-   * @param lineNo        zero-based line number (not used because this info is mostly contextual)
    * 
    * @throws HashConflictException
    *          if the row's hash conflicts with what's already recorded
@@ -143,15 +142,14 @@ public class BlockRecorder implements
    *          skipped                 
    */
   @Override
-  public void observeLedgeredLine(
-      HashFrontier frontier, long offset, long eolOff, long lineNo)
-          throws
-          IOException,
-          RowHashConflictException,
-          OffsetConflictException,
-          IllegalArgumentException {
+  public void observeLedgeredLine(Fro fro, long offset)
+      throws
+      IOException,
+      RowHashConflictException,
+      OffsetConflictException,
+      IllegalArgumentException {
     
-    long rn = frontier.rowNumber();
+    long rn = fro.rowNumber();
     if ((rn & rnMask) != 0)
       return;
     
@@ -168,29 +166,29 @@ public class BlockRecorder implements
           "skipped offset: count %d; index %d".formatted(oc, index));
     
     if (index ==  fc) {
-      frontiers.append(frontier.frontierHash());
+      frontiers.append(fro.rowHash());
       
     } else {
       
       var rowHash = frontiers.get(index);
-      if (!rowHash.equals(frontier.frontierHash()))
+      if (!rowHash.equals(fro.rowHash()))
         throw new RowHashConflictException(rn,
-            "at row [%d] (%d:%d)".formatted(rn, lineNo, offset));
+            "at row [%d] (%d:%d)".formatted(rn, fro.lineNo(), offset));
       
     }
     
     if (index == oc) {
       
-      rowOffsets.addNext(eolOff, workBuff);
+      rowOffsets.addNext(fro.eolOffset(), workBuff);
     
     } else {
       
       long eol = rowOffsets.get(index, workBuff);
-      if (eol != eolOff)
+      if (eol != fro.eolOffset())
         throw new OffsetConflictException(
-            rn, eol, eolOff,
+            rn, eol, fro.eolOffset(),
             "row [%d] recorded EOL offset was %d; given EOL offset is %d (%d:%d)"
-            .formatted(rn, eol, eolOff, lineNo, offset));
+            .formatted(rn, eol, fro.eolOffset(), fro.lineNo(), offset));
     }
   }
   

@@ -17,9 +17,8 @@ import io.crums.sldg.cache.HashFrontier;
  * then the new hash of the log can be calculated without having to replay
  * the log from the beginning.
  * <p>
- * Note, depending on context, offsets and lineNos may be relative. The API
- * will make clear when these are absolute (i.e. from the beginning of the
- * file).
+ * Note, depending on context, offsets and lineNos <em>may</em> be relative. The API
+ * will make clear when they are not absolute.
  * </p>
  * 
  * @param frontier  hash frontier at the last row
@@ -53,7 +52,22 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
   public long rowNumber() {
     return frontier.rowNumber();
   }
-
+  
+  /**
+   * Tests the given {@code state} is equal to this one, ignoring differences in line number.
+   */
+  public boolean fuzzyEquals(State state) {
+    return state != null && state.frontier.equals(frontier) && state.eolOffset == eolOffset;
+  }
+  
+  
+  /** Returns the [skip ledger] row hash. */
+  public ByteBuffer rowHash() {
+    return frontier.frontierHash();
+  }
+  
+  
+  //   S E R I A L
 
   @Override
   public int serialSize() {
@@ -91,6 +105,8 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
     var front = HashFrontier.loadSerial(in);
     return new State(front, eol, lineNo);
   }
+  
+  
 
 }
 

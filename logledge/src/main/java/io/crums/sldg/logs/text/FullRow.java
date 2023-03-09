@@ -121,6 +121,11 @@ public record FullRow(
   }
   
   
+  /**
+   * The state of the log at this row.
+   * 
+   * @return {@code new State(frontier(), eolOffset, lineNo)}
+   */
   public State toState() {
     return new State(frontier(), eolOffset, lineNo);
   }

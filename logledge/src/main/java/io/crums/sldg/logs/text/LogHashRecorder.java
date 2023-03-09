@@ -4,32 +4,31 @@
 package io.crums.sldg.logs.text;
 
 
+import static io.crums.sldg.logs.text.LogledgeConstants.DIR_PREFIX;
+import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_FILE;
+import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_MAGIC;
+import static io.crums.sldg.logs.text.LogledgeConstants.LOGNAME;
+import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_FILE;
+import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_MAGIC;
+import static io.crums.sldg.logs.text.LogledgeConstants.UNUSED_PAD;
+
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.function.Predicate;
 
-import io.crums.io.BackedupFile;
-import io.crums.io.FileUtils;
 import io.crums.io.Opening;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.io.sef.Alf;
-import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.src.TableSalt;
-import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 
@@ -99,7 +98,9 @@ import io.crums.util.TaskStack;
  * State files record the hash of a log up to a certain line (row). If data written to
  * the target log file is never modified and is only ever appended to, then updating
  * the state only involves playing the log forward from the (ending) offset recorded
- * in the last state file.
+ * in the last state file. They also contain additional information that allow replaying
+ * the last row in the log. This helps verify the previous content of the log being
+ * appended to has not been inadvertantly modified.
  * </p>
  * <h3>Header</h3>
  * <p>
@@ -111,31 +112,16 @@ import io.crums.util.TaskStack;
  * </pre>
  * <h3>Data</h3>
  * <p>
- * A serial representation of the {@linkplain State} is written out following
- * the header. See {@linkplain State#writeTo(ByteBuffer)}.
+ * A serial representation of the {@linkplain Fro row} is written out following
+ * the header. See {@linkplain Fro#writeTo(ByteBuffer)}.
  * </p>
  */
 public class LogHashRecorder implements AutoCloseable {
   
-  public final static String LOGNAME = "sldg.lhash";
-  
-  public final static String DIR_PREFIX = ".sldg.";
-
-  public final static String FRONTIERS_FILE = "fhash";
-  public final static String OFFSETS_FILE = "eor";
-  
-  public final static String STATE_PREFIX = "_";
-  public final static String STATE_POSTFIX = ".fstate";
-
-  private final static String FRONTIERS_MAGIC = FRONTIERS_FILE;
-  private final static String OFFSETS_MAGIC = OFFSETS_FILE;
-  private final static String STATE_MAGIC = "fstate";
-  
   
   
   
 
-  private final static int UNUSED_PAD = 2;
   
   private final static int FRONTIERS_FIXED_HDR_LEN =
       FRONTIERS_MAGIC.length() +
@@ -308,58 +294,6 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   
-  private static State loadState(FileChannel file) throws IOException {
-    int bufferSize = (int) Math.min(8 * 1024, file.size());
-    var buffer = ByteBuffer.allocate(bufferSize);
-    ChannelUtils.readRemaining(file, 0L, buffer).flip();
-    
-    assertMagic(STATE_MAGIC, buffer);
-    advanceUnused(buffer);
-    return State.loadSerial(buffer);
-  }
-  
-  
-  
-  private static State loadState(File file) throws IOException {
-    try (var fc = Opening.READ_ONLY.openChannel(file)) {
-      return loadState(fc);
-    }
-  }
-  
-  
-  private static void saveState(File file, State state) throws IOException {
-    if (file.exists() && loadState(file).equals(state))
-      return;
-    
-    BackedupFile backup = new BackedupFile(file);
-    backup.moveToBackup();
-    
-    var ch = Opening.CREATE.openChannel(file);
-    try (ch) {
-      
-      saveState(ch, state);
-    
-    } catch (Exception x) {
-      ch.close();
-      backup.rollback();
-      if (x instanceof IOException iox)
-        throw iox;
-      if (x instanceof RuntimeException rx)
-        throw rx;
-      
-      assert false; // not reachable
-    }
-  }
-  
-  private static void saveState(FileChannel file, State state) throws IOException {
-    var buffer = ByteBuffer.allocate(64 * 128); // 8k
-    buffer.put(Strings.utf8Bytes(STATE_MAGIC)).put((byte) 0).put((byte) 0);
-    state.writeTo(buffer).flip();
-    ChannelUtils.writeRemaining(file, 0L, buffer);
-  }
-  
-  
-  
   
   
   
@@ -412,51 +346,6 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
-
-  private static String stateFilename(State state) {
-    return STATE_PREFIX + state.rowNumber() + STATE_POSTFIX;
-  }
-  
-  
-  private static FileFilter newStateFileFilter(long minRowNumber) {
-    if (minRowNumber < 0)
-      throw new IllegalArgumentException(
-          "min row number %d < 0".formatted(minRowNumber));
-    
-    return (f) -> inferStateRn(f) >= minRowNumber;
-  }
-  
-  
-  private final static FileFilter STATE_FILE_FILTER = newStateFileFilter(0L);
-  
-  
-  private final static Comparator<File> STATE_FILE_COMP = new Comparator<File>() {
-    @Override
-    public int compare(File a, File b) {
-      long ar = inferStateRn(a);
-      long br = inferStateRn(b);
-      return ar < br ? -1 : (ar == br ? 0 : 1);
-    }
-  };
-  
-  private static long inferStateRn(File stateFile) {
-    var name = stateFile.getName();
-    if (!name.startsWith(STATE_PREFIX) || !name.endsWith(STATE_POSTFIX))
-        return -1L;
-    var rn = name.substring(
-        STATE_PREFIX.length(),
-        name.length() - STATE_POSTFIX.length());
-    try {
-      
-      return Long.parseLong(rn);
-    
-    } catch (NumberFormatException ignore) {
-      sysLogger().log(Level.TRACE, "failed parsing no. in funky name: " + name);
-      return -1L;
-    }
-  }
-  
-  
   
   private static Logger sysLogger() {
     return System.getLogger(LOGNAME);
@@ -475,7 +364,9 @@ public class LogHashRecorder implements AutoCloseable {
   
   private final FrontiersInfo config;
   
-  private LogHasher hasher;
+  private final EndStateRecorder endStateRecorder;
+  
+  private final BlockRecorder blockRecorder;
   
   private SldgException error;
   
@@ -516,7 +407,6 @@ public class LogHashRecorder implements AutoCloseable {
     this.log = log;
     if (!log.isFile())
       throw new IllegalArgumentException("not a file: " + log);
-    FileUtils.ensureDir(getIndexDir());
     
     try (var onFail = new TaskStack()) {
       var ff = Opening.CREATE.openChannel(frontiersFile());
@@ -524,9 +414,12 @@ public class LogHashRecorder implements AutoCloseable {
       
       this.config = FrontiersInfo.create(ff, dex, cPrefix, delimiters);
       
+      this.endStateRecorder = new EndStateRecorder(getIndexDir(), false);
+      
       if (config.stateOnly()) {
         
         ff.close();
+        this.blockRecorder = null;
       
       } else {
 
@@ -537,13 +430,7 @@ public class LogHashRecorder implements AutoCloseable {
         var fTable = new FrontierTableFile(ff, config.zeroOffset());
         var rowOffsets = new Alf(off, oInfo.zeroOffset());
         
-        this.hasher = new LogHasher(
-            config.salter(),
-            config.commentMatcher(),
-            config.delimiters(),
-            rowOffsets,
-            fTable,
-            config.dex());
+        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, dex);
       }
       
       
@@ -576,8 +463,12 @@ public class LogHashRecorder implements AutoCloseable {
       
       this.config = FrontiersInfo.load(fFile);
       
+      this.endStateRecorder = new EndStateRecorder(getIndexDir(), false);
+      
       if (config.stateOnly()) {
         fFile.close();
+        
+        this.blockRecorder = null;
       
       } else {
         var fTable = new FrontierTableFile(fFile, config.zeroOffset(), null);
@@ -594,14 +485,7 @@ public class LogHashRecorder implements AutoCloseable {
         
         var rowOffsets = new Alf(oFile, oInfo.zeroOffset());
         
-        this.hasher = new LogHasher(
-            config.salter(),
-            config.commentMatcher(),
-            config.delimiters(),
-            rowOffsets,
-            fTable,
-            config.dex());
-        
+        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, config.dex);
       }
       
       onFail.clear();
@@ -609,8 +493,10 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
-  
-  protected File getIndexDir() {
+  /**
+   * The directory path tracking files are located in.
+   */
+  public File getIndexDir() {
     return new File(log.getParentFile(), dirPrefix() + log.getName());
   }
   
@@ -620,11 +506,19 @@ public class LogHashRecorder implements AutoCloseable {
   }
   
   
+  /**
+   * EOL row offsets are recorded in this file. Does not exist in the
+   */
   public File offsetsFile() {
     return new File(getIndexDir(), OFFSETS_FILE);
   }
   
   
+  /**
+   * Row hashes for rows at some multiple of 2<sup>k</sup> are
+   * recorded in this file. It's also header contains the secret seed for
+   * salting values. Always exists.
+   */
   public File frontiersFile() {
     return new File(getIndexDir(), FRONTIERS_FILE);
   }
@@ -634,16 +528,18 @@ public class LogHashRecorder implements AutoCloseable {
     try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
       this.error = null;
       
-      
-      State state;
+      ContextedHasher hasher;
       if (config.stateOnly()) {
-        State preState = getState().orElse(State.EMPTY);
-        state = config.stateHasher().play(logChannel, preState);
+        hasher = new ContextedHasher(config.stateHasher(), endStateRecorder);
       } else {
-        state = hasher.update(logChannel);
+        hasher = new ContextedHasher(config.stateHasher(), blockRecorder, endStateRecorder);
       }
-      saveState(state, true);
-      return state;
+      
+      var fro = endStateRecorder.getFro();
+      return
+          fro.isPresent() ?
+              hasher.play(logChannel, fro.get().preState()) :
+                hasher.play(logChannel);
     
     } catch (SldgException error) {
       this.error = error;
@@ -654,132 +550,16 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   
-  
-  
-//  public State verify() 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  private void saveState(State state, boolean top) throws IOException {
-
-    var prev = getState();
-    
-    if (prev.isPresent()) {
-      State prevState = prev.get();
-      long prn = prevState.rowNumber();
-      if (prn == state.rowNumber()) {
-        
-        if (prevState.equals(state))
-          return;
-        
-        if (!top) {
-          if (!prevState.frontier().equals(state.frontier()))
-            throw new RowHashConflictException(prn);
-          if (prevState.eolOffset() != state.eolOffset())
-            throw new OffsetConflictException(
-                prn, prevState.eolOffset(), state.eolOffset());
-          else
-            throw new OffsetConflictException(
-                prn, prevState.lineNo(), state.lineNo(),
-                "line no.s for row [%d] don't match: expected %d; %d actual"
-                .formatted(prn, prevState.lineNo(), state.lineNo()));
-        }
-      }
-    }
-    
-    File file = stateFile(state);
-    saveState(file, state);
-    
-    if (!top || prev.isEmpty() || prev.get().rowNumber() <= state.rowNumber())
-      return;
-    
-    
-    for (var stateFile : listStateFiles(false, state.rowNumber() + 1)) {
-      new BackedupFile(stateFile).moveToBackup();
-    }
+  public boolean isStateOnly() {
+    return config.stateOnly();
   }
   
   
-  
-  
-  
-  
-  
-  
-  private File stateFile(State state) {
-    return new File(getIndexDir(), stateFilename(state));
-  }
-  
-  
-  
-  public Optional<File> stateFile() {
-    File[] stateFiles = getIndexDir().listFiles(STATE_FILE_FILTER);
-    return
-        stateFiles == null ?
-          Optional.empty()
-            : Lists.asReadOnlyList(stateFiles).stream().max(STATE_FILE_COMP);
-  }
-  
-  
-  /**
-   * Returns the list of state files in order of row number.
-   * 
-   * @return {@code listStateFiles(true, 0)}
-   */
-  public List<File> listStateFiles() {
-    return listStateFiles(true, 0);
-  }
-  
-  
-  /**
-   * Returns the list of state files.
-   * 
-   * @param sort          if {@code true} then sorted by row number
-   * @param minRowNumber  the minimum row number (&ge; 0)
-   * @return not null.
-   */
-  public List<File> listStateFiles(boolean sort, long minRowNumber) {
-    File[] stateFiles = getIndexDir().listFiles(newStateFileFilter(minRowNumber));
-    if (stateFiles == null)
-      return List.of();
-    if (sort && stateFiles.length > 1)
-      Arrays.sort(stateFiles, STATE_FILE_COMP);
-    return Lists.asReadOnlyList(stateFiles);
-  }
   
   
   
   public Optional<State> getState() {
-    
-    var stateFile = stateFile();
-    if (stateFile.isEmpty())
-      return Optional.empty();
-    
-    try {
-      
-      return Optional.of( loadState(stateFile.get()) );
-      
-    } catch (IOException iox) {
-      throw new UncheckedIOException(
-          "on loading " + stateFile.get() + ": " + iox.getMessage(), iox);
-      
-    } catch (RuntimeException rx) {
-      throw new ByteFormatException(
-          "on loading " + stateFile.get() + ": " + rx.getMessage(), rx);
-    }
+    return endStateRecorder.getFro().map(Fro::state);
   }
   
   
@@ -796,8 +576,8 @@ public class LogHashRecorder implements AutoCloseable {
   
   @Override
   public void close() {
-    if (hasher != null)
-      hasher.close();
+    if (blockRecorder != null)
+      blockRecorder.close();
   }
   
   
@@ -821,7 +601,9 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   
-  
+  /**
+   * Removes the backup files (filenames prefixed with {@code ~}).
+   */
   public void clean() {
     File[] backups = getIndexDir().listFiles((f) -> f.getName().startsWith("~"));
     if (backups == null || backups.length == 0)
