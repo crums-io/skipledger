@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.util.Objects;
+import java.util.Optional;
 
 import io.crums.io.sef.Alf;
 import io.crums.sldg.HashConflictException;
@@ -25,7 +26,7 @@ import io.crums.util.TaskStack;
  * <p>
  * This uses 2 files: one to store frontier row hashes (32 bytes each),
  * the other to store end-of-row (EOL) offsets. Because the block sizes are a power
- * of 2, the {@linkplain HashFrontier} for every row numbered at the block
+ * of 2, the {@linkplain HashFrontier} every row numbered at the block
  * boundary can be looked up. Combined with the row's end-of-row offset, the log
  * can be played forward starting at the beginning of any block.
  * </p><p>
@@ -104,8 +105,10 @@ public class BlockRecorder implements
   /**
    * Returns the delta exponent. The following relationship
    * holds: 2<sup>dex()</sup> == rnDelta()
+   * 
+   * @return range is &ge; 0 and &lt; 63
    */
-  public final long dex() {
+  public final int dex() {
     return Long.numberOfTrailingZeros(rnDelta());
   }
   
@@ -190,6 +193,16 @@ public class BlockRecorder implements
             "row [%d] recorded EOL offset was %d; given EOL offset is %d (%d:%d)"
             .formatted(rn, eol, fro.eolOffset(), fro.lineNo(), offset));
     }
+  }
+  
+  
+  public Optional<ByteBuffer> getRowHash(long rn) throws IOException {
+    long blockSize = rnDelta();
+    long index = rn / blockSize;
+    return
+        index * blockSize != rn || index >= frontiersRecorded() ?
+            Optional.empty() :
+              Optional.of( frontiers.get(index) );
   }
   
 

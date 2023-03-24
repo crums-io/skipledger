@@ -28,6 +28,13 @@ public class ContextedHasher extends StateHasher {
    */
   public interface Context {
     /**
+     * Invoked once at the beginning of each {@linkplain StateHasher#play(java.nio.channels.ReadableByteChannel, State) play}.
+     * Use this for instance initialization. (This method is actually invoked
+     * thru {@linkplain StateHasher#lineBufferSize()} which is only called
+     * once per run.)
+     */
+    default void init() {  }
+    /**
      * Controls the maximum number of bytes in a line. Defaults to 8k.
      * Invoked once per {@linkplain StateHasher#play(java.nio.channels.ReadableByteChannel, State)
      * play}.
@@ -87,6 +94,7 @@ public class ContextedHasher extends StateHasher {
 
   @Override
   protected int lineBufferSize() {
+    context.init();
     return context.lineBufferSize();
   }
 
@@ -137,6 +145,7 @@ public class ContextedHasher extends StateHasher {
   public static class ContextArray implements Context {
     
     private final Context[] array;
+    private final boolean allowEmptyLines;
     
     /**
      * @param array not empty, not null
@@ -149,6 +158,20 @@ public class ContextedHasher extends StateHasher {
       this.array = new Context[len];
       for (int i = len; i-- > 0;)
         this.array[i] = Objects.requireNonNull(array[i], "at index " + i);
+      {
+        int i = array.length;
+        while (i-- > 0 && !array[i].allowEmptyLines());
+        this.allowEmptyLines = i != -1;
+      }
+    }
+    
+    
+    
+    
+    /** Initialize first to last. */
+    public void init() {
+      for (var ctx : array)
+        ctx.init();
     }
 
     /** The maximum any one wants. */
@@ -162,9 +185,7 @@ public class ContextedHasher extends StateHasher {
     /** Any one says we do, we do. */
     @Override
     public boolean allowEmptyLines() {
-      int i = array.length;
-      while (i-- > 0 && !array[i].allowEmptyLines());
-      return i != -1;
+      return allowEmptyLines;
     }
 
     /** Any one says stop, we stop. */

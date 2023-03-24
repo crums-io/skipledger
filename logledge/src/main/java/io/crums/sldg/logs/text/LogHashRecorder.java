@@ -10,29 +10,49 @@ import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_MAGIC;
 import static io.crums.sldg.logs.text.LogledgeConstants.LOGNAME;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_FILE;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_MAGIC;
+import static io.crums.sldg.logs.text.LogledgeConstants.STATE_EXT;
 import static io.crums.sldg.logs.text.LogledgeConstants.UNUSED_PAD;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.StringTokenizer;
 import java.util.function.Predicate;
 
+import io.crums.client.Client;
+import io.crums.io.BackedupFile;
 import io.crums.io.Opening;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.io.sef.Alf;
+import io.crums.sldg.MorselFile;
+import io.crums.sldg.Path;
+import io.crums.sldg.Row;
+import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.WitnessedRowRepo;
+import io.crums.sldg.fs.WitRepo;
+import io.crums.sldg.logs.text.ContextedHasher.Context;
+import io.crums.sldg.packs.MorselPackBuilder;
 import io.crums.sldg.src.TableSalt;
+import io.crums.sldg.time.TrailedRow;
+import io.crums.sldg.time.WitnessRecord;
+import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 
 /**
+ * A [log] state hasher bound to a particular log file.
  * <p>
  * Convention for the tracking files associated with the target log file.
  * Given a target file, say {@code acme-2023.log}, its tracking files are
@@ -93,6 +113,12 @@ import io.crums.util.TaskStack;
  * unused := BYTE^2
  * dex := BYTE
  * </pre>
+ * <h3>Offsets</h3>
+ * <p>
+ * End-of-row (EOL) offsets are written in simplified Elias-Fano encoding. This
+ * provides good compression while also supporting efficient random access.
+ * </p>
+ * 
  * <h2>State Files</h2>
  * <p>
  * State files record the hash of a log up to a certain line (row). If data written to
@@ -113,10 +139,11 @@ import io.crums.util.TaskStack;
  * <h3>Data</h3>
  * <p>
  * A serial representation of the {@linkplain Fro row} is written out following
- * the header. See {@linkplain Fro#writeTo(ByteBuffer)}.
+ * the header. See {@linkplain Fro#writeTo(ByteBuffer)}. This has sufficient information
+ * to allow re-playing the last row of the log (useful as a sanity check).
  * </p>
  */
-public class LogHashRecorder implements AutoCloseable {
+public class LogHashRecorder implements WitnessedRowRepo {
   
   
   
@@ -370,6 +397,7 @@ public class LogHashRecorder implements AutoCloseable {
   
   private SldgException error;
   
+  private WitRepo witRepo;
   
 
 
@@ -527,15 +555,8 @@ public class LogHashRecorder implements AutoCloseable {
   public State update() throws IOException, OffsetConflictException, RowHashConflictException {
     try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
       this.error = null;
-      
-      ContextedHasher hasher;
-      if (config.stateOnly()) {
-        hasher = new ContextedHasher(config.stateHasher(), endStateRecorder);
-      } else {
-        hasher = new ContextedHasher(config.stateHasher(), blockRecorder, endStateRecorder);
-      }
-      
-      var fro = endStateRecorder.getFro();
+      ContextedHasher hasher = hasher();
+      var fro = endStateRecorder.lastFro();
       return
           fro.isPresent() ?
               hasher.play(logChannel, fro.get().preState()) :
@@ -545,6 +566,21 @@ public class LogHashRecorder implements AutoCloseable {
       this.error = error;
       throw error;
     }
+  }
+  
+  
+  
+  protected ContextedHasher hasher() {
+    var stateMorselFiler = new StateMorselFiler(getIndexDir());
+    boolean hasMorsels = stateMorselFiler.lastFile().isPresent();
+    var contexts = new ArrayList<Context>(3);
+    if (!config.stateOnly())
+      contexts.add(blockRecorder);
+    contexts.add(endStateRecorder);
+    if (hasMorsels)
+      contexts.add(stateMorselFiler);
+    Context[] ctxArray = contexts.toArray(new Context[contexts.size()]);
+    return new ContextedHasher(config.stateHasher(), ctxArray);
   }
   
   
@@ -559,7 +595,7 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   public Optional<State> getState() {
-    return endStateRecorder.getFro().map(Fro::state);
+    return endStateRecorder.lastFro().map(Fro::state);
   }
   
   
@@ -615,8 +651,277 @@ public class LogHashRecorder implements AutoCloseable {
   
   
   
+  private StateMorselFiler stateMorselFiler() {
+    return new StateMorselFiler(getIndexDir());
+  }
   
   
+  /**
+   * 
+   */
+  public Optional<MorselFile> getStateMorsel() {
+    return stateMorselFiler().getStateMorsel();
+  }
+  
+  
+  
+  public boolean updateStateMorsel()
+      throws IOException, OffsetConflictException, RowHashConflictException {
+    var filer = stateMorselFiler();
+    Optional<MorselFile> oldSm = filer.getStateMorsel();
+    
+    var fro = endStateRecorder.lastFro().orElseThrow(
+        () -> new IllegalStateException("no '" + STATE_EXT + "' file found"));
+    
+    long hi = fro.rowNumber();
+    BackedupFile target = new BackedupFile(filer.rnFile(hi));
+    
+    try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
+      Path path = hasher().getPath(1, hi, logChannel);
+      
+      if (oldSm.isPresent()) {
+        var oldMorsel = oldSm.get().getMorselPack();
+        if (oldMorsel.hi() == hi && oldMorsel.getRow(hi).equals(path.last()))
+          return false;
+      }
+      
+      target.moveToBackup();
+      var builder = new MorselPackBuilder();
+      builder.initPath(path, log.getName());
+      
+      MorselFile.createMorselFile(target.getFile(), builder);
+      return true;
+    
+    } catch (OffsetConflictException | RowHashConflictException | IOException x) {
+      if (x instanceof SldgException error)
+        this.error = error;
+      target.rollback();
+      throw x;
+    }
+  }
+  
+  
+  
+  
+  
+  public Row getRow(long rn)
+      throws IOException, NoSuchElementException {
+    
+    var row = stateMorselFiler().getRow(rn);
+    if (row.isPresent())
+      return row.get();
+
+    try (var lc = Opening.READ_ONLY.openChannel(log)) {
+      return hasher().getFullRow(rn, lc).row();
+    }
+  }
+  
+  
+  
+  public ByteBuffer getRowHash(long rn)
+      throws IOException, NoSuchElementException {
+    
+    if (blockRecorder != null) {
+      var bh = blockRecorder.getRowHash(rn);
+      if (bh.isPresent())
+        return bh.get();
+    }
+    
+    var fm = stateMorselFiler().getRowHash(rn);
+    if (fm.isPresent())
+      return fm.get();
+    
+    try (var lc = Opening.READ_ONLY.openChannel(log)) {
+      return hasher().getRowHash(rn, lc);
+    }
+  }
+  
+  
+  
+  public List<ByteBuffer> getRowHashes(List<Long> rns)
+      throws IOException, NoSuchElementException {
+    
+    if (rns.isEmpty())
+      return List.of();
+
+//    if (rns.get(0) < 1)
+//      throw new IllegalArgumentException("rns [0]: " + rns.get(0));
+    
+    var hashes = new ArrayList<ByteBuffer>(rns.size());
+    long lastRn = 0;
+    for (long rn : rns) {
+      if (rn <= lastRn)
+        throw new IllegalArgumentException(
+            "out-of-bounds/sequence %d; predecessor %d"
+            .formatted(rn, lastRn));
+      lastRn = rn;
+      hashes.add(getRowHash(rn));
+    }
+    return Collections.unmodifiableList(hashes);
+  }
+  
+  
+  
+  public List<Row> getRows(List<Long> rns)
+      throws IOException, NoSuchElementException {
+    
+    if (rns.isEmpty())
+      return List.of();
+
+    if (rns.get(0) < 1)
+      throw new IllegalArgumentException("rns [0]: " + rns.get(0));
+
+    
+    Row[] rows = new Row[rns.size()];
+    
+    State state = State.EMPTY;
+    
+    var smFiler = stateMorselFiler();
+    final boolean checkSm = smFiler.lastFile().isPresent();
+    
+    var hasher = hasher();
+    
+    try (var lc = Opening.READ_ONLY.openChannel(log)) {
+      for (int index = 0; index < rows.length; ++index) {
+        long rn = rns.get(index);
+        if (rn <= state.rowNumber())
+          throw new IllegalArgumentException(
+              "out-of-sequence/illegal row number %d <= last %d (at index %d)"
+              .formatted(rn, state.rowNumber(), index));
+        if (checkSm) {
+          var row = smFiler.getRow(rn);
+          if (row.isPresent()) {
+            rows[index] = row.get();
+            continue;
+          }
+        }
+        var fr = hasher.getFullRow(rn, lc);
+        rows[index] = fr.row();
+        state = fr.toState();
+      }
+      return Lists.asReadOnlyList(rows);
+    }
+  }
+  
+  
+  public List<FullRow> getFullRows(List<Long> rns)
+      throws IOException, NoSuchElementException {
+
+    try (var lc = Opening.READ_ONLY.openChannel(log)) {
+      return hasher().getFullRows(rns, lc);
+    }
+  }
+  
+  
+  
+  
+  public Path getPath(long loRn, long hiRn)
+      throws IOException, NoSuchElementException {
+
+    var rows = getRows(SkipLedger.skipPathNumbers(loRn, hiRn));
+    return new Path(rows);
+  }
+  
+  
+  
+  @Override
+  public List<Long> getTrailedRowNumbers() {
+    return getWitRepo().map(WitRepo::getTrailedRowNumbers).orElse(List.of());
+  }
+  
+  
+  
+  public List<Long> pendingTrailedRows() {
+    long lastTrailedRn = lastWitnessedRowNumber();
+    return endStateRecorder.listFileRns(lastTrailedRn);
+  }
+  
+
+  
+  
+  public List<WitnessRecord> witness() throws IOException {
+    var pendingRns = pendingTrailedRows();
+    if (pendingRns.isEmpty())
+      return List.of();
+
+    var rowsToWitness = getRows(pendingRns);
+    
+    Client remote = new Client();
+    
+    for (var row : rowsToWitness) {
+      remote.addHash(row.hash());
+    }
+    var cRecords = remote.getCrumRecords();
+    var witRecords = Lists.zip(rowsToWitness, cRecords, WitnessRecord::new);
+    
+    long lastUtc = Long.MAX_VALUE;
+    var toStore = new ArrayList<WitnessRecord>(cRecords.size());
+    for (int index = cRecords.size(); index-- > 0; ) {
+      var record = cRecords.get(index);
+      if (!record.isTrailed())
+        continue;
+      if (lastUtc > record.utc()) {
+        toStore.add(witRecords.get(index));
+        lastUtc = record.utc();
+      }
+    }
+    if (!toStore.isEmpty()) {
+      var witRepo = ensureWitRepo();
+      for (var wRecord : Lists.reverse(toStore))
+        witRepo.addTrail(wRecord);
+    }
+    return witRecords;
+  }
+  
+  
+  
+  
+  
+  protected Optional<WitRepo> getWitRepo() {
+    if (witRepo == null) {
+      File dir = getIndexDir();
+      if (!WitRepo.isPresent(dir))
+        return Optional.empty();
+      try {
+        witRepo = new WitRepo(dir, Opening.READ_WRITE_IF_EXISTS);
+      } catch (IOException iox) {
+        throw new UncheckedIOException(iox);
+      }
+    }
+    return Optional.of(witRepo);
+  }
+  
+  protected WitRepo ensureWitRepo() {
+    if (witRepo == null) {
+      try {
+        File dir = getIndexDir();
+        // half-cooked states are not supported..
+        // (i.e. no CREATE_ON_DEMAND)
+        Opening mode = WitRepo.isPresent(dir) ?
+            Opening.READ_WRITE_IF_EXISTS : Opening.CREATE;
+        witRepo = new WitRepo(dir, mode);
+      } catch (IOException iox) {
+        throw new UncheckedIOException(iox);
+      }
+    }
+    return witRepo;
+  }
+
+  @Override
+  public int getTrailCount() {
+    return getWitRepo().map(WitRepo::getTrailCount).orElse(0);
+  }
+
+  @Override
+  public TrailedRow getTrailByIndex(int index) {
+    return getWitRepo().map(repo -> repo.getTrailByIndex(index)).orElseThrow();
+  }
+
+  @Override
+  public boolean addTrail(WitnessRecord trailedRecord) {
+    throw new UnsupportedOperationException(
+        "direct trail record addition not supported");
+  }
   
 
 }

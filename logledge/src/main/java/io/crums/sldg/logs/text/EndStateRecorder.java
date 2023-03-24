@@ -4,21 +4,19 @@
 package io.crums.sldg.logs.text;
 
 
+import static io.crums.sldg.logs.text.LogledgeConstants.STATE_EXT;
 import static io.crums.sldg.logs.text.LogledgeConstants.STATE_MAGIC;
-import static io.crums.sldg.logs.text.LogledgeConstants.STATE_POSTFIX;
 import static io.crums.sldg.logs.text.LogledgeConstants.STATE_PREFIX;
 import static io.crums.sldg.logs.text.LogledgeConstants.UNUSED_PAD;
+import static io.crums.sldg.logs.text.LogledgeConstants.parseRnInName;
 import static io.crums.sldg.logs.text.LogledgeConstants.sysLogger;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,14 +30,14 @@ import io.crums.util.Strings;
 
 /**
  * Records the [end] state of a log (after it's been parsed to the end)
- * as a <em>.state</em> file. Since the log is allowed to be append-only,
+ * as a <em>.fstate</em> file. Since the log is allowed to be append-only,
  * there may be multiple of these files lying around: in that event,
  * on playback, if there are any conflicts, they are reported via
  * {@linkplain OffsetConflictException} or {@linkplain RowHashConflictException}.
  * 
  * @see #observeEndState(Fro)
  */
-public class EndStateRecorder implements Context {
+public class EndStateRecorder extends NumberFiler implements Context {
   
 
   /**
@@ -47,51 +45,10 @@ public class EndStateRecorder implements Context {
    * -1 if not well formed.
    */
   public static long inferStateRn(File stateFile) {
-    var name = stateFile.getName();
-    if (!name.startsWith(STATE_PREFIX) || !name.endsWith(STATE_POSTFIX))
-        return -1L;
-    var rn = name.substring(
-        STATE_PREFIX.length(),
-        name.length() - STATE_POSTFIX.length());
-    try {
-      
-      return Long.parseLong(rn);
-    
-    } catch (NumberFormatException ignore) {
-      sysLogger().log(Level.TRACE, "failed parsing no. in funky name: " + name);
-      return -1L;
-    }
+    return parseRnInName(stateFile.getName(), STATE_PREFIX, STATE_EXT);
   }
   
-  
-  private static FileFilter newStateFileFilter(long minRowNumber) {
-    if (minRowNumber < 0)
-      throw new IllegalArgumentException(
-          "min row number %d < 0".formatted(minRowNumber));
-    
-    return (f) -> inferStateRn(f) >= minRowNumber;
-  }
-
-  
-  
-  private final static Comparator<File> STATE_FILE_COMP = new Comparator<File>() {
-    @Override
-    public int compare(File a, File b) {
-      long ar = inferStateRn(a);
-      long br = inferStateRn(b);
-      return ar < br ? -1 : (ar == br ? 0 : 1);
-    }
-  };
-  
-
-
-  private static String stateFilename(Fro fro) {
-    return stateFilename( fro.rowNumber() );
-  }
-
-  private static String stateFilename(long rn) {
-    return STATE_PREFIX + rn + STATE_POSTFIX;
-  }
+ 
   
   
   
@@ -99,31 +56,37 @@ public class EndStateRecorder implements Context {
   //    I N S T A N C E  
 
   
-  private final File dir;
   private final boolean repairOffsets;
+
+  private long nextStateCheck = -1;
+  
+  /**
+   * Instance does not repair offsets.
+   * 
+   * @param dir   directory path
+   */
+  public EndStateRecorder(File dir) {
+    this(dir, false);
+  }
 
   /**
    * 
    */
   public EndStateRecorder(File dir, boolean repairOffsets) {
-    this.dir = dir;
-    if (dir.isFile())
-      throw new IllegalArgumentException("not a directory: " + dir);
+    super(dir, STATE_PREFIX, STATE_EXT);
     this.repairOffsets = repairOffsets;
   }
   
   
   
   public Optional<Fro> loadState(long rn) throws IOException {
-    File stateFile = new File(dir, stateFilename(rn));
+    File stateFile = rnFile(rn);
     return stateFile.exists() ?
         Optional.of( loadFro(stateFile) ) :
           Optional.empty(); 
   }
   
   
-
-  private long nextStateCheck = -1;
 
   
   /**
@@ -145,13 +108,13 @@ public class EndStateRecorder implements Context {
     
     if (nextStateCheck == -1) {
       nextStateCheck =
-          listStateFiles(false, rn).stream()
-          .map(EndStateRecorder::inferStateRn).min(Long::compare).orElse(0L);
+          listFiles(false, rn).stream()
+          .map(this::inferRn).min(Long::compare).orElse(0L);
     }
     
     if (nextStateCheck == rn) {
       // FIXME
-      Fro recorded = loadFro( new File(dir, stateFilename(rn)) );
+      Fro recorded = loadFro( rnFile(rn) );
       State observed = fro.state();
       nextStateCheck = -1;
       if (recorded.state().equals(observed))
@@ -179,13 +142,10 @@ public class EndStateRecorder implements Context {
     }
   }
   
-  
-
 
   @Override
-  public int lineBufferSize() {
+  public void init() {
     this.nextStateCheck = -1;
-    return Context.super.lineBufferSize();
   }
 
 
@@ -232,46 +192,19 @@ public class EndStateRecorder implements Context {
             "magic bytes '%s' not matched".formatted(STATE_MAGIC));
     }
   }
-  
-  
-  
-  /**
-   * Returns the list of state files in order of row number.
-   * 
-   * @return {@code listStateFiles(true, 0)}
-   */
-  public List<File> listStateFiles() {
-    return listStateFiles(true, 0);
-  }
-  
 
-  /**
-   * Returns the list of state files.
-   * 
-   * @param sort          if {@code true} then sorted by row number
-   * @param minRowNumber  the minimum row number (&ge; 0)
-   * @return not null.
-   */
-  public List<File> listStateFiles(boolean sort, long minRowNumber) {
-    File[] stateFiles = dir.listFiles(newStateFileFilter(minRowNumber));
-    if (stateFiles == null)
-      return List.of();
-    if (sort && stateFiles.length > 1)
-      Arrays.sort(stateFiles, STATE_FILE_COMP);
-    return Lists.asReadOnlyList(stateFiles);
-  }
 
 
   @Override
   public State nextStateAhead(State state, long rn) throws IOException {
-    var stateFiles = listStateFiles();
+    var stateFiles = listFiles();
     if (stateFiles.isEmpty())
       return state;
     
     State candidate = null;
     int index;
     {
-      List<Long> stateRns = Lists.map(stateFiles, EndStateRecorder::inferStateRn);
+      List<Long> stateRns = Lists.map(stateFiles, this::inferRn);
       index = Collections.binarySearch(stateRns, rn);
       if (index >= 0) {
         candidate = loadFro(stateFiles.get(index)).preState();
@@ -317,17 +250,10 @@ public class EndStateRecorder implements Context {
   }
   
   
-  /**
-   * Lists the row numbers of the saved state files.
-   */
-  public List<Long> listStateRns() {
-    return Lists.map(listStateFiles(), EndStateRecorder::inferStateRn);
-  }
   
   
-  
-  public Optional<Fro> getFro() {
-    var files = listStateFiles();
+  public Optional<Fro> lastFro() {
+    var files = listFiles();
     return files.isEmpty() ?
         Optional.empty() :
           Optional.of(loadFro(files.get(files.size() - 1)));
@@ -342,7 +268,7 @@ public class EndStateRecorder implements Context {
    * out of the way.
    */
   public void save(Fro fro) throws IOException {
-    File stateFile = new File(dir, stateFilename(fro));
+    File stateFile = rnFile(fro.rowNumber());
     if (stateFile.exists()) {
       try {
         if (loadFro(stateFile).equals(fro))

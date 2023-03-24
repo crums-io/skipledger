@@ -252,7 +252,6 @@ public class StateHasher {
   
 
   /**
-   * FIXME doc
    * <p>
    * Observes the given line of {@code text} and if it forms a ledger row
    * computes the source row's hash (the input hash in the skip ledger)
@@ -445,6 +444,38 @@ public class StateHasher {
   }
   
   
+  /**
+   * Returns a list of ascending full rows.
+   * 
+   * @param rns         ascending list of row numbers
+   * @param logChannel  seekable stream
+   * 
+   * @return not null
+   * 
+   * @throws IllegalArgumentException if {@code rns} is not ascending
+   * @throws NoSuchElementException   if there are too few ledgerable rows in the {@code logChannel}
+   */
+  public List<FullRow> getFullRows(List<Long> rns, SeekableByteChannel logChannel)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    if (rns.isEmpty())
+      return List.of();
+    
+    
+    List<FullRow> rows = new ArrayList<>(rns.size());
+    
+    State state = State.EMPTY;
+    for (long rn : rns) {
+      if (rn <= state.rowNumber())
+        throw new IllegalArgumentException("out-of-bounds/sequence rn: " + rn);
+      FullRow row = getFullRow(rn, state, logChannel);
+      rows.add(row);
+      state = row.toState();
+    }
+    
+    return rows;
+  }
+  
   
   public FullRow getFullRow(long rn, SeekableByteChannel logChannel)
       throws IOException, IllegalArgumentException, NoSuchElementException {
@@ -475,7 +506,7 @@ public class StateHasher {
   public FullRow getFullRow(
       long rn, State state, SeekableByteChannel logChannel)
           throws IOException, IllegalArgumentException, NoSuchElementException {
-
+          
     synchronized (this) {
       state = nextStateAhead(state, rn);
     }
@@ -497,7 +528,7 @@ public class StateHasher {
    * @param logChannel positioned at end of state row [{@code state.rowNumber()}]
    * 
    * @return not null
-   * @throws IOException
+   * 
    * @throws IllegalArgumentException if {@code rn <= state.rowNumber()}
    * @throws NoSuchElementException if the target row number is never reached
    */
@@ -509,38 +540,81 @@ public class StateHasher {
       throw new IllegalArgumentException(
           "row [%d] <= state [%d]".formatted(rn, state.rowNumber()));
     
-    
-    class Collector extends StateHasher {
-      FullRow row;
-      Collector() {
-        super(StateHasher.this);
-      }
-      @Override
-      protected boolean stopPlay() {
-        return row != null;
-      }
+    class RowCollector extends Collector<FullRow> {
+
       @Override
       protected void observeRow(
           HashFrontier preFrontier, List<ColumnValue> cols,
           long offset, long endOff, long lineNo) {
+        
         if (preFrontier.rowNumber() + 1 == rn) {
-          this.row = new FullRow(cols, preFrontier, endOff, lineNo);
+          this.item = new FullRow(cols, preFrontier, endOff, lineNo);
         }
-      }
-      
-      boolean failed() {
-        return row == null;
       }
     }
     
-    Collector c = new Collector();
+    var c = new RowCollector();
     var rState = c.play(logChannel, state);
     
     if (c.failed())
       throw new NoSuchElementException(
           "row [%d] never reached; final row [%d]".formatted(rn, rState.rowNumber()));
     
-    return c.row;
+    return c.item;
+  }
+  
+  
+  public ByteBuffer getRowHash(long rn, SeekableByteChannel logChannel)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    return getRowHash(rn, State.EMPTY, logChannel);
+  }
+  
+  
+  
+  public ByteBuffer getRowHash(long rn, State state, SeekableByteChannel logChannel)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    state = nextStateAhead(state, rn + 1);
+    if (state.rowNumber() == rn)
+      return state.rowHash();
+    
+    logChannel.position(state.eolOffset());
+    return getRowHash(rn, state, (ReadableByteChannel) logChannel);
+  }
+  
+  
+  public ByteBuffer getRowHash(long rn, State state, ReadableByteChannel logChannel)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    long srn = state.rowNumber();
+    
+    if (rn < srn)
+      throw new IllegalArgumentException(
+          "row [%d] < state [%d]".formatted(rn, srn));
+    
+    if (rn == srn)
+      return state.rowHash();
+    
+    class FroCollector extends Collector<Fro> {
+
+      @Override
+      protected void observeLedgeredLine(Fro fro, long offset) throws IOException {
+        if (fro.rowNumber() == rn)
+          this.item = fro;
+      }
+    }
+    
+    var c = new FroCollector();
+    var rState = c.play(logChannel, state);
+    
+    if (rState.rowNumber() != rn) {
+      assert c.failed();
+      throw new NoSuchElementException(
+          "row [%d] never reached; final row [%d]".formatted(rn, rState.rowNumber()));
+    }
+    
+    return rState.rowHash();
   }
   
   
@@ -632,7 +706,7 @@ public class StateHasher {
   /**
    * 
    * @param buffer      not necessarily positioned at zero (may be compacted)
-   * @return EOL offset (1 beyond {@code '\n'} or at end-of-stream)
+   * @return EOL position in {@code buffer} (1 beyond {@code '\n'} or at end-of-stream)
    */
   private int loadLine(ByteBuffer buffer, ReadableByteChannel logChannel) throws IOException {
     int pos = buffer.position();
@@ -665,7 +739,24 @@ public class StateHasher {
   }
 
 
+  class Collector<T> extends StateHasher {
+    
+    T item;
+    
+    Collector() {
+      super(StateHasher.this);
+    }
+    
+    boolean failed() {
+      return item == null;
+    }
+    
 
+    @Override
+    protected boolean stopPlay() {
+      return item != null;
+    }
+  }
 
 }
 
