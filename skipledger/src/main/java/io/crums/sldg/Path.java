@@ -188,7 +188,7 @@ public class Path implements Digest {
    * @return non-empty, ascending list of row numbers &ge; 1
    */
   public final List<Long> rowNumbers() {
-    return Lists.map(rows, r -> r.rowNumber());
+    return Lists.map(rows, Row::rowNumber);
   }
   
   

@@ -665,18 +665,8 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * given <code>lo</code> number from the row with the given <code>hi</code> number.
    */
   public Path skipPath(long lo, long hi) {
-    if (hi > size())
-      throw new IllegalArgumentException("hi " + hi + " > size " + size());
-    if (lo < 1)
-      throw new IllegalArgumentException("lo " + lo + " < 1");
-    
-    List<Long> rowNumPath = skipPathNumbers(lo, hi);
-    int length = rowNumPath.size();
-    Row[] rows = new Row[length];
-    for (int index = length; index-- > 0; )
-      rows[index] = getRow(rowNumPath.get(index));
-    
-    return new Path(Lists.asReadOnlyList(rows), false);
+    List<Row> rows = getRows(skipPathNumbers(lo, hi));
+    return new Path(rows, false);
   }
   
   
@@ -701,17 +691,50 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   public Path getPath(List<Long> targets) {
     List<Long> stitched = stitch(targets);
     if (stitched.get(stitched.size() - 1) > size())
-      throw new IllegalArgumentException("targets out-of-bounds, size=" + size() + ": " + targets);
+      throw new IllegalArgumentException(
+          "targets out-of-bounds, size=" + size() + ": " + targets);
     
-    Row[] rows = new Row[stitched.size()];
-    for (int index = rows.length; index-- > 0; )
-      rows[index] = getRow(stitched.get(index));
-    return new Path(Lists.asReadOnlyList(rows), false);
+    var rows = getRows(stitched);
+    return new Path(rows, false);
   }
   
   
   
+  /**
+   * Bulk {@code getRow} method. By default, this just invokes {@linkplain #getRow(long)}
+   * in succession. Overridden when an implementation does better in bulk.
+   * 
+   * @param rns strictly ascending list of row numbers (&le; {@linkplain #size()})
+   * 
+   * @return not null
+   * 
+   * @throws IllegalArgumentException if {@code rns} are out-of-bounds, or not ascending
+   */
+  public List<Row> getRows(List<Long> rns) throws IllegalArgumentException {
+    Row[] rows = new Row[rns.size()];
+    long last = 0;
+    for (int index = 0; index < rows.length; ++index) {
+      long rn = rns.get(index);
+      if (rn <= last)
+        throw new IllegalArgumentException(
+            "out-of-bounds/sequence row number " + rn + " at index " + index +
+            ": " + rns);
+      rows[index] = getRow(rn);
+      last = rn;
+    }
+    return Lists.asReadOnlyList(rows);
+  }
   
+  
+  
+  /**
+   * Trims the number of rows in the ledger to the given {@code size}.
+   * Optional operation, not implemented by default.
+   * 
+   * @param newSize positive
+   * 
+   * @throws UnsupportedOperationException  if not implemented
+   */
   public void trimSize(long newSize) throws UnsupportedOperationException {
     throw new UnsupportedOperationException("on trimSize(" + newSize + ")");
   }

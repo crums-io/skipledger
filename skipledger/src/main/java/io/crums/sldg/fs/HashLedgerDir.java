@@ -4,18 +4,14 @@
 package io.crums.sldg.fs;
 
 
-import static io.crums.sldg.SldgConstants.*;
+import static io.crums.sldg.SldgConstants.DB_LEDGER;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-import io.crums.client.repo.TrailRepo;
 import io.crums.io.Opening;
-import io.crums.model.CrumTrail;
-import io.crums.sldg.HashConflictException;
 import io.crums.sldg.HashLedger;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.time.TrailedRow;
@@ -30,8 +26,8 @@ public class HashLedgerDir implements HashLedger {
   
 
   private final File dir;
-  private final SkipLedgerFile skipLedger;
-  private TrailRepo witnessRepo;
+  private final SkipLedger skipLedger;
+  private WitRepo witnessRepo;
   
   
   
@@ -39,7 +35,13 @@ public class HashLedgerDir implements HashLedger {
   
 
   /**
+   * Creates an instance implemented using an underlying {@linkplain SkipLedgerFile}
+   * and {@linkplain WitRepo} in the given directory.
    * 
+   * @param dir   directory path where data is kept
+   * @param mode  opening mode (e.g. create/read-only, etc.)
+   * @param lazy  if {@code true}, then skip ledger rows are created lazily
+   *              (usually what you want)
    */
   public HashLedgerDir(File dir, Opening mode, boolean lazy) throws IOException {
     this.dir = Objects.requireNonNull(dir, "null directory");
@@ -48,10 +50,18 @@ public class HashLedgerDir implements HashLedger {
       
       this.skipLedger = new SkipLedgerFile(new File(dir, DB_LEDGER), mode, lazy);
       onFail.pushClose(skipLedger);
-      this.witnessRepo = new TrailRepo(dir, mode);
+      this.witnessRepo = new WitRepo(dir, mode);
       onFail.clear();
     }
 
+  }
+  
+  
+  
+  protected HashLedgerDir(SkipLedger skipLedger, WitRepo witnessRepo) {
+    this.dir = witnessRepo.getDir();
+    this.skipLedger = Objects.requireNonNull(skipLedger, "null skip ledger");
+    this.witnessRepo = witnessRepo;
   }
   
   
@@ -79,61 +89,22 @@ public class HashLedgerDir implements HashLedger {
 
   @Override
   public List<Long> getTrailedRowNumbers() {
-    return witnessRepo.getIds();
+    return witnessRepo.getTrailedRowNumbers();
   }
 
   @Override
   public boolean addTrail(WitnessRecord trailedRecord) {
-    if (lastWitnessedRowNumber() >= trailedRecord.rowNum())
-      return false;
-    long rn = trailedRecord.rowNum();
-    long sz = getSkipLedger().size();
-    if (rn > sz)
-      throw new IllegalArgumentException("trailRecord row-number " + rn + " > size " + sz);
-    
-    if (!skipLedger.getRow(rn).equals(trailedRecord.row()))
-      throw new HashConflictException("on attempt to addTrail() on row " + rn);
-    
-    // TODO: ensure TrailRepo instances only store stuff in increasing utc order
-    //       (or at least provide a version that does that)
-    
-    witnessRepo.putTrail(trailedRecord.record().trail(), rn);
-    return true;
+    return witnessRepo.addTrail(trailedRecord);
   }
 
   @Override
   public int getTrailCount() {
-    return (int) witnessRepo.size();
+    return witnessRepo.getTrailCount();
   }
 
   @Override
   public TrailedRow getTrailByIndex(int index) {
-    CrumTrail trail = witnessRepo.getTrail(index);
-    long rowNumber = getTrailedRowNumbers().get(index);
-    return new TrailedRow(rowNumber, trail);
-  }
-
-  @Override
-  public TrailedRow nearestTrail(long rowNumber) {
-    long witRn;
-    CrumTrail trail;
-    {
-      List<Long> witRns = getTrailedRowNumbers();
-      int sindex = Collections.binarySearch(witRns, rowNumber);
-      
-      if (sindex < 0) {
-        sindex = -1 - sindex;
-        if (sindex == witRns.size())
-          return null;
-      }
-      
-      witRn = witRns.get(sindex);
-      trail = witnessRepo.getTrail(sindex);
-    }
-    
-    assert witRn >= rowNumber;
-    
-    return new TrailedRow(witRn, trail);
+    return witnessRepo.getTrailByIndex(index);
   }
   
   
@@ -142,11 +113,7 @@ public class HashLedgerDir implements HashLedger {
   
   public void trimSize(long newSize) {
     skipLedger.trimSize(newSize);
-    
-    int searchIndex = Collections.binarySearch(witnessRepo.getIds(), newSize);
-    if (searchIndex < 0)
-      searchIndex = -1 - searchIndex;
-    witnessRepo.trimSize(searchIndex);
+    witnessRepo.trimTrailsByRowNumber(newSize);
   }
 
 }
