@@ -33,9 +33,11 @@ import io.crums.util.Strings;
  * as a <em>.fstate</em> file. Since the log is allowed to be append-only,
  * there may be multiple of these files lying around: in that event,
  * on playback, if there are any conflicts, they are reported via
- * {@linkplain OffsetConflictException} or {@linkplain RowHashConflictException}.
+ * {@linkplain LineNoConflictException} or {@linkplain RowHashConflictException}s.
+ * 
  * 
  * @see #observeEndState(Fro)
+ * @see Fro
  */
 public class EndStateRecorder extends NumberFiler implements Context {
   
@@ -56,7 +58,7 @@ public class EndStateRecorder extends NumberFiler implements Context {
   //    I N S T A N C E  
 
   
-  private final boolean repairOffsets;
+  private boolean repairOffsets;
 
   private long nextStateCheck = -1;
   
@@ -70,12 +72,32 @@ public class EndStateRecorder extends NumberFiler implements Context {
   }
 
   /**
-   * 
+   * Full constructor.
    */
   public EndStateRecorder(File dir, boolean repairOffsets) {
     super(dir, STATE_PREFIX, STATE_EXT);
     this.repairOffsets = repairOffsets;
   }
+  
+  
+  /**
+   * Sets the repair mode. After repairing, you usually want to set it
+   * back to {@code false}.
+   */
+  public void repairsOffsets(boolean on) {
+    this.repairOffsets = on;
+  }
+  
+  /**
+   * Determines whether the instance is configured to repair EOL offsets and line no.s.
+   * Instances start in the {@code false} state.
+   * 
+   * @see #repairsOffsets(boolean)
+   */
+  public final boolean repairsOffsets() {
+    return repairOffsets;
+  }
+  
   
   
   
@@ -86,24 +108,42 @@ public class EndStateRecorder extends NumberFiler implements Context {
           Optional.empty(); 
   }
   
+
   
+
+  @Override
+  public void init() {
+    this.nextStateCheck = -1;
+  }
 
   
   /**
    * If the ledgered row (line) is that recorded in a state file,
-   * then the saved state is verified to match what we're seeing. Does not
-   * create or modify state files.
+   * then the saved state is verified to match what we're seeing.
+   * 
+   * <p>
+   * If the row hash does not match {@code RowHashConflictException} is thrown.
+   * If an EOL offset or line no. conflict is encountered but the row hash is
+   * still correct, and the {@linkplain #repairsOffsets()} property is {@code false}
+   * then a {@code LineNoConflictException} is thrown; if {@code repairsOffsets}
+   * is {@code true}, then the line no.s and offsets are repaired (the old file
+   * is backed up and a new file is written).
+   * </p>
    * 
    * @throws OffsetConflictException
-   *    if the EOL offset recorded in a state file for this row number
-   *    does not match
+   *    if the EOL offset or line no. recorded in a state file for this row number
+   *    does not match, but the row hash does
    * @throws RowHashConflictException
    *    if the row hash recorded in a state file for this row number
    *    does not match
+   *
+   * @see #repairsOffsets()
+   * @see #repairsOffsets(boolean)
    */
   @Override
   public void observeLedgeredLine(Fro fro, long eolOff)
-          throws IOException, OffsetConflictException, RowHashConflictException {
+          throws IOException, LineNoConflictException, RowHashConflictException {
+    
     long rn = fro.rowNumber();
     
     if (nextStateCheck == -1) {
@@ -113,39 +153,30 @@ public class EndStateRecorder extends NumberFiler implements Context {
     }
     
     if (nextStateCheck == rn) {
-      // FIXME
       Fro recorded = loadFro( rnFile(rn) );
       State observed = fro.state();
       nextStateCheck = -1;
-      if (recorded.state().equals(observed))
+      
+      State recordedState = recorded.state();
+      
+      if (recordedState.equals(observed))
         return;
       
-      boolean offsetsEqual = recorded.eolOffset() == observed.eolOffset();
-      boolean hashesEqual = recorded.frontier().equals(observed.frontier());
-      
-      if (!offsetsEqual) {
-        if (hashesEqual && repairOffsets) {
-          // FIXME
-//          save(observed);
-        } else
-          throw new OffsetConflictException(
-              rn, recorded.eolOffset(), observed.eolOffset());
-      
-      } else if (!hashesEqual) {
-        throw new RowHashConflictException(rn);
+      if (recordedState.frontier().equals(observed.frontier())) {
+        if (repairOffsets) {
+          save(fro);
+        } else {
+          throw new LineNoConflictException(recordedState, observed);
+        }
       } else {
-        sysLogger().log(
-            Level.WARNING,
-            "ignoring differing line no.s for row [%d]: expected %d; actual %d"
-            .formatted(rn, recorded.lineNo(), observed.lineNo()));
+        throw new RowHashConflictException(rn,
+            "hash conflict at row [%d] (recorded/actual): line no. (%d/%d); EOL offset (%d/%d)"
+            .formatted(
+                rn,
+                recorded.lineNo(), observed.lineNo(),
+                recorded.eolOffset(), observed.eolOffset()));
       }
     }
-  }
-  
-
-  @Override
-  public void init() {
-    this.nextStateCheck = -1;
   }
 
 
@@ -197,44 +228,55 @@ public class EndStateRecorder extends NumberFiler implements Context {
 
   @Override
   public State nextStateAhead(State state, long rn) throws IOException {
-    var stateFiles = listFiles();
+    
+    assert state.rowNumber() < rn;
+    
+    var stateFiles = listFiles(true, state.rowNumber());
     if (stateFiles.isEmpty())
       return state;
     
-    State candidate = null;
-    int index;
+    State candidate;
+    File stateFile;
     {
       List<Long> stateRns = Lists.map(stateFiles, this::inferRn);
-      index = Collections.binarySearch(stateRns, rn);
+      int index = Collections.binarySearch(stateRns, rn);
       if (index >= 0) {
-        candidate = loadFro(stateFiles.get(index)).preState();
+        stateFile = stateFiles.get(index);
+        candidate = loadFro(stateFile).preState();
       } else {
         int insertIndex = -1 - index;
         index = insertIndex - 1;
-        if (index >= 0)
-          candidate = loadFro(stateFiles.get(index)).state();
-        else
+        if (index >= 0) {
+          stateFile = stateFiles.get(index);
+          candidate = loadFro(stateFile).state();
+        } else
           return state;
       }
     }
     
-    
-    // candidate != null;
-    
     if (candidate.rowNumber() == state.rowNumber()) {
-      if (!candidate.fuzzyEquals(state)) {
-        if (candidate.eolOffset() != state.eolOffset())
-          throw new OffsetConflictException(
-              state.rowNumber(), candidate.eolOffset(), state.eolOffset());
-        assert !candidate.frontier().equals(state.frontier());
-        throw new RowHashConflictException(
-            rn, "state %s row hash conflicts with that recorded in %s"
-            .formatted(state.toString(), stateFiles.get(index).getName()));
-      }
-      return state;
+      
+      if (candidate.equals(state))
+        return state;
+      
+      if (candidate.eolOffset() != state.eolOffset() || candidate.lineNo() < state.lineNo())
+        throw new LineNoConflictException(candidate, state);
+      
+      
+      if (!candidate.frontier().equals(state.frontier()))
+          throw new RowHashConflictException(
+              rn, "state %s row hash conflicts with that recorded in %s"
+              .formatted(state.toString(), stateFile.getName()));
+      
+      assert candidate.lineNo() > state.lineNo(); // they can't be equal
+      
+      // prefer the state with the greater line no.
+      return candidate;
     }
     
-    return candidate.rowNumber() <= state.rowNumber() ? state : candidate;
+    assert candidate.rowNumber() < rn;
+    
+    return candidate.rowNumber() < state.rowNumber() ? state : candidate;
     
   }
   
@@ -292,15 +334,10 @@ public class EndStateRecorder extends NumberFiler implements Context {
       fro.writeTo(buffer).flip();
       ChannelUtils.writeRemaining(ch, 0L, buffer);
     
-    } catch (Exception x) {
+    } catch (IOException | RuntimeException x) {
       ch.close();
       backup.rollback();
-      if (x instanceof IOException iox)
-        throw iox;
-      if (x instanceof RuntimeException rx)
-        throw rx;
-      
-      assert false; // not reachable
+      throw x;
     }
   }
   

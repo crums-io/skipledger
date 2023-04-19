@@ -17,8 +17,13 @@ import io.crums.sldg.cache.HashFrontier;
  * then the new hash of the log can be calculated without having to replay
  * the log from the beginning.
  * <p>
- * Note, depending on context, offsets and lineNos <em>may</em> be relative. The API
+ * Note, depending on context, line no.s <em>may</em> be relative. The API
  * will make clear when they are not absolute.
+ * </p>
+ * <h2>Note to Author</h2>
+ * <p>
+ * Records override {@linkplain Object#equals(Object)} and {@linkplain Object#hashCode()}
+ * properly. I keep forgetting.
  * </p>
  * 
  * @param frontier  hash frontier at the last row
@@ -53,12 +58,6 @@ public record State(HashFrontier frontier, long eolOffset, long lineNo) implemen
     return frontier.rowNumber();
   }
   
-  /**
-   * Tests the given {@code state} is equal to this one, ignoring differences in line number.
-   */
-  public boolean fuzzyEquals(State state) {
-    return state != null && state.frontier.equals(frontier) && state.eolOffset == eolOffset;
-  }
   
   
   /** Returns the [skip ledger] row hash. */

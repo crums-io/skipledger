@@ -45,6 +45,13 @@ class NumberFiler {
     this.ext = Objects.requireNonNull(ext, "null ext");
   }
   
+  /** Copy constructor. */
+  NumberFiler(NumberFiler copy) {
+    this.dir = copy.dir;
+    this.prefix = copy.prefix;
+    this.ext = copy.ext;
+  }
+  
   
   /** Returns the number inferred by the filename; -1 on failure to parse. */
   public long inferRn(File file) {
@@ -61,6 +68,62 @@ class NumberFiler {
   /** Returns a file filter for the naming scheme with minimum number value. */
   public FileFilter newFileFilter(long minRn) {
     return rnFileFilter(prefix(), ext(), minRn);
+  }
+  
+
+  /** Returns a file filter for the naming scheme with minimum number value. */
+  /**
+   * Returns a file filter for the backup files using the naming scheme
+   * with minimum number value. This 
+   * @param minRn
+   * @return
+   */
+  public FileFilter newBackupFileFilter(long minRn) {
+    return rnFileFilter("~" + prefix(), ext(), minRn);
+  }
+  
+  
+
+  
+  
+  /**
+   * Deletes managed files <em>above and including</em> the specified row number.
+   * <p>
+   * <em>Warning: this is a destructive operation. Backup files are also
+   * removed.</em>
+   * </p>
+   * 
+   * @param minRn the minimum value of files deleted (&ge; 0)
+   * @return the number of files deleted
+   */
+  public int trim(long minRn) {
+    if (minRn < 0)
+      throw new IllegalArgumentException("minRn: " + minRn);
+    var files = listFiles(false, minRn);
+    for (var file : files) {
+      new File(file.getParentFile(), "~" + file.getName()).delete();
+      if (!file.delete())
+        throw new IllegalStateException("Failed to delete " + file);
+    }
+    return files.size();
+  }
+  
+  /**
+   * Deletes backup files <em>above and including</em> the specified row number.
+   * 
+   * @param minRn the minimum value of files deleted (&ge; 0)
+   * @return the number of backup files deleted
+   * 
+   * @see #newBackupFileFilter(long)
+   */
+  public int deleteBackups(long minRn) {
+    var files = dir().listFiles(newBackupFileFilter(minRn));
+    if (files == null)
+      return 0;
+    for (var file : files)
+      if (!file.delete())
+        throw new IllegalStateException("Failed to delete backup file " + file);
+    return files.length;
   }
   
   /** Returns a file comparator based on the numbering scheme. Files
@@ -132,6 +195,22 @@ class NumberFiler {
     if (sort && files.length > 1)
       Arrays.sort(files, newFileComparator());
     return Lists.asReadOnlyList(files);
+  }
+  
+  
+  
+  /**
+   * Deletes the files numbered equal to or higher than the given number.
+   * 
+   * @param minRn   min number
+   * @return the number of files deleted
+   */
+  public int deleteFiles(long minRn) {
+    var files = listFiles(false, minRn);
+    for (var file : files)
+      if (!file.delete())
+        throw new IllegalStateException("Failed to delete file " + file);
+    return files.size();
   }
   
 

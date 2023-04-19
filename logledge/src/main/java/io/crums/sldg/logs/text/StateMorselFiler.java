@@ -88,6 +88,7 @@ public class StateMorselFiler extends NumberFiler
   @Override
   public void observeLedgeredLine(Fro frontier, long offset)
       throws IOException, MorselConflictException {
+    
     if (knownRns.isEmpty())
       return;
     

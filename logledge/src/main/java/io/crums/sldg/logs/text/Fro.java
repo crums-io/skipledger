@@ -83,6 +83,25 @@ public class Fro implements Serial {
           "EOL offset %d < line no. %d".formatted(eolOffset, lineNo));
   }
   
+  
+  /**
+   * Returns {@code true} iff all members are equal. {@inheritDoc}
+   */
+  public final boolean equals(Object o) {
+    return
+        o instanceof Fro fro &&
+        fro.preState.equals(preState) &&
+        fro.inputHash.equals(inputHash) &&
+        fro.eolOffset == eolOffset &&
+        fro.lineNo == lineNo;
+  }
+  
+  
+  /** The hashcode is dependent on every field except the pre-state. {@inheritDoc}*/
+  public final int hashCode() {
+    return Long.hashCode(eolOffset + 31*lineNo) * 31 + inputHash.hashCode();
+  }
+  
   /**
    * @return {@code preState().rowNumber() + 1}
    */

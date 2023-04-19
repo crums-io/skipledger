@@ -3,6 +3,7 @@
  */
 package io.crums.sldg.logs.text;
 
+
 import io.crums.sldg.HashConflictException;
 
 /**

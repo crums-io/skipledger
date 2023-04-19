@@ -91,6 +91,9 @@ public class ContextedHasher extends StateHasher {
             Objects.requireNonNull(context[0], "null context") :
               new ContextArray(context);
   }
+  
+  
+  
 
   @Override
   protected int lineBufferSize() {
@@ -137,6 +140,14 @@ public class ContextedHasher extends StateHasher {
 
 
 
+  public ContextedHasher appendContext(Context nextCtx) {
+    Objects.requireNonNull(nextCtx, "null nextCtx");
+    ContextArray ctx =
+        this.context instanceof ContextArray ctxArray ?
+            new ContextArray(ctxArray, nextCtx) :
+              new ContextArray(this.context, nextCtx);
+    return new ContextedHasher(this, ctx);
+  }
 
 
   /**
@@ -150,7 +161,7 @@ public class ContextedHasher extends StateHasher {
     /**
      * @param array not empty, not null
      */
-    public ContextArray(Context[] array) {
+    public ContextArray(Context... array) {
       final int len = array.length;
       if (len == 0)
         throw new IllegalArgumentException("empty array");
@@ -158,12 +169,32 @@ public class ContextedHasher extends StateHasher {
       this.array = new Context[len];
       for (int i = len; i-- > 0;)
         this.array[i] = Objects.requireNonNull(array[i], "at index " + i);
-      {
-        int i = array.length;
-        while (i-- > 0 && !array[i].allowEmptyLines());
-        this.allowEmptyLines = i != -1;
-      }
+      this.allowEmptyLines = allowEL(array);
     }
+    
+    
+    
+    
+    public ContextArray(ContextArray copy, Context... array) {
+      int clen = copy.array.length;
+      
+      this.array = new Context[clen + array.length];
+      for (int index = 0; index < clen; ++index)
+        this.array[index] = copy.array[index];
+      for (int index = 0; index < array.length; ++index)
+        this.array[index + clen] = Objects.requireNonNull(array[index], "at index " + index);
+      this.allowEmptyLines = copy.allowEmptyLines || allowEL(array);
+    }
+    
+    
+    
+    private boolean allowEL(Context[] array) {
+      int i = array.length;
+      while (i-- > 0 && !array[i].allowEmptyLines());
+      return i != -1;
+    }
+    
+    
     
     
     
