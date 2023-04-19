@@ -277,7 +277,8 @@ public class HashFrontier extends Frontier implements Serial {
   public final boolean equals(Object o) {
     return o instanceof HashFrontier other &&
         other.rowNumber() == rowNumber() &&
-        other.frontierHash().equals(frontierHash());
+        other.frontierHash().equals(frontierHash()) &&
+        other.levelRows().equals(levelRows());
   }
   
   

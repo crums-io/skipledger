@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import io.crums.model.CrumTrail;
 import io.crums.sldg.time.TrailedRow;
@@ -127,6 +128,12 @@ public interface WitnessedRowRepo extends AutoCloseable {
   default long lastWitnessedRowNumber() {
     List<Long> witRns = getTrailedRowNumbers();
     return witRns.isEmpty() ? 0 : witRns.get(witRns.size() - 1);
+  }
+  
+  
+  default Optional<TrailedRow> lastTrailedRow() {
+    int count = getTrailCount();
+    return count == 0 ? Optional.empty() : Optional.of(getTrailByIndex(count - 1));
   }
 
   
