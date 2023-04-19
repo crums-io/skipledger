@@ -93,6 +93,7 @@
     <module>b64</module>
     <module>report-template</module>
     <module>logledge</module>
+    <module>jurno</module>
   </modules>
   
 
