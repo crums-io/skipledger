@@ -11,33 +11,52 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 
+import io.crums.client.ClientException;
+import io.crums.io.FileUtils;
+import io.crums.model.Crum;
+import io.crums.model.CrumRecord;
+import io.crums.model.CrumTrail;
 import io.crums.sldg.MorselFile;
 import io.crums.sldg.Path;
 import io.crums.sldg.SkipLedger;
+import io.crums.sldg.cache.HashFrontier;
+import io.crums.sldg.fs.Filenaming;
+import io.crums.sldg.logs.text.ContextedHasher.Context;
+import io.crums.sldg.logs.text.ContextedHasher;
+import io.crums.sldg.logs.text.Fro;
 import io.crums.sldg.logs.text.FullRow;
+import io.crums.sldg.logs.text.Grammar;
 import io.crums.sldg.logs.text.LogHashRecorder;
 import io.crums.sldg.logs.text.LogledgeConstants;
 import io.crums.sldg.logs.text.OffsetConflictException;
 import io.crums.sldg.logs.text.RowHashConflictException;
+import io.crums.sldg.logs.text.Seal;
+import io.crums.sldg.logs.text.Sealer;
 import io.crums.sldg.logs.text.State;
+import io.crums.sldg.logs.text.StateHasher;
 import io.crums.sldg.packs.MorselPackBuilder;
+import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.time.TrailedRow;
+import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
+import io.crums.util.main.NumbersArg;
 import io.crums.util.main.PrintSupport;
 import io.crums.util.main.StdExit;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Help.Ansi;
 import picocli.CommandLine.HelpCommand;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.ParameterException;
@@ -65,7 +84,7 @@ import picocli.CommandLine.Spec;
         "do not count; nor do comment-lines, if enabled. Each line is parsed into tokens",
         "(words). By default, tokens are delimited by whitespace characters. A salted",
         "hash of each token is then used to compute the row's @|italic input|@ hash. More info",
-        "on configuration options available via: @|bold jurno help " + Seal.NAME + "|@",
+        "on configuration options available via: @|bold jurno help " + SealCmd.NAME + "|@",
         "",
         "@|bold Usage:|@",
         "",
@@ -77,8 +96,9 @@ import picocli.CommandLine.Spec;
     subcommands = {
         HelpCommand.class,
         Status.class,
+        ListCmd.class,
         History.class,
-        Seal.class,
+        SealCmd.class,
         Witness.class,
         Verify.class,
         FixOffsets.class,
@@ -109,6 +129,24 @@ public class Jurno {
     System.out.println("  row hash: " +
         IntegralStrings.toHex(state.rowHash().limit(4)) + "..");
   }
+  
+  static void printSeal(Seal seal) {
+    System.out.println("  row  no.: " +  seal.rowNumber());
+    System.out.println("  row hash: " +
+        IntegralStrings.toHex(seal.hash().limit(4)) + "..");
+    System.out.print("  wit date: ");
+    if (seal.isTrailed())
+      System.out.println(new Date(seal.trail().get().utc()));
+    else
+      System.out.println(Ansi.AUTO.string("@|fg(yellow) pending|@"));
+  }
+  
+  static void printFancySeal(Seal seal) {
+    String label = seal.isTrailed() ? "[@|fg(green),bold SEAL|@]:" : "[@|fg(blue),bold SEAL|@]:";
+    System.out.println(Ansi.AUTO.string(label));
+    printSeal(seal);
+  }
+  
   
   static void printFancyHistorySummary(LogHashRecorder recorder) {
     System.out.println(Ansi.AUTO.string("[@|fg(blue),bold HISTORY|@]:"));
@@ -209,9 +247,12 @@ public class Jurno {
   private File journalFile;
   
   
+  private final static String FILE = "FILE";
+  
+  
   @Parameters(
       arity = "1",
-      paramLabel = "FILE",
+      paramLabel = FILE,
       description = {
           "Text-based journal (log)",
       })
@@ -225,12 +266,20 @@ public class Jurno {
   }
   
   
-  public File getJournalFile() {
+  public File getJournalFile() throws ParameterException {
+    if (journalFile == null)
+      throw new ParameterException(spec.commandLine(), "missing " + FILE + " parameter");
     return journalFile;
   }
   
   
+  public Optional<Seal> loadSeal() throws IOException {
+    return Sealer.loadForLog(journalFile);
+  }
+  
+  
   public Optional<LogHashRecorder> loadRecorder(boolean readOnly) throws IOException {
+    getJournalFile(); // ensure not null
     if (!LogHashRecorder.trackDirExists(journalFile))
       return Optional.empty();
     var recorder = new LogHashRecorder(journalFile, readOnly);
@@ -308,10 +357,12 @@ public class Jurno {
     
   }
   
-  
-  
-  
-  
+
+  ParameterException notTracked() {
+    return new ParameterException(
+        spec.commandLine(),
+        getJournalFile() + " is not tracked");
+  }
   
 
 }
@@ -346,18 +397,39 @@ class Status implements Runnable {
   public void run() {
     
     try (var closer = new TaskStack()) {
-      var file = jurno.getJournalFile();
-      if (!LogHashRecorder.trackDirExists(file)) {
-        printNotTracked(file);
-        return;
+      
+      LogHashRecorder recorder;
+      {
+        var r = jurno.loadRecorder(true);
+        if (r.isPresent()) {
+          recorder = r.get();
+          closer.pushClose(recorder);
+        } else {
+          var file = jurno.getJournalFile();
+          var s = Sealer.loadForLog(file);
+          
+          if (s.isEmpty()) {
+            printNotTracked(file);
+            return;
+          }
+          
+          Seal seal = s.get();
+          Jurno.printFancySeal(seal);
+          if (printGrammar)
+            printGrammar(seal.rules().grammar());
+          
+          System.out.println();
+          return;
+        }
+        
       }
-      var recorder = new LogHashRecorder(file, true);
-      closer.pushClose(recorder);
+      
       var state = recorder.getState();
       if (state.isEmpty()) {
-        printNotTracked(file);
+        printNotTracked(recorder.getJournal());
         return;
       }
+      
       State s = state.get();
       Jurno.printFancyState(s);
       var lastTrail = recorder.lastTrailedRow();
@@ -375,7 +447,7 @@ class Status implements Runnable {
           throw new IllegalStateException("witRn " + witRn + " > last rn " + rn);
       }
       System.out.println();
-      long lenDiff = file.length() - s.eolOffset();
+      long lenDiff = recorder.getJournal().length() - s.eolOffset();
       if (lenDiff >= 0)
         System.out.println(Strings.nOf(lenDiff, "byte") + " not ledgered.");
       else {
@@ -391,12 +463,7 @@ class Status implements Runnable {
       Jurno.printFancyHistorySummary(recorder);
       
       if (printGrammar) {
-        System.out.println();
-        System.out.println(Ansi.AUTO.string("[@|fg(cyan) GRAMMAR|@]:"));
-        System.out.print(Ansi.AUTO.string("  Comment-line prefix (@|faint ><|@): "));
-        printQuotedSpecial(recorder.commentLinePrefix(), "not enabled");
-        System.out.print(Ansi.AUTO.string("     Token delimiters (@|faint ><|@): "));
-        printQuotedSpecial(recorder.tokenDelimiters(), "whitespace");
+        printGrammar(recorder.grammar());
       }
 
       System.out.println();
@@ -407,13 +474,24 @@ class Status implements Runnable {
   }
   
   
-  private void printQuotedSpecial(Optional<String> str, String fallback) {
+  static void printGrammar(Grammar grammar) {
+    System.out.println();
+    System.out.println(Ansi.AUTO.string("[@|fg(cyan) GRAMMAR|@]:"));
+    System.out.print(Ansi.AUTO.string("  Comment-line prefix (@|faint <>|@): "));
+    printQuotedSpecial(grammar.commentPrefix(), "not enabled");
+    System.out.print(Ansi.AUTO.string("     Token delimiters (@|faint <>|@): "));
+    printQuotedSpecial(grammar.tokenDelimiters(), "whitespace");
+    
+  }
+  
+  
+  private static void printQuotedSpecial(Optional<String> str, String fallback) {
     if (str.isEmpty())
       System.out.println(Ansi.AUTO.string("@|bold " + fallback + "|@"));
     else {
-      System.out.print(Ansi.AUTO.string("  @|faint >|@"));
+      System.out.print(Ansi.AUTO.string("  @|faint <|@"));
       System.out.print(escapeFunkyWs(str.get()));
-      System.out.println(Ansi.AUTO.string("@|faint <|@"));
+      System.out.println(Ansi.AUTO.string("@|faint >|@"));
     }
   }
   
@@ -428,33 +506,26 @@ class Status implements Runnable {
   static void printNotTracked(File file) {
     System.out.println(file + " is not tracked.");
     System.out.println(Ansi.AUTO.string(
-        "Invoke '@|bold " + Seal.NAME + "|@' to begin tracking."));
+        "Invoke '@|bold " + SealCmd.NAME + "|@' to begin tracking."));
   }
 }
 
 
+
+
 @Command(
-    name = Seal.NAME,
+    name = ListCmd.NAME,
     description = {
-        "Tracks and seals journal state",
-        "The hash of the last ledgered row is recorded.",
-        "Use @|fg(yellow) " + Seal.MAX + "|@ to limit how many rows are added.",
+        "Lists the ledgerable lines in the log",
         "",
-        "@|underline First-pass Options:|@",
-        "",
-        "Both parsing grammar and storage parameters can be specified on the",
-        "first pass at tracking thru the following options:",
-        "",
-        "  @|fg(yellow) " + Seal.COM + "|@ for comment-lines",
-        "  @|fg(yellow) " + Seal.DEL + "|@, @|fg(yellow) " + Seal.DEL_PLUS + "|@ for parsing grammar",
-        "  @|fg(yellow) " + Seal.DEX + "|@ for how fine-grained hash info is recorded",
-        "",
-        "This information is recorded in and read from the tracking files thereafter.",
-        "",
-    })
-class Seal implements Runnable {
+        "Blank lines, and comment-lines (if enabled), are not ledgered.",
+        "This works beyond the last ledgered row."
+    }
+    )
+class ListCmd implements Callable<Integer> {
   
-  final static String NAME = "seal";
+  final static String NAME = "list";
+
 
   
   @ParentCommand
@@ -464,6 +535,178 @@ class Seal implements Runnable {
   private CommandSpec spec;
   
   
+  
+  
+  
+  private List<Long> rns = List.of();
+  
+  
+  @Option(
+      names = "--eol",
+      description = {
+          "Show end-of-line offsets",
+          "By default, EOL offsets are @|italic not|@ listed."
+      }
+      )
+  private boolean showEol;
+  
+  
+  @Option(
+      names = "--no-lineNos",
+      description = {
+          "Don't show line no.s",
+          "By default, line no.s are listed."
+      }
+      )
+  private boolean noLineNums;
+  
+  @Option(
+      names = "--rows",
+      paramLabel = "NUMS",
+      description = {
+          "Comma separated list of row no.s and/or ranges",
+          "Ranges are expressed using dashes. Example:",
+          "    2,3,53-58,99"
+      }
+      )
+  public void setRows(String rows) {
+    var nums = NumbersArg.parse(rows);
+    if (nums == null)
+      throw new ParameterException(spec.commandLine(), "Cannot parse '" + rows + "'");
+    
+    if (nums.isEmpty())
+      return;
+    
+    this.rns = Lists.sortRemoveDups(nums);
+    if (rns.get(0) < 1)
+      throw new ParameterException(spec.commandLine(),
+          "Illegal row number %d in '%s'".formatted(rns.get(0), rows));
+  }
+  
+  
+  
+  
+  @Override
+  public Integer call() throws IOException {
+    
+    final File log = jurno.getJournalFile();
+    long rows;
+    try (var closer = new TaskStack()) {
+      if (rns.isEmpty()) {
+
+        Context printer = new Context() {
+          @Override
+          public void observeRow(
+              HashFrontier preFrontier, List<ColumnValue> cols, long offset,
+              long endOffset, long lineNo) throws IOException {
+            printRow(preFrontier.rowNumber() + 1, cols, endOffset, lineNo);
+          }
+        };
+        
+        StateHasher hasher;
+        var r = jurno.loadRecorder(true);
+        if (r.isPresent()) {
+          closer.pushClose(r.get());
+          hasher = r.get().stateHasher();
+        } else {
+          hasher = Sealer.loadForLog(log)
+              .map(s -> s.rules().stateHasher()).orElseThrow(
+              jurno::notTracked);
+        }
+        rows = 
+            new ContextedHasher(hasher, printer).play(log)
+            .rowNumber();
+      
+      } else {
+        rows = rns.size();
+        
+        List<FullRow> fullRows;
+
+        var r = jurno.loadRecorder(true);
+        
+        if (r.isPresent())
+          fullRows = r.get().getFullRows(rns);
+        else {
+          StateHasher hasher = Sealer.loadForLog(log)
+              .map(s -> s.rules().stateHasher()).orElseThrow(
+              jurno::notTracked);
+          
+          fullRows = hasher.getFullRows(rns, log);
+        }
+        
+        
+        for (var row : fullRows)
+          printRow(row.rowNumber(), row.columns(), row.eolOffset(), row.lineNo());
+
+      }
+      
+
+      System.out.println();
+      System.out.println(Strings.nOf(rows, "row") + " listed.");
+      return 0;
+    } catch (NoSuchElementException nsex) {
+      throw new ParameterException(spec.commandLine(), nsex.getMessage());
+    }
+  }
+  
+  
+  
+  
+  private void printRow(long rowNo, List<ColumnValue> cols, long endOffset, long lineNo) {
+    var out = System.out;
+    out.print(Ansi.AUTO.string(
+        "%s[@|fg(yellow) %d|@]".formatted(numPadding(rowNo), rowNo)
+        ));
+    if (!noLineNums)
+      out.print(Ansi.AUTO.string(
+          showEol ?
+              " %s@|faint %d|@".formatted(numPadding(lineNo), lineNo) :
+              " @|faint %d|@ %s".formatted(lineNo, numPadding(lineNo))
+          ));
+    
+    if (showEol)
+      out.print(Ansi.AUTO.string(":@|faint %d|@%s".formatted(endOffset, numPadding(endOffset))));
+    
+    
+    for (var col : cols) {
+      out.print(' ');
+      out.print(col.getValue());
+    }
+    out.println();
+  }
+  
+  
+  private String numPadding(long rn) {
+    if (rn >= NO_PAD_MIN)
+      return "";
+    if (rn >= 100)
+      return " ";
+    if (rn >= 10)
+      return "  ";
+    return   "   ";
+  }
+  
+  private final static long NO_PAD_MIN = 1_000;
+  
+  
+  
+  
+  
+  
+}
+
+
+class GrammarSettings {
+  
+  final static String COM = "--com";
+  final static String DEL = "--delimiters";
+  final static String DEL_PLUS = "--delimiters-plus";
+
+  final static String WS = " \n\r\t\f";
+  private final static String DELCHARS = "DELCHARS";
+
+
+
   @Option(
       names = COM,
       paramLabel = "PREFIX",
@@ -472,47 +715,73 @@ class Seal implements Runnable {
           "they're treated as if they are comments."
       }
       )
-  private String commentPrefix;
-  
- final static String COM = "--com";
-  
-  
-  
-  private String delimiters;
-  
+  String commentPrefix;
+
+
 
   @Option(
       names = DEL,
-      paramLabel = "DELCHARS",
+      paramLabel = DELCHARS,
       description = {
           "Chars defining how text is divided into tokens (words).",
           "By default, these are the standard whitespace characters.",
           "See also: @|fg(yellow) " + DEL_PLUS + "|@ option"
       })
-  public void setDelimiters(String delimiters) {
-    
-  }
-  
-  final static String DEL = "--delimiters";
-  
+  String delimiters;
+
+
+
+
   @Option(
       names = DEL_PLUS,
-      paramLabel = "DELCHARS",
+      paramLabel = DELCHARS,
       description = {
-          "Space plus char delimiters. Includes the given delimiters",
-          "@|italic in addition to whitespace|@ chars."
+          "Space@|italic,bold +|@ char delimiters. Adds the the given",
+          "characters to the default (whitespace) delimiter set."
       })
   public void setWsPlusDelimters(String delimiters) {
-    this.delimiters = delimiters.isEmpty() ? null : WS + delimiters;
+    this.delimiters = delimiters.isBlank() ? null : WS + delimiters;
   }
   
-  final static String WS = " \n\r\t\f";
   
-  final static String DEL_PLUS = "--delimiters-plus";
+  Grammar getGrammar() {
+    return new Grammar(delimiters, commentPrefix);
+  }
   
-  private int dex = LogHashRecorder.NO_DEX;
+  public void checkArgs(CommandSpec spec) {
+    if (delimiters == null)
+      return;
+    
+    var tokenSet = new TreeSet<Character>();
+    for (int index = delimiters.length(); index-- > 0; )
+      tokenSet.add(delimiters.charAt(index));
+    if (tokenSet.size() != delimiters.length())
+      throw new ParameterException(spec.commandLine(),
+          DELCHARS + " contains duplicates (quoted): '" + delimiters + "'");
+  }
+  
+
+  public void checkNotSet(CommandSpec spec) {
+    String illegal;
+    if (delimiters != null)
+      illegal = DEL + " or " + DEL_PLUS;
+    else if (commentPrefix != null)
+      illegal = COM;
+    else
+      return;
+    
+    throw new ParameterException(spec.commandLine(), "illegal " + illegal + " init option");
+  }
+  
+}
+
+
+class DexSetting {
   
   
+  final static String DEX = "--dex";
+  
+
   @Option(
       names = DEX,
       paramLabel = "EXPONENT",
@@ -521,23 +790,130 @@ class Seal implements Runnable {
           "When set, then hashes and offsets of rows numbered at",
           "multiples of the row-delta are also recorded. (The hash",
           "of the last row is always recorded in any case.)",
-          "Valid values: 0 thru 63"
+          "Valid values: 0 thru 63",
+          "Default: 63 (means not enabled)"
       })
-  public void setDex(int dex) {
+  int dex = LogHashRecorder.NO_DEX;
+  
+  void checkArg(CommandSpec spec) {
     if (dex < 0 || dex > LogHashRecorder.NO_DEX)
-      throw new ParameterException(
-          spec.commandLine(),
+      throw new ParameterException(spec.commandLine(),
           DEX + " out-of-bounds: " + dex);
-    this.dex = dex;
+    
   }
+}
+
+
+class RepoSettings {
+  
   final static String DEX = "--dex";
+ 
+ 
+  @Mixin
+  GrammarSettings grammarSettings = new GrammarSettings();
+ 
+  int dex() {
+    return dexSetting.dex;
+  }
+  
+  @Mixin
+  DexSetting dexSetting = new DexSetting();
+  
+  
+  
+  Grammar getGrammar() {
+    return grammarSettings.getGrammar();
+  }
+  
+  
+  boolean hasBlocks() {
+    return dex() != LogHashRecorder.NO_DEX;
+  }
+  
+  
+  public void checkArgs(CommandSpec spec) {
+    dexSetting.checkArg(spec);
+    grammarSettings.checkArgs(spec);
+  }
+  
+  
+  
+  public void checkNotSet(CommandSpec spec) {
+    if (dex() != LogHashRecorder.NO_DEX)
+      throw new ParameterException(spec.commandLine(), "illegal " + DEX + " init option");
+    checkGrammarNotSet(spec);
+  }
+  
+  
+  public void checkGrammarNotSet(CommandSpec spec) {
+    grammarSettings.checkNotSet(spec);
+  }
+  
+}
+
+
+
+
+
+
+
+
+
+
+@Command(
+    name = SealCmd.NAME,
+    description = {
+        "Tracks and seals journal state",
+        "The hash of the last ledgered row is recorded.",
+        "Use @|fg(yellow) " + SealCmd.ADD_OPT + "|@ to limit how many rows are added.",
+        "",
+        "@|underline First-pass Options:|@",
+        "",
+        "Both parsing grammar and repo storage parameters can be customized on the",
+        "first pass thru the following options:",
+        "",
+        "  @|fg(yellow) " + GrammarSettings.COM + "|@ for comment-lines",
+        "  @|fg(yellow) " + GrammarSettings.DEL + "|@, @|fg(yellow) " + GrammarSettings.DEL_PLUS + "|@ for parsing grammar",
+        "  @|fg(yellow) " + RepoSettings.DEX + "|@ for how fine-grained hash info is recorded",
+        "",
+        "This information is recorded in and read from the tracking files thereafter.",
+        "Tracking files are maintained as either a single hidden seal file or under a",
+        "repo directory whose name is prefixed @|faint " + LogledgeConstants.PREFIX + "|@ followed by the journal's",
+        "filename. Seal files are named similarly, but with the @|faint " + LogledgeConstants.SEAL_EXT + "|@ or @|faint " + LogledgeConstants.PSEAL_EXT + "|@",
+        "extensions added to signify complete or pending-witness seals, resp.",
+        "",
+        "Seals record the minimum data necessary for documenting the witnessed state",
+        "of ledgers and are suited for one-shot, write-once logs. Unless overridden,",
+        "journals (logs) are first tracked and recorded using hiddent seal files.",
+        "",
+        "Repo directories are better suited for evolving, append-only ledgers. They",
+        "may contain multiple witness records (a seal contains at most one), as well",
+        "as optional auxilliary files designed to speed up lookups.",
+        "",
+    })
+class SealCmd implements Callable<Integer> {
+  
+  final static String NAME = "seal";
+  final static String ADD_OPT = "--add";
+
+  
+  @ParentCommand
+  private Jurno jurno;
+  
+  @Spec
+  private CommandSpec spec;
+  
+  
+  @Mixin
+  private RepoSettings settings = new RepoSettings();
+  
   
   
   private int max = -1;
   
   
   @Option(
-      names = MAX,
+      names = ADD_OPT,
       paramLabel = "NEW_ROWS",
       description = {
           "Maximum number of rows added. If not specified, then all",
@@ -550,63 +926,199 @@ class Seal implements Runnable {
           "max-rows " + max + " <= 0");
     this.max = max;
   }
-  final static String MAX = "--max";
   
   
   
+  @Option(
+      names = "--repo",
+      description = {
+          "Ensures a repo is created for the journal",
+          "(If @|fg(yellow) " + RepoSettings.DEX + "|@ is set then a repo is created anyway.)",
+      }
+      )
+  private boolean createRepo;
+  
+  
+  
+  @Option(
+      names = "--witness",
+      description = {
+          "Witness the final hash",
+          "You must follow up with @|bold " + Witness.NAME + "|@ a few minutes after",
+          "in order to save the permanently verifiable crumtrail",
+          "(witness record)."
+      }
+      )
+  private boolean witness;
   
   
 
   @Override
-  public void run() {
+  public Integer call() throws IOException {
     try (var closer = new TaskStack()) {
+      
       var file = jurno.getJournalFile();
+      if (file == null)
+        throw new ParameterException(spec.commandLine(), "required journal file parameter missing");
+      
       LogHashRecorder recorder;
+      
       if (LogHashRecorder.trackDirExists(file)) {
-        // TODO: nag if first-pass args set
+        
+        settings.checkNotSet(spec);
+        
         recorder = new LogHashRecorder(file);
+        closer.pushClose(recorder);
+        
         System.out.println("Updating..");
-      } else {
-        String msg = Ansi.AUTO.string("[@|fg(blue) STARTING|@]: " + file);
-        System.out.println(msg);
-        msg = "  token delimiters: ";
-        if (delimiters == null)
-          msg += "@|bold whitespace|@";
-        else if (delimiters.startsWith(WS))
-          msg += "@|bold whitespace+|@ " + delimiters.substring(WS.length());
-        else
-          msg += "@|italic custom|@";
+      
+      } else {  // no repo
         
-        msg = Ansi.AUTO.string(msg);
-        System.out.println(msg);
+        var existingSeal = Sealer.loadForLog(file);
         
-        if (commentPrefix == null || commentPrefix.isEmpty())
-          msg = "  comment-lines not enabled";
-        else
-          msg = "  comment-line prefix: '" + commentPrefix + "'";
-        System.out.println(msg);
         
-        System.out.print("  dex: " + dex);
-        if (dex == LogHashRecorder.NO_DEX)
-          System.out.println(" (no " + LogledgeConstants.OFFSETS_FILE + " file)");
-        else if (dex == 0)
-          System.out.println(" (every row)");
-        else if (dex == 1)
-          System.out.println(" (every other row)");
-        else {
-          long delta = 1L << dex;
-          System.out.println(" (every " + Strings.nTh(delta) + " row)");
-        }
-        
-        recorder = new LogHashRecorder(file, commentPrefix, delimiters, dex);
+        if (existingSeal.isEmpty()) { // no seal
+          
+          settings.checkArgs(spec);
+          printGrammarGreetings();
+          
+          boolean createSeal = !createRepo && !settings.hasBlocks() && max == -1;
+          
+          if (createSeal) {
+            System.out.print("Generating seal..");
+            System.out.flush();
+            Seal seal = Sealer.seal(file, settings.getGrammar());
+            System.out.println(Ansi.AUTO.string(" @|bold done|@."));
+            System.out.println(Strings.nOf(seal.rowNumber(), "row") + " sealed.");
+            
+            return witness ? Witness.witnessSealAndReport(file) : 0;
+          }
+          
+
+          System.out.print("Creating repo..");
+          System.out.flush();
+          recorder = new LogHashRecorder(file, settings.getGrammar(), settings.dex());
+          closer.pushClose(recorder);
+          System.out.println(Ansi.AUTO.string(" @|bold done|@."));
+          
+        } else { // gotta seal
+          
+          Seal seal = existingSeal.get();
+          settings.checkArgs(spec);
+          settings.checkGrammarNotSet(spec);
+
+          System.out.print("Verifying seal..");
+          System.out.flush();
+          
+          boolean brokenSeal;
+          try {
+            Fro fro = seal.verify(file);
+            
+            brokenSeal = false;
+            System.out.println(Ansi.AUTO.string(" @|bold done|@."));
+            System.out.println(Strings.nOf(seal.rowNumber(), "row") + " in seal.");
+            
+            if (fro.rowNumber() == seal.rowNumber()) {
+              System.out.println("Seal hash up to date with file contents.");
+              return witness && !seal.isTrailed() ? Witness.witnessSealAndReport(file) : 0;
+            }
+            
+          } catch (RowHashConflictException rhcx) {
+            if (seal.isTrailed()) {
+              System.err.println(Ansi.AUTO.string(" @|fg(red),bold error|@!"));
+              System.err.println(Ansi.AUTO.string("[@|fg(red),bold HASH|@]: witnessed seal hash conficts with source."));
+              System.err.println(Ansi.AUTO.string("Detail: @|italic " + rhcx.getMessage() + "|@"));
+              return 1;
+            }
+            brokenSeal = true;
+            System.out.println(Ansi.AUTO.string(" @|fg(yellow),bold warning|@!"));
+            System.out.println(Ansi.AUTO.string("[@|fg(yellow),bold HASH|@]: seal hash conficts with source."));
+          }
+          
+          boolean updateSeal = !brokenSeal && !createRepo && !settings.hasBlocks() && max == -1 && !seal.isTrailed();
+          
+          if (updateSeal) {
+            
+            System.out.print("Replacing seal..");
+            
+            var sFile = LogledgeConstants.pendingSealFile(file);
+            sFile.delete();
+            Seal replacement;
+            {
+              State state = seal.rules().stateHasher().play(file);
+              replacement = new Seal(state.rowNumber(), state.rowHash(), seal.rules());
+            }
+            Sealer.writeSeal(replacement, sFile);
+            System.out.println(Ansi.AUTO.string(" @|bold done|@."));
+            
+            return witness ? Witness.witnessSealAndReport(file) : 0;
+          }
+          
+          // - - - - - -
+          
+          if (brokenSeal)
+            System.out.print("Creating repo ..");
+          else
+            System.out.print("Initializing repo up to sealed row [" + seal.rowNumber() + "] ..");
+          
+          System.out.flush();
+          recorder = new LogHashRecorder(file, seal.rules(), settings.dex());
+          closer.pushClose(recorder);
+          
+          
+
+          boolean cleaned;
+          if (brokenSeal) {
+            cleaned = (seal.isTrailed() ?
+                LogledgeConstants.sealFile(file) :
+                  LogledgeConstants.pendingSealFile(file)).delete();
+            
+          } else {
+
+            // update the recorder up to the seal
+            recorder.update(seal.rowNumber());
+            
+            if (seal.isTrailed()) {
+              var trail = seal.trail().get();
+              var cRecord =
+                  new CrumRecord() {
+                    @Override
+                    public CrumTrail trail() {
+                      return trail.trail();
+                    }
+                    @Override
+                    public boolean isTrailed() {
+                      return true;
+                    }
+                    @Override
+                    public Crum crum() {
+                      return trail().crum();
+                    }
+                  };
+              boolean added = recorder.addTrail(new WitnessRecord(trail, cRecord));
+              if (!added)
+                throw new RuntimeException("Failed assertion: trail " + trail + " not added");
+              System.out.println("Trail " + trail + " in seal added to repo.");
+              cleaned = LogledgeConstants.sealFile(file).delete();
+            } else
+              cleaned = LogledgeConstants.pendingSealFile(file).delete();
+          }
+          
+          
+          if (!cleaned) {
+            var out = System.err;
+            out.print(Ansi.AUTO.string("[@|fg(yellow),bold WARNING|@]:"));
+            out.println(" failed to clean up ununsed seal file.");
+          }
+          
+        } // end gotta seal
 
         System.out.println();
-      }
-      closer.pushClose(recorder);
+        
+      } // end no repo
+      
       
       var preState = recorder.getState();
-      
-      
       var state = max == -1 ? recorder.update() : recorder.update(max);
       
       Jurno.printFancyState(state);
@@ -618,10 +1130,55 @@ class Seal implements Runnable {
               rowsAdded,
               Strings.pluralize("row", rowsAdded))));
       
+      if (witness)
+        Witness.witnessAndReport(recorder);
       
       
-    } catch (IOException iox) {
-      throw new UncheckedIOException(iox);
+      return 0;
+    }
+  }
+  
+  
+  
+  
+  private void printGrammarGreetings() {
+
+    var grammar = settings.grammarSettings;
+    String msg = Ansi.AUTO.string("[@|fg(blue) STARTING|@]: " + jurno.getJournalFile());
+    System.out.println(msg);
+    msg = "  token delimiters: ";
+    
+    
+    String delimiters = grammar.delimiters;
+    if (delimiters == null)
+      msg += "@|bold whitespace|@";
+    else if (delimiters.startsWith(GrammarSettings.WS))
+      msg += "@|bold whitespace|@@|bold,italic +|@ " + delimiters.substring(GrammarSettings.WS.length());
+    else
+      msg += "@|italic custom|@";
+    
+    msg = Ansi.AUTO.string(msg);
+    System.out.println(msg);
+    
+    String commentPrefix = grammar.commentPrefix;
+    if (commentPrefix == null || commentPrefix.isEmpty())
+      msg = "  comment-lines not enabled";
+    else
+      msg = "  comment-line prefix: '" + commentPrefix + "'";
+    System.out.println(msg);
+    
+    
+    int dex = settings.dex();
+    System.out.print("  dex: " + dex);
+    if (dex == LogHashRecorder.NO_DEX)
+      System.out.println(" (no " + LogledgeConstants.OFFSETS_FILE + " file)");
+    else if (dex == 0)
+      System.out.println(" (every row)");
+    else if (dex == 1)
+      System.out.println(" (every other row)");
+    else {
+      long delta = 1L << dex;
+      System.out.println(" (every " + Strings.nTh(delta) + " row)");
     }
   }
   
@@ -632,13 +1189,15 @@ class Seal implements Runnable {
     name = Witness.NAME,
     description = {
         "Witnesses the last ledgered row (line) in the journal",
+        "",
+        "Requires a network connection.",
         "Because witness records take a few minutes to cure, this is a 2-step process.",
-        "Rows actually witnessed are those recorded at conclusion of the @|bold " + Seal.NAME + "|@",
-        "command. Not all witness records are saved: if 2 or more share the same time,",
-        "only the record with the highest row number is saved.",
+        "Rows actually witnessed are those recorded at conclusion of the @|bold " + SealCmd.NAME + "|@ command.",
+        "Not all witness records are saved: if 2 records share the same time, then the",
+        "one at the lower row number is discarded.",
         "",
     })
-class Witness implements Runnable {
+class Witness implements Callable<Integer> {
   
   final static String NAME = "witness";
   
@@ -654,48 +1213,94 @@ class Witness implements Runnable {
   
 
   @Override
-  public void run() {
-
-    var file = jurno.getJournalFile();
-    if (!LogHashRecorder.trackDirExists(file))
-      throw new ParameterException(
-          spec.commandLine(),
-          "File not tracked. Invoke '" + Seal.NAME + "' first.");
+  public Integer call() throws IOException {
     
-    try (var recorder = new LogHashRecorder(file)) {
-      var records = recorder.witness();
-      if (records.isEmpty()) {
-        System.out.println("All ledgered rows already witnessed.");
-        return;
+    var r = jurno.loadRecorder(false);
+    
+    if (r.isPresent()) try (var recorder = r.get()) {
+      witnessAndReport(recorder);
+    } else {
+      var file = jurno.getJournalFile();
+      
+      Seal seal = Sealer.loadForLog(file).orElseThrow(
+          () -> new ParameterException(
+              spec.commandLine(),
+              "File not tracked. Invoke '" + SealCmd.NAME + "' first."));
+      
+      if (seal.isTrailed()) {
+        System.out.println("Already witnessed.");
+        Jurno.printFancySeal(seal);
+      
+      } else
+        return witnessSealAndReport(file);
+    }
+    
+    return 0;
+  }
+  
+  
+  
+  static void witnessAndReport(LogHashRecorder recorder) throws IOException {
+    var records = recorder.witness();
+    if (records.isEmpty()) {
+      System.out.println("All ledgered rows already witnessed.");
+      return;
+    }
+    var stored = recorder.toStored(records);
+    
+    System.out.println(
+        "%s witnessed; %s stored.".formatted(
+        Strings.nOf(records.size(), "row"),
+        Strings.nOf(stored.size(), "witness record")));
+    
+    var last = records.get(records.size() - 1);
+    if (last.isTrailed()) {
+      System.out.println("All ledgered rows witnessed and recorded.");
+      return;
+    }
+    
+    String time;
+    {
+      long agoSeconds = (System.currentTimeMillis() - last.utc()) / 1000;
+      if (agoSeconds < 60)
+        time = Strings.nOf(agoSeconds, "second");
+      else {
+        time = Strings.nOf(agoSeconds / 60, "minute");
       }
-      var stored = recorder.toStored(records);
+    }
+    System.out.println(
+        "Last row [%d] witnessed %s ago; final record pending.".formatted(
+            last.rowNum(), time));
+  }
+  
+  
+  static int witnessSealAndReport(File log) throws IOException {
+    try {
       
-      System.out.println(
-          "%s witnessed; %s stored.".formatted(
-          Strings.nOf(records.size(), "row"),
-          Strings.nOf(stored.size(), "witness record")));
-      
-      var last = records.get(records.size() - 1);
-      if (last.isTrailed()) {
-        System.out.println("All ledgered rows witnessed and recorded.");
-        return;
+      System.out.print("Witnessing seal..");
+      System.out.flush();
+      Optional<Seal> s = Sealer.witnessLog(log);
+      if (s.isEmpty()) {
+        System.err.println(Ansi.AUTO.string(" @|fg(red),bold failed|@: seal not found"));
+        return 1;
       }
+      System.out.println(Ansi.AUTO.string(" @|bold done|@."));
       
-      String time;
-      {
-        long agoSeconds = (System.currentTimeMillis() - last.utc()) / 1000;
-        if (agoSeconds < 60)
-          time = "seconds";
-        else {
-          time = Strings.nOf(agoSeconds / 60, "minute");
-        }
-      }
-      System.out.println(
-          "Last row [%d] witnessed %s ago; final record pending.".formatted(
-              last.rowNum(), time));
+      var seal = s.get();
+      if (seal.isTrailed())
+        Jurno.printFancySeal(seal);
+      else
+        System.out.println(Ansi.AUTO.string(
+            "Use @|bold " + Witness.NAME + "|@ in a few minutes to save the witness record."));
       
-    } catch (IOException iox) {
-      throw new UncheckedIOException(iox);
+      return 0;
+    
+    } catch (ClientException remoteError) {
+      
+      System.err.print(Ansi.AUTO.string("[@|fg(yellow),bold WARNING|@]:"));
+      System.err.println(Ansi.AUTO.string(" Failed to witness seal. This can be caused by a network/service error."));
+      System.err.println(Ansi.AUTO.string("Error message: @|italic " + remoteError.getMessage() + "|@"));
+      return 1;
     }
   }
   
@@ -704,7 +1309,7 @@ class Witness implements Runnable {
 @Command(
     name = Verify.NAME,
     description = {
-        "Verifies ledgered lines from the journal have not been modified",
+        "Verifies ledgered lines in the journal have not been modified",
         "",
         "Modifying an already ledgered line is @|italic considered an error|@",
         "unless the only modifications are",
@@ -735,30 +1340,52 @@ class Verify implements Callable<Integer> {
     
     var recorderOpt = jurno.loadRecorder(true);
     if (recorderOpt.isEmpty()) {
-      Status.printNotTracked(jurno.getJournalFile());
-      return 1;
+      var sealOpt = jurno.loadSeal();
+      if (sealOpt.isEmpty()) {
+        Status.printNotTracked(jurno.getJournalFile());
+        return 1;
+      }
+      Seal seal = sealOpt.get();
+      try {
+        Fro fro = seal.verify(jurno.getJournalFile());
+        boolean extended = fro.rowNumber() > seal.rowNumber();
+        printVerified(extended ? fro.preState() : fro.state());
+        if (extended)
+          System.out.println("More ledgerable lines remain to be sealed.");
+        else
+          System.out.println("Seal is up to date.");
+        return 0;
+      } catch (RowHashConflictException rhcx) {
+        Jurno.printConflict(rhcx);
+        return 1;
+      }
     }
     var recorder = recorderOpt.get();
     try (recorder) {
+      
       var state = recorder.verify();
-      System.out.println(Ansi.AUTO.string("[@|fg(green),bold VERIFIED|@]: up to.."));
-      System.out.println(Ansi.AUTO.string(
-                          "  row  no.: @|bold " + state.rowNumber() + "|@"));
-      System.out.println( "  line no.: " + state.lineNo());
-      System.out.println( "  EOL  off: " + state.eolOffset());
-      System.out.println();
+      printVerified(state);
       return 0;
       
     } catch (OffsetConflictException ocx) {
-      
       jurno.printConflictAdvice(ocx);
     
     } catch (RowHashConflictException rhcx) {
-
       jurno.printConflictAdvice(rhcx);
       
     }
     return 1;
+  }
+  
+  
+  
+  private void printVerified(State state) {
+    System.out.println(Ansi.AUTO.string("[@|fg(green),bold VERIFIED|@]: up to.."));
+    System.out.println(Ansi.AUTO.string(
+                        "  row  no.: @|bold " + state.rowNumber() + "|@"));
+    System.out.println( "  line no.: " + state.lineNo());
+    System.out.println( "  EOL  off: " + state.eolOffset());
+    System.out.println();
   }
   
   
@@ -983,7 +1610,7 @@ class Rollback implements Callable<Integer> {
     var opt = jurno.loadRecorder(false);
     if (opt.isEmpty()) {
       printErrorLabel();
-      System.out.println(jurno.getJournalFile() + " is not tracked.");
+      System.out.println(jurno.getJournalFile() + " is not tracked in a repo.");
       System.out.println();
       return StdExit.ILLEGAL_ARG.code;
     }
@@ -1227,19 +1854,20 @@ class History implements Runnable {
 @Command(
     name = Morsel.NAME,
     description = {
-        "Creates a morsel file (@|faint .mrsl|@)",
+        "Creates a morsel file",
         "",
-        "Morsel files are compact, tamper proof archives of ledger state which may",
-        "optionally contain hash proofs of row (line) contents and dates witnessed.",
-        "(Use the @|bold mrsl|@ tool to retrieve information from morsel files,",
-        "as well as to redact or merge information.)",
+        "Morsel files @|faint (.mrsl)|@ are compact, tamper proof archives of ledger state which",
+        "may optionally contain hash proofs of row (line) contents and dates witnessed.",
+        "",
+        "(Use the @|bold mrsl|@ tool to retrieve information from morsel files.)",
         "",
         "@|underline State Morsel|@:",
         "",
-        "A morsel file only asserting how many rows the ledger had and what the hash of",
-        "the ledger's last row was. State morsels serve as ledger state fingerprints: as",
-        "the ledger evolves with more rows being added, its new fingerprint's lineage is",
-        "verifiable against its older fingerprints.",
+        "A morsel (created with no @|fg(yellow) " + Morsel.SRC_OPT + "|@ option) only asserting how many rows the",
+        "ledger had and what the hash of the ledger's last row was. State morsels",
+        "serve as ledger state fingerprints: as the ledger evolves with the addition",
+        "of new rows, the lineage of its new fingerprint is verifiable against its",
+        "older ones.",
         "",
     }
     )
@@ -1247,7 +1875,13 @@ class Morsel implements Callable<Integer> {
   
   final static String NAME = "morsel";
   
-  private final static String SRC_OPT = "--src";
+  final static String SRC_OPT = "--src";
+  
+  final static String DST_OPT = "--dest";
+  
+  final static String REDACT_OPT = "--red";
+  
+  final static String REPO_OPT = "--repo";
 
   
   @ParentCommand
@@ -1268,15 +1902,15 @@ class Morsel implements Callable<Integer> {
   
   
   @Option(
-      names = "--dest",
+      names = DST_OPT,
       paramLabel = "PATH",
       description = {
           "Destination morsel filepath",
-          "An existing directory, or path to @|italic new|@ file",
+          "An existing directory, or path to a @|italic new|@ file.",
           "If a directory, then the new file's name is be based",
           "on the current highest row no. and any source row no.s",
           "specified thru the @|fg(yellow) " + SRC_OPT + "|@ option",
-          "Default: . (current directory)"
+          "Default: . @|faint (current directory)|@"
       }
       )
   private File morselFile;
@@ -1288,19 +1922,24 @@ class Morsel implements Callable<Integer> {
   
   @Option(
       names = SRC_OPT,
-      split = ",",
+      paramLabel = "NUMS",
       description = {
-          "Include source contents for specified rows no.s",
-          "Separate row no.s using commas (@|faint ,|@)"
+          "Comma separated list of @|italic source|@ row no.s and/or ranges",
+          "to include. Ranges are expressed using dashes. Example:",
+          "    2,3,53-58,99",
+          "(If not set, then it's a @|italic state|@ morsel.)"
       }
       )
-  public void setSrcRns(List<Long> rns) {
-    if (rns.isEmpty())
-      return;
+  public void setSrcRns(String srcs) {
+    var rns = NumbersArg.parse(srcs);
+    if (rns == null || rns.isEmpty())
+      throw new ParameterException(spec.commandLine(),
+          "illegal " + SRC_OPT + " " + srcs);
+    
     rns = Lists.sortRemoveDups(rns);
     if (rns.get(0) < 1L)
-      throw new ParameterException(
-          spec.commandLine(), "illegal source row no. " + rns.get(0));
+      throw new ParameterException(spec.commandLine(),
+          "illegal row no. [%d]: %s %s".formatted(rns.get(0), SRC_OPT, srcs));
     srcRns = rns;
   }
   
@@ -1321,13 +1960,38 @@ class Morsel implements Callable<Integer> {
   
   
   
+  @Option(
+      names = REPO_OPT,
+      description = {
+          "Saves the @|italic state|@ morsel in the default repo location",
+          "(Must not be combined with @|fg(yellow) " + SRC_OPT + "|@)",
+          "If @|fg(yellow) " + DST_OPT + "|@ is set, then the state morsel",
+          "is also @|italic copied|@ to the specified destination path."
+      }
+      )
+  boolean saveInRepo;
+  
+  
+  
+  private void checkArgs() {
+    boolean stateMorsel = srcRns.isEmpty();
+    if (stateMorsel && !redactTokens.isEmpty())
+      throw new ParameterException(spec.commandLine(),
+          REDACT_OPT + " must be used in combination with " + SRC_OPT);
+    if (!stateMorsel && saveInRepo)
+      throw new ParameterException(spec.commandLine(),
+          REPO_OPT + " may not be used in combination with " + SRC_OPT);
+  }
+  
+  
+  
   
   
   @Option(
       names = "--comment",
       paramLabel = "MSG",
       description = {
-          "Optional, informal (not verified) message embedded in morsel"
+          "Optional, informal (unverified) embedded message"
       }
       )
   private String comment;
@@ -1335,23 +1999,47 @@ class Morsel implements Callable<Integer> {
   @Override
   public Integer call() throws IOException {
     
-    try (var recorder = jurno.loadRecorder(true).orElseThrow(this::notTracked)) {
+    checkArgs();
+    
+    try (var recorder = jurno.loadRecorder(true).orElseThrow(jurno::notTracked)) {
       
-      var state = recorder.getState().orElseThrow(this::notTracked);
+      if (saveInRepo) {
+        boolean created = recorder.updateStateMorsel(!noTrails);
+        if (created)
+          System.out.println("State morsel created and saved in repo.");
+        else if (morselFile == null)
+          System.out.println("State morsel already in repo.");
+        else
+          System.out.println("State morsel found in repo.");
+        
+        if (morselFile != null) {
+          var morsel = recorder.getStateMorsel().get();
+          
+          if (morselFile.isDirectory())
+            morselFile = Filenaming.INSTANCE.newMorselFile(morselFile, morsel.getMorselPack());
+          
+          FileUtils.copy(morsel.getFile(), morselFile);
+          System.out.println("Copied to " + morselFile);
+        }
+        
+        return 0;
+      }
+      
+      
+      State state = recorder.getState().orElseThrow(jurno::notTracked);
+      
+      
       
       List<Long> trailedRns = noTrails ? List.of() : recorder.getTrailedRowNumbers();
       
-      Optional<TrailedRow> lastTrail = noTrails ? Optional.empty() : recorder.lastTrailedRow();
       
-      long lastTrailRn = lastTrail.map(TrailedRow::rowNumber).orElse(0L);
+      final long hi = state.rowNumber();
+      final long lastTrailRn = trailedRns.isEmpty() ? 0 : trailedRns.get(trailedRns.size() - 1);
       
-      long hi = state.rowNumber();
-      
-      if (lastTrailRn != 0L) {
-        if (lastTrailRn > hi)
-          throw new IllegalStateException(
-              "assertion failure: last row [%d]; last witnessed [%d]"
-              .formatted(hi, lastTrailRn));
+      if (lastTrailRn > hi) {
+        throw new IllegalStateException(
+            "assertion failure: last row [%d] < last witnessed row [%d]"
+            .formatted(hi, lastTrailRn));
       }
       
       if (hi < 2)
@@ -1364,12 +2052,15 @@ class Morsel implements Callable<Integer> {
       List<TrailedRow> trailSet;
       
       if (srcRns.isEmpty()) {
+        
+        
+        
         if (trailedRns.isEmpty()) {
           trailSet = List.of();
           anchorRns =  List.of(1L, hi);
         
         } else {
-          trailSet = List.of(lastTrail.get());
+          trailSet = List.of(recorder.lastTrailedRow().get());
           
           anchorRns = (lastTrailRn == 1L || lastTrailRn == hi) ?
               List.of(1L, hi) : List.of(1L, lastTrailRn, hi);
@@ -1429,13 +2120,12 @@ class Morsel implements Callable<Integer> {
       
       trailSet.stream().forEach(builder::addTrail);
       
-          
-      ensureMorselFile();
       
       File file = MorselFile.createMorselFile(morselFile, builder);
       
       System.out.println("Morsel file created: " + file);
-    }
+      
+    } // try (
     
     return 0;
   }
@@ -1457,20 +2147,22 @@ class Morsel implements Callable<Integer> {
   }
   
   
-  
-  private ParameterException notTracked() {
-    return new ParameterException(spec.commandLine(), jurno.getJournalFile() + " is not tracked");
-  }
-  
-  
-  
-  private void ensureMorselFile() {
-    if (morselFile == null) {
-      morselFile = new File(".");
-    }
-  }
-  
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @Command(
