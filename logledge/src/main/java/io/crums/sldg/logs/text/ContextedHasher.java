@@ -76,6 +76,29 @@ public class ContextedHasher extends StateHasher {
   
   
   
+  /**
+   * Returns a new context instance that stops beyond the row number {@code maxRn}.
+   */
+  public static Context newLimitContext(long maxRn) {
+    return new Context() {
+      private long rn = 0;
+      @Override
+      public void init() {
+        rn = 0;
+      }
+      @Override
+      public void observeLedgeredLine(Fro frontier, long offset) {
+        rn = frontier.rowNumber();
+      }
+      @Override
+      public boolean stopPlay() {
+        return rn >= maxRn;
+      }
+    };
+  }
+  
+  
+  
   protected final Context context;
   
 
@@ -135,6 +158,24 @@ public class ContextedHasher extends StateHasher {
   @Override
   protected State nextStateAhead(State state, long rn) throws IOException {
     return context.nextStateAhead(state, rn);
+  }
+  
+  
+  /**
+   * Looks up and returns the nearest saved state ahead of row number
+   * {@code rn} if found and greater than that of {@code fallback};
+   * {@code fallback} otherwise.
+   * 
+   * @param fallback  fallback state; <em>before</em> {@code rn}
+   * @param rn        positive
+   */
+  public State savedStateAhead(State fallback, long rn) throws IOException {
+    if (fallback.rowNumber() >= rn)
+      throw new IllegalArgumentException(
+          "fallback state [%d] >= row [%d]"
+          .formatted(fallback.rowNumber(), rn));
+    
+    return nextStateAhead(fallback, rn);
   }
 
 

@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Predicate;
@@ -22,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import com.gnahraf.test.IoTestCase;
 
 import io.crums.io.Opening;
-import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.src.ColumnValue;

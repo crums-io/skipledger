@@ -6,7 +6,8 @@ package io.crums.sldg.logs.text;
 import java.io.File;
 
 /**
- * 
+ * Exception indicating a hash conflict in a morsel file.
+ * Thrown by {@linkplain StateMorselFiler}.
  */
 @SuppressWarnings("serial")
 public class MorselConflictException extends RowHashConflictException {

@@ -4,14 +4,17 @@
 package io.crums.sldg.logs.text;
 
 
-import static io.crums.sldg.logs.text.LogledgeConstants.DIR_PREFIX;
+import static io.crums.sldg.logs.text.ContextedHasher.newLimitContext;
 import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_FILE;
 import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_MAGIC;
 import static io.crums.sldg.logs.text.LogledgeConstants.LOGNAME;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_FILE;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_MAGIC;
+import static io.crums.sldg.logs.text.LogledgeConstants.PREFIX;
 import static io.crums.sldg.logs.text.LogledgeConstants.STATE_EXT;
-import static io.crums.sldg.logs.text.LogledgeConstants.UNUSED_PAD;
+import static io.crums.sldg.logs.text.LogledgeConstants.assertMagicHeader;
+import static io.crums.sldg.logs.text.LogledgeConstants.magicHeaderLen;
+import static io.crums.sldg.logs.text.LogledgeConstants.writeMagicHeader;
 
 import java.io.File;
 import java.io.IOException;
@@ -20,15 +23,12 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.StringTokenizer;
-import java.util.function.Predicate;
 
 import io.crums.client.Client;
 import io.crums.io.BackedupFile;
@@ -39,23 +39,20 @@ import io.crums.sldg.MorselFile;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
 import io.crums.sldg.WitnessedRowRepo;
 import io.crums.sldg.fs.WitRepo;
 import io.crums.sldg.logs.text.ContextedHasher.Context;
 import io.crums.sldg.packs.MorselPackBuilder;
-import io.crums.sldg.src.TableSalt;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.Lists;
-import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 
 /**
- * A state hasher bound to a particular log file.
+ * Incremental state-recording hasher bound to a particular text-based log file.
  * <p>
- * Convention for the tracking files associated with the target log file.
+ * Maintains convention-based tracking files associated with the target log file.
  * Given a target file, say {@code acme-2023.log}, its tracking files are
  * found in a sibling directory {@code .sldg.acme-2023.log} containing an
  * {@code fhash} file specifying hashing and parsing rules, optionally an
@@ -156,46 +153,35 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   public static File getIndexDir(File log) {
-    return new File(log.getParentFile(), DIR_PREFIX + log.getName());
+    return new File(log.getParentFile(), PREFIX + log.getName());
   }
   
 
-  
-  private final static int FRONTIERS_FIXED_HDR_LEN =
-      FRONTIERS_MAGIC.length() +
-      UNUSED_PAD +
-      1 +                         // dex
-      SldgConstants.HASH_WIDTH +  // salt
-      1 +                         // comment prefix len
-      1;                          // delimiters len
-  
-  private final static int OFFSETS_HDR_LEN =
-      OFFSETS_MAGIC.length() +
-      UNUSED_PAD +
-      1;                          // dex
+  private final static int FRONTIERS_HDR_LEN = magicHeaderLen(FRONTIERS_MAGIC)
+      + 1; // dex
   
   
-  // records are implicitly static, btw
-  private record FrontiersInfo(int dex, TableSalt salter, String cPrefix, String delimiters) {
+  private final static int OFFSETS_HDR_LEN = magicHeaderLen(OFFSETS_MAGIC)
+      + 1; // dex
+  
+  
+  
+  
+//  // records are implicitly static, btw
+  private record FrontiersInfo(int dex, HashingGrammar rules) {
+    
+    FrontiersInfo {
+      checkDex(dex);
+      Objects.requireNonNull(rules, "null hash grammar rules");
+    }
     
     /** Returns a new configured hasher (salter, comment-rules, token delimiters). */
     StateHasher stateHasher() {
-      return new StateHasher(salter, commentMatcher(), delimiters);
-    }
-    
-    
-    Predicate<ByteBuffer> commentMatcher() {
-      if (cPrefix == null)
-        return null;
-      return StateHasher.commentPrefixMatcher(cPrefix);
+      return rules.stateHasher();
     }
     
     long zeroOffset() {
-      int commentPrefixLen = cPrefix == null ?
-          0 : Strings.utf8Bytes(cPrefix).length;
-      int delimitersLen = delimiters == null ?
-          0 : Strings.utf8Bytes(delimiters).length;
-      return FRONTIERS_FIXED_HDR_LEN + commentPrefixLen + delimitersLen;
+      return FRONTIERS_HDR_LEN + rules.serialSize();
     }
     
     
@@ -205,79 +191,24 @@ public class LogHashRecorder implements WitnessedRowRepo {
     
     
     static FrontiersInfo load(FileChannel file) throws IOException {
-      return loadFi(file).toFrontiersInfo();
-    }
-    
-    
-    private static Fi loadFi(FileChannel file) throws IOException {
-      ByteBuffer work = ByteBuffer.allocate(256);
+      ByteBuffer work = ByteBuffer.allocate(2048);
+      work.limit(
+          (int) Math.min(work.capacity(), file.size()));
       
-      work.clear().limit(FRONTIERS_FIXED_HDR_LEN);
+      
       
       ChannelUtils.readRemaining(file, 0, work).flip();
       
-      assertMagic(FRONTIERS_MAGIC, work);
-      advanceUnused(work);
+      assertMagicHeader(FRONTIERS_MAGIC, work);
 
       int dex = 0xff & work.get();
-      byte[] salt = new byte[SldgConstants.HASH_WIDTH];
-      work.get(salt);
       
-      int commentPrefixLen = 0xff & work.get();
-      int delimiterLen = 0xff & work.get();
-      String commentPrefix;
-      String delimiters;
-      if (commentPrefixLen == 0)
-        commentPrefix = null;
-      else {
-        work.clear().limit(commentPrefixLen);
-        ChannelUtils.readRemaining(file, FRONTIERS_FIXED_HDR_LEN, work).flip();
-        commentPrefix = Strings.utf8String(work);
-      }
-      if (delimiterLen == 0)
-        delimiters = null;
-      else {
-        work.clear().limit(delimiterLen);
-        long pos = FRONTIERS_FIXED_HDR_LEN + commentPrefixLen;
-        ChannelUtils.readRemaining(file, pos, work).flip();
-        delimiters = Strings.utf8String(work);
-      }
-      return new Fi(dex, salt, commentPrefix, delimiters);
+      var rules = HashingGrammar.load(work);
+      
+      return new FrontiersInfo(dex, rules);
     }
     
-    
-    private record Fi(int dex, byte[] salt, String cPrefix, String delimiters) {
-      Fi {
-        checkDex(dex);
-        if (cPrefix != null) {
-          if (cPrefix.isEmpty())
-            cPrefix = null;
-        }
-        if (delimiters != null) {
-          if (delimiters.isEmpty())
-            delimiters = null;
-          else {
-            checkDelimiters(delimiters);
-          }
-        }
-      }
-      /** Warning: clears salt on invocation. */
-      FrontiersInfo toFrontiersInfo() {
-        var salter = new TableSalt(salt);
-        return new FrontiersInfo(dex, salter, cPrefix, delimiters);
-      }
-      boolean hasBlocks() {
-        return dex != NO_DEX;
-      }
-      Fi cPrefix(String prefix) {
-        return 
-            Objects.equals(prefix, prefix) ? this :
-              new Fi(dex, salt, prefix, delimiters);
-      }
-      Fi dex(int exp) {
-        return dex == exp ? this : new Fi(exp, salt, cPrefix, delimiters);
-      }
-    }
+
     
     // TODO: You should be able to update these, particularly from the default
     // settings (no dex, no comment-lines)
@@ -304,39 +235,50 @@ public class LogHashRecorder implements WitnessedRowRepo {
       File ff = new File(dir, LogledgeConstants.FRONTIERS_FILE);
       File eor = new File(dir, LogledgeConstants.OFFSETS_FILE);
       
+      final FrontiersInfo info;
 
-      Fi rawInfo;
       try (var ch = Opening.READ_ONLY.openChannel(ff)) {
-        rawInfo = loadFi(ch);
+        info = FrontiersInfo.load(ch);
       }
       
-      Fi modInfo = rawInfo;
-      if (dex.isPresent())
-        modInfo = modInfo.dex(dex.get());
-      if (cPrefix.isPresent())
-        modInfo = modInfo.cPrefix(cPrefix.get());
-     
-      if (modInfo.equals(rawInfo))
-        return rawInfo.toFrontiersInfo();
-
-      new BackedupFile(eor).moveToBackup();
+      FrontiersInfo mod = info;
+      if (dex.isPresent()) {
+        int d = dex.get();
+        if (d != mod.dex)
+          mod = new FrontiersInfo(d, mod.rules);
+      }
       
-      replace(ff, modInfo);
-      if (modInfo.hasBlocks())
+      if (cPrefix.isPresent()) {
+        var prefix = cPrefix.get();
+        if (!prefix.equals(mod.rules.grammar().cPrefix())) {
+          var modGrammar = mod.rules.grammar().cPrefix(prefix);
+          var modRules = new HashingGrammar(mod.rules.salt(), modGrammar);
+          mod = new FrontiersInfo(mod.dex, modRules);
+        }
+      }
+      
+      if (mod.equals(info))
+        return info;
+
+      boolean dexChange = mod.dex() != info.dex();
+      if (dexChange)
+        new BackedupFile(eor).moveToBackup();
+      
+      replace(ff, mod);
+      if (dexChange && mod.hasBlocks())
         try (var ch = Opening.CREATE.openChannel(eor)) {
-          OffsetsInfo.create(ch, modInfo.dex());
+          OffsetsInfo.create(ch, mod.dex());
         }
       
-      return modInfo.toFrontiersInfo();
+      return mod;
     }
     
-    
-    private static void replace(File file, Fi rawInfo) throws IOException {
+    private static void replace(File file, FrontiersInfo mod) throws IOException {
       BackedupFile bf = new BackedupFile(file);
       bf.moveToBackup();
       var ch = Opening.CREATE.openChannel(file);
       try (ch) {
-        writeFi(ch, rawInfo);
+        write(ch, mod);
       } catch (IOException iox) {
         ch.close();
         bf.rollback();
@@ -344,38 +286,24 @@ public class LogHashRecorder implements WitnessedRowRepo {
       }
     }
     
-    static FrontiersInfo create(FileChannel file, int dex, String cPrefix, String delimiters) throws IOException {
-      
-      byte[] salt = new SecureRandom().generateSeed(SldgConstants.HASH_WIDTH);
-      Fi rawInfo = new Fi(dex, salt, cPrefix, delimiters);
-      writeFi(file, rawInfo);
-      return rawInfo.toFrontiersInfo();
+    
+    static FrontiersInfo create(FileChannel file, HashingGrammar grammar, int dex) throws IOException {
+      var info = new FrontiersInfo(dex, grammar);
+      write(file, info);
+      return info;
     }
     
     
-    
-    static void writeFi(FileChannel file, Fi info) throws IOException {
+    static void write(FileChannel file, FrontiersInfo info) throws IOException {
 
       ByteBuffer header = ByteBuffer.allocate(2048);
       writeHeader(header, FRONTIERS_MAGIC, info.dex());
-      header.put(info.salt());
-      byte[] cp, del;
-      
-      if (info.cPrefix() == null)
-        cp = new byte[0];
-      else
-        cp = Strings.utf8Bytes(info.cPrefix());
-      if (info.delimiters() == null)
-        del = new byte[0];
-      else
-        del = Strings.utf8Bytes(info.delimiters());
-      
-      header.put((byte) cp.length).put((byte) del.length);
-      header.put(cp).put(del);
-      header.flip();
-      
+      info.rules.writeTo(header).flip();
       ChannelUtils.writeRemaining(file, 0, header);
     }
+    
+    
+    
     
     
     
@@ -401,8 +329,7 @@ public class LogHashRecorder implements WitnessedRowRepo {
       
       ChannelUtils.readRemaining(file, 0, work).flip();
       
-      assertMagic(OFFSETS_MAGIC, work);
-      advanceUnused(work);
+      assertMagicHeader(OFFSETS_MAGIC, work);
       int dex = 0xff & work.get();
       return new OffsetsInfo(dex);
     }
@@ -419,41 +346,7 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   
-  
-  
-  
-  
-  private static void checkDelimiters(String delimiters) {
-    if (delimiters.length() > 256)
-      throw new IllegalArgumentException(
-          "too many delimiters: " + delimiters);
-    try {
-      new StringTokenizer(
-          "fox jumping over lazy dog n such", delimiters);
-    } catch (Exception error) {
-      throw new IllegalArgumentException(
-          "delimiters \"%s\" (quoted): %s"
-          .formatted(delimiters, error.getMessage()));
-    }
-  }
-  
-  /**
-   * Checks the magic bytes and advances the given buffer.
-   * 
-   * @param expected  expected bytes (as UTF-8 encoded)
-   * @param buffer    positioned at beginning of magic bytes
-   */
-  private static void assertMagic(String expected, ByteBuffer buffer) {
-    for (int index = 0; index < expected.length(); ++index) {
-      if (buffer.get() != expected.charAt(index))
-        throw new IllegalArgumentException(
-            "magic bytes '%s' not matched".formatted(expected));
-    }
-  }
-  
-  private static ByteBuffer advanceUnused(ByteBuffer work) {
-    return work.position(work.position() + UNUSED_PAD);
-  }
+
   
   
   public final static int NO_DEX = 63;
@@ -465,8 +358,7 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   private static ByteBuffer writeHeader(ByteBuffer header, String magic, int dex) {
-    header.put(magic.getBytes(Strings.UTF_8));
-    header.put((byte) 0).put((byte) 0);
+    writeMagicHeader(magic, header);
     return header.put((byte) dex);
   }
   
@@ -530,15 +422,47 @@ public class LogHashRecorder implements WitnessedRowRepo {
    */
   public LogHashRecorder(File log, String cPrefix, String delimiters, int dex)
       throws IOException {
+    this(log, new Grammar(delimiters, cPrefix), dex);
+    
+  }
+  
+  /**
+   * Creates a <em>new</em> peristence instance for the given {@code log} file
+   * using the specified settings. Though bound to the {@code log}, the initial
+   * recorded state is empty.
+   * 
+   * @param log         text-based log / journal tracked
+   * @param grammar     defines tokenizaton and comment-lines
+   * @param dex         delta exponent. Row hashes and offsets are recorded for
+   *                    row numbers that are a multiple of 2<sup>dex</sup>.
+   */
+  public LogHashRecorder(File log, Grammar grammar, int dex) throws IOException {
+    this(log, new HashingGrammar(grammar), dex);
+  }
+  
+  
+  /**
+   * Creates a <em>new</em> peristence instance for the given {@code log} file
+   * using the specified settings. Though bound to the {@code log}, the initial
+   * recorded state is empty.
+   * 
+   * @param log         text-based log / journal tracked
+   * @param grammar     defines tokenizaton and comment-lines and secret salt
+   * @param dex         delta exponent. Row hashes and offsets are recorded for
+   *                    row numbers that are a multiple of 2<sup>dex</sup>.
+   */
+  public LogHashRecorder(File log, HashingGrammar grammar, int dex) throws IOException {
     this.log = log;
     if (!log.isFile())
       throw new IllegalArgumentException("not a file: " + log);
+    checkDex(dex);
+    Objects.requireNonNull(grammar, "null grammar");
     
     try (var onFail = new TaskStack()) {
       var ff = Opening.CREATE.openChannel(frontiersFile());
       onFail.pushClose(ff);
       
-      this.config = FrontiersInfo.create(ff, dex, cPrefix, delimiters);
+      this.config = FrontiersInfo.create(ff, grammar, dex);
       
       this.endStateRecorder = new EndStateRecorder(getIndexDir(), false);
       
@@ -559,17 +483,22 @@ public class LogHashRecorder implements WitnessedRowRepo {
         this.blockRecorder = null;
       }
       
-      
       onFail.clear();
-    }
-    
+    } // try (
   }
+  
+  
+  
+  
+  
+  
+  
   
 
   /**
    * Loads an <em>existing</em> saved instance from the file system for the
    * given {@code log} file. The location of the backing files are
-   * convention based.
+   * convention based. The instance is in read/write mode.
    * 
    * @param log       the log file tracked
    */
@@ -638,13 +567,18 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   /** Returns the comment-line prefix. (<em>Leading whitespace is not stripped</em>.) */
   public Optional<String> commentLinePrefix() {
-    return Optional.ofNullable(config.cPrefix());
+    return config.rules().grammar().commentPrefix();
   }
   
 
   /** Returns any special token delimiters, if set. Defaults to ASCII whitespace chars. */
   public Optional<String> tokenDelimiters() {
-    return Optional.ofNullable(config.delimiters());
+    return config.rules().grammar().tokenDelimiters();
+  }
+  
+  
+  public Grammar grammar() {
+    return config.rules().grammar();
   }
   
 
@@ -667,7 +601,7 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   protected String dirPrefix() {
-    return DIR_PREFIX;
+    return PREFIX;
   }
   
   
@@ -710,8 +644,8 @@ public class LogHashRecorder implements WitnessedRowRepo {
   }
   
   
-  public State update(int maxRows) throws IOException, OffsetConflictException, RowHashConflictException {
-    if (maxRows < 1)
+  public State update(long maxRows) throws IOException, OffsetConflictException, RowHashConflictException {
+    if (maxRows < 1L)
       throw new IllegalArgumentException("maxRows " + maxRows + " < 1");
     
     final long maxRn = maxRows + getState().map(State::rowNumber).orElse(0L);
@@ -721,22 +655,6 @@ public class LogHashRecorder implements WitnessedRowRepo {
     var hasher = hasher().appendContext(limiter);
     
     return updateImpl(hasher);
-  }
-  
-  
-  
-  private Context newLimitContext(long maxRn) {
-    return new Context() {
-      long rn = 0;
-      @Override
-      public void observeLedgeredLine(Fro frontier, long offset) {
-        rn = frontier.rowNumber();
-      }
-      @Override
-      public boolean stopPlay() {
-        return rn >= maxRn;
-      }
-    };
   }
   
   
@@ -779,6 +697,14 @@ public class LogHashRecorder implements WitnessedRowRepo {
     } finally {
       endStateRecorder.repairsOffsets(false);
     }
+  }
+  
+
+  
+  
+  
+  public State savedStateAhead(State fallback, long rn) throws IOException {
+    return hasher().savedStateAhead(fallback, rn);
   }
   
   
@@ -873,6 +799,8 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   
+  
+  
   @Override
   public void close() {
     
@@ -934,37 +862,70 @@ public class LogHashRecorder implements WitnessedRowRepo {
   }
   
   
-  
   public boolean updateStateMorsel()
       throws IOException, OffsetConflictException, RowHashConflictException {
-    var filer = stateMorselFiler();
-    Optional<MorselFile> oldSm = filer.getStateMorsel();
+    return updateStateMorsel(true);
+  }
+  
+  
+  public boolean updateStateMorsel(boolean includeTrail)
+      throws IOException, OffsetConflictException, RowHashConflictException {
     
     var fro = endStateRecorder.lastFro().orElseThrow(
         () -> new IllegalStateException("no '" + STATE_EXT + "' file found"));
     
     long hi = fro.rowNumber();
-    BackedupFile target = new BackedupFile(filer.rnFile(hi));
     
+    Path path;
     try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
-      Path path = hasher().getPath(1, hi, logChannel);
+      path = hasher().getPath(1, hi, logChannel);
+    }
+
+    var filer = stateMorselFiler();
+    Optional<MorselFile> oldSm = filer.getStateMorsel();
+    
+    final Optional<TrailedRow> trail;
+    
+    if (oldSm.isPresent()) {
+      var oldMorsel = oldSm.get().getMorselPack();
+      boolean sameState =
+          oldMorsel.hi() == hi && oldMorsel.getRow(hi).equals(path.last());
       
-      if (oldSm.isPresent()) {
-        var oldMorsel = oldSm.get().getMorselPack();
-        if (oldMorsel.hi() == hi && oldMorsel.getRow(hi).equals(path.last()))
+      if (sameState) {
+        if (!includeTrail || !oldMorsel.trailedRowNumbers().isEmpty())
           return false;
-      }
+        trail = lastTrailedRow();
+        if (trail.isEmpty())
+          return false;
+        
+      } else
+        trail = includeTrail ? lastTrailedRow() : Optional.empty();
+    } else
+      trail = includeTrail ? lastTrailedRow() : Optional.empty();
+    
+    
+    var builder = new MorselPackBuilder();
+    builder.initPath(path, log.getName());
+
+    if (trail.isPresent()) {
+      long trn = trail.get().rowNumber();
+      if (trn == hi)
+        builder.addTrail(trail.get());
       
-      target.moveToBackup();
-      var builder = new MorselPackBuilder();
-      builder.initPath(path, log.getName());
-      
+      else if (trn > hi)  // sanity check state
+        throw new IllegalStateException(
+            "repo is in inconsistent state (trail repo ahead of skip leddger): hi row [%d] < last trail [%d]"
+            .formatted(hi, trn));
+    }
+    
+    BackedupFile target = new BackedupFile(filer.rnFile(hi));
+    target.moveToBackup();
+    
+    try {
       MorselFile.createMorselFile(target.getFile(), builder);
       return true;
     
-    } catch (OffsetConflictException | RowHashConflictException | IOException x) {
-      if (x instanceof SldgException error)
-        this.error = error;
+    } catch (RuntimeException | IOException x) {
       target.rollback();
       throw x;
     }
@@ -1044,7 +1005,6 @@ public class LogHashRecorder implements WitnessedRowRepo {
     
     Row[] rows = new Row[rns.size()];
     
-    State state = State.EMPTY;
     
     var smFiler = stateMorselFiler();
     final boolean checkSm = smFiler.lastFile().isPresent();
@@ -1052,6 +1012,8 @@ public class LogHashRecorder implements WitnessedRowRepo {
     var hasher = hasher();
     
     try (var lc = Opening.READ_ONLY.openChannel(log)) {
+      
+      State state = State.EMPTY;
       for (int index = 0; index < rows.length; ++index) {
         long rn = rns.get(index);
         if (rn <= state.rowNumber())
@@ -1065,13 +1027,14 @@ public class LogHashRecorder implements WitnessedRowRepo {
             continue;
           }
         }
-        var fr = hasher.getFullRow(rn, lc);
+        var fr = hasher.getFullRow(rn, state, lc);
         rows[index] = fr.row();
         state = fr.toState();
       }
       return Lists.asReadOnlyList(rows);
     }
   }
+  
   
   
   public List<FullRow> getFullRows(List<Long> rns)
@@ -1081,6 +1044,10 @@ public class LogHashRecorder implements WitnessedRowRepo {
       return hasher().getFullRows(rns, lc);
     }
   }
+  
+  
+  
+  
   
   
   
@@ -1125,6 +1092,10 @@ public class LogHashRecorder implements WitnessedRowRepo {
     if (pendingRns.isEmpty())
       return List.of();
 
+    // this seems needlessly inefficient
+    // (we really just need row hashes)..
+    // but it isn't, and the list isn't that big besides
+    
     var rowsToWitness = getRows(pendingRns);
     
     Client remote = new Client();
@@ -1222,11 +1193,53 @@ public class LogHashRecorder implements WitnessedRowRepo {
     return getWitRepo().map(repo -> repo.getTrailByIndex(index)).orElseThrow();
   }
 
+  
   @Override
-  public boolean addTrail(WitnessRecord trailedRecord) {
-    throw new UnsupportedOperationException(
-        "direct trail record addition not supported");
+  public boolean addTrail(WitnessRecord record) {
+    
+    var last = lastTrailedRow();
+    if (last.isPresent()) {
+      var lastTrailedRow = last.get();
+      long lastTrn = lastTrailedRow.rowNumber();
+      
+      if (lastTrn == record.rowNum() &&
+          !lastTrailedRow.hash().equals(record.row().hash())) {
+        throw new RowHashConflictException(
+            lastTrn,
+            "attempt to add trail with conflicting hash for row [%d]"
+            .formatted(lastTrn));
+      }
+
+      if (lastTrn >= record.rowNum())
+        return false;
+    }
+
+    State state = getState().orElseThrow(
+        () -> new IllegalArgumentException("no state file; no rows in ledger"));
+    
+    long trn = record.rowNum();
+    
+    if (trn > state.rowNumber())
+      throw new IllegalArgumentException(
+          "trailed row [%d] > last row [%d]"
+          .formatted(trn, state.rowNumber()));
+    
+    try {
+      
+      if (!getRowHash(trn).equals(record.row().hash()))
+          throw new RowHashConflictException(trn,
+              "attempt to add trail with conflicting hash for row [%d]"
+              .formatted(trn));
+    
+    } catch (IOException iox) {
+      throw new UncheckedIOException(iox);
+    }
+    
+    return ensureWitRepo().addTrail(record);
   }
+  
+  
+  
   
 
 }

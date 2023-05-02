@@ -14,6 +14,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -33,6 +34,7 @@ import io.crums.sldg.src.NullValue;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.StringValue;
 import io.crums.sldg.src.TableSalt;
+import io.crums.util.CollectionUtils;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 
@@ -49,7 +51,7 @@ import io.crums.util.Strings;
  * 
  * <h2>Stateless; sorta</h2>
  * <p>
- * This base class is purely "functional": invoking its methods produce
+ * This base class is purely "functional": its methods produce
  * no side effects (that is, no side effects beyond consuming and advancing
  * the position of the stream argument). However, it does contain a few hooks
  * that a subclass can exploit to record work and so on.
@@ -332,6 +334,17 @@ public class StateHasher {
   
   
   /**
+   * Plays the given {@code file}, starting from the {@linkplain State#eolOffset() EOL offset}
+   * in the specified {@code state}, and returns the resultant state.
+   */
+  public State play(File file, State state) throws IOException {
+    try (var fc = Opening.READ_ONLY.openChannel(file)) {
+      return play(fc, state);
+    }
+  }
+  
+  
+  /**
    * Plays the given log stream and returns its state.
    */
   public State play(InputStream log) throws IOException {
@@ -444,6 +457,31 @@ public class StateHasher {
   }
   
   
+  
+
+  /**
+   * Returns a list of ascending full rows.
+   * 
+   * @param rns         ascending list of row numbers
+   * @param log         text-based log file
+   * 
+   * @return not null
+   * 
+   * @throws IllegalArgumentException if {@code rns} is not ascending
+   * @throws NoSuchElementException   if there are too few ledgerable rows in the {@code logChannel}
+   */
+  public List<FullRow> getFullRows(List<Long> rns, File log)
+      throws IOException, IllegalArgumentException, NoSuchElementException {
+    
+    if (rns.isEmpty())
+      return List.of();
+    
+    try (var logChannel = Opening.READ_ONLY.openChannel(log)) {
+      return getFullRows(rns, logChannel);
+    }
+  }
+  
+  
   /**
    * Returns a list of ascending full rows.
    * 
@@ -477,6 +515,30 @@ public class StateHasher {
   }
   
   
+  /**
+   * Plays the given log and returns the specified row. Invokes the
+   * {@linkplain #nextStateAhead(State, long)} lookup method, positions
+   * the stream and returns
+   * {@linkplain #getFullRow(long, State, ReadableByteChannel)}.
+   * 
+   * <h4>No Side Effects</h4>
+   * <p>
+   * By default, this method has no side effects. This is because a private subclass is
+   * used to do the actual parsing.
+   * </p>
+   * 
+   * @param rn          target row number
+   * @param logChannel  seekable byte stream
+   * 
+   * @return everything to know about the given row
+   * 
+   * @throws IOException
+   *    if an I/O error occurs on reading the log
+   * @throws IllegalArgumentException
+   *    if {@code rn <= frontier.rowNumber()}
+   * @throws NoSuchElementException
+   *    if the target row number is never reached
+   */
   public FullRow getFullRow(long rn, SeekableByteChannel logChannel)
       throws IOException, IllegalArgumentException, NoSuchElementException {
     
@@ -489,8 +551,14 @@ public class StateHasher {
    * the stream and returns
    * {@linkplain #getFullRow(long, State, ReadableByteChannel)}.
    * 
+   * <h4>No Side Effects</h4>
+   * <p>
+   * By default, this method has no side effects. This is because a private subclass is
+   * used to do the actual parsing.
+   * </p>
+   * 
    * @param rn          target row number
-   * @param state       state <em>before</em> {@code rn}; {@code state.eolOffset}
+   * @param state       state <em>before</em> {@code rn}; i.e. {@code state.rowNumber() < rn}
    *                    expected to be absolute
    * @param logChannel  seekable byte stream
    * 
@@ -522,6 +590,12 @@ public class StateHasher {
    * for the given row number. The given log channel is assumed to be positioned at the
    * beginning of content following the {@linkplain State#rowNumber()
    * state row number}.
+   * 
+   * <h4>No Side Effects</h4>
+   * <p>
+   * By default, this method has no side effects. This is because a private subclass is
+   * used to do the actual parsing.
+   * </p>
    * 
    * @param rn         target row number
    * @param state      state <em>before</em> target row, i.e. {@code state.rowNumber() < rn}
@@ -673,7 +747,7 @@ public class StateHasher {
   
   
   /**
-   * Returns the ledger skip path connecting the specified rows.
+   * Returns the skip path connecting the specified rows.
    * 
    * @param loRn    &ge; 1
    * @param hiRn    &ge; {@code loRn}
@@ -687,6 +761,39 @@ public class StateHasher {
       throws IOException, NoSuchElementException {
     
     var rns = SkipLedger.skipPathNumbers(loRn, hiRn);
+    var rows = getRows(rns, log);
+    return new Path(rows);
+  }
+  
+  
+  
+  /**
+   * Returns the path connecting the high row {@code hiRn}, to the given
+   * target rows {@code targetRns}, to row [1].
+   * 
+   * @param targetRns target row numbers &gt; 0 and &le; {@code hiRn}
+   * @param hiRn      highest row number
+   * @param log       source log
+   * 
+   * @throws NoSuchElementException
+   *         if {@code log} does not contain {@code hiRn} ledgerable lines
+   */
+  public Path getPath(Collection<Long> targetRns, long hiRn, SeekableByteChannel log)
+      throws IOException, NoSuchElementException {
+    
+    if (hiRn < 1)
+      throw new IllegalArgumentException("hiRn " + hiRn);
+    
+    if (targetRns.isEmpty())
+      return getPath(1L, hiRn, log);
+    
+    var rns =  SkipLedger.stitchCollection(
+        CollectionUtils.concat(targetRns, List.of(1L, hiRn)));
+    
+    if (rns.get(rns.size() - 1) < hiRn)
+      throw new IllegalArgumentException(
+          "hiRn " + hiRn + " > max targetRns " + rns.get(rns.size() - 1));
+    
     var rows = getRows(rns, log);
     return new Path(rows);
   }

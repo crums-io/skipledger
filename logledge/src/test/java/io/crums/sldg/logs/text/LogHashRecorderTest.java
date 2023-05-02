@@ -149,7 +149,11 @@ public class LogHashRecorderTest extends IoTestCase {
     try (var hashRecorder = new LogHashRecorder(log, "#", null, dex)) {
       state = hashRecorder.update();
       hasher = hashRecorder.stateHasher();
+      hashRecorder.verify();
     }
+    
+    
+    
 
     
     BackedupFile backup = new BackedupFile(log);

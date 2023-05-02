@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import io.crums.io.sef.Alf;
 import io.crums.sldg.HashConflictException;
+import io.crums.sldg.SldgConstants;
 import io.crums.sldg.cache.Frontier;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.util.TaskStack;
@@ -197,18 +198,24 @@ public class BlockRecorder implements
   
   
   public Optional<ByteBuffer> getRowHash(long rn) throws IOException {
+
+    if (rn == 0)
+      return Optional.of(SldgConstants.DIGEST.sentinelHash());
+    if (rn < 0)
+      throw new IllegalArgumentException("negative row no.: " + rn);
+    
     long blockSize = rnDelta();
-    long index = rn / blockSize;
+    long blockNo = rn / blockSize;
     return
-        index * blockSize != rn || index >= frontiersRecorded() ?
+        blockNo * blockSize != rn || blockNo >= frontiersRecorded() ?
             Optional.empty() :
-              Optional.of( frontiers.get(index) );
+              Optional.of( frontiers.get(blockNo - 1) );
   }
   
 
   /**
    * Uses the already recorded information to jump ahead and return the
-   * {@linkplain State state} closest (but less than) the given row number
+   * {@linkplain State state} closest to (but less than) the given row number
    * {@code rn}, if any.
    */
   @Override
