@@ -32,8 +32,10 @@ public class TableSalt implements AutoCloseable {
     }
     @Override
     public void close() { }
-    
-    
+    @Override
+    public TableSalt clone() {
+      return this;
+    }
   };
   
   

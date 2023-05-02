@@ -3,6 +3,7 @@
  */
 package io.crums.sldg;
 
+
 import static io.crums.sldg.SldgConstants.DIGEST;
 import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 
@@ -10,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Objects;
 
+import io.crums.util.IntegralStrings;
 import io.crums.util.hash.Digest;
 
 /**
@@ -90,7 +92,18 @@ public abstract class RowHash implements Digest {
   }
   
 
-  
+  /**
+   * Returns a string of the form <em>rn</em>{@code :}<em>abreviated_hash</em>
+   * where <em>rn</em> is the row number, and <em>abreviated_hash</em> is the 6
+   * leftmost hexadecimal digits of the row's hash. E.g.
+   * <p>
+   * {@code 55:2e9a08}
+   * </p>
+   */
+  @Override
+  public String toString() {
+    return rowNumber() + ":" + IntegralStrings.toHex(hash().slice().limit(3));
+  }
   
 
   

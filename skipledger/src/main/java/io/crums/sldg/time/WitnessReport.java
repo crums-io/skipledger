@@ -217,8 +217,13 @@ public final class WitnessReport {
           "; actual was " + records.size());
     
     ArrayList<WitnessRecord> zip = new ArrayList<>(records.size());
-    for (int index = 0; index < records.size(); ++index)
-      zip.add(new WitnessRecord( rowsToWitness.get(index), records.get(index)) );
+    for (int index = 0; index < records.size(); ++index) {
+      var record = records.get(index);
+      var row = rowsToWitness.get(index);
+      if (!record.crum().hash().equals(row.hash()))
+        throw new ClientException("hash mismatch from remote: " + record + " / " + row);
+      zip.add(new WitnessRecord(row, record));
+    }
     return zip;
   }
   

@@ -4,9 +4,9 @@
 package io.crums.sldg.time;
 
 
-import io.crums.client.ClientException;
 import io.crums.model.CrumRecord;
-import io.crums.sldg.Row;
+import io.crums.sldg.HashConflictException;
+import io.crums.sldg.RowHash;
 
 
 /**
@@ -14,14 +14,14 @@ import io.crums.sldg.Row;
  */
 public final class WitnessRecord {
   
-  private final Row row;
+  private final RowHash row;
   private final CrumRecord record;
   
-  public WitnessRecord(Row row, CrumRecord record) {
+  public WitnessRecord(RowHash row, CrumRecord record) {
     this.row = row;
     this.record = record;
     if (!record.crum().hash().equals(row.hash()))
-      throw new ClientException("hash mismatch from remote: " + record + " / " + row);
+      throw new HashConflictException("crum hash mismatch for row " + row);
   }
   
   
@@ -39,7 +39,7 @@ public final class WitnessRecord {
   }
   
   
-  public Row row() {
+  public RowHash row() {
     return row;
   }
   
