@@ -44,19 +44,19 @@ public class LogHasher extends ContextedHasher implements Channel {
    */
   public LogHasher(
       TableSalt salt, Predicate<ByteBuffer> commentFilter, String tokenDelimiters,
-      Alf rowOffsets, FrontierTable frontiers, int rnExponent) {
+      Alf rowOffsets, Alf lineNos, FrontierTable frontiers, int rnExponent) {
     
     this(
         new StateHasher(salt, commentFilter, tokenDelimiters),
-        rowOffsets, frontiers, rnExponent);
+        rowOffsets, lineNos, frontiers, rnExponent);
   }
   
 
   public LogHasher(
       StateHasher promote,
-      Alf rowOffsets, FrontierTable frontiers, int rnExponent) {
+      Alf rowOffsets, Alf lineNos, FrontierTable frontiers, int rnExponent) {
     
-    this(promote, new BlockRecorder(frontiers, rowOffsets, rnExponent));
+    this(promote, new BlockRecorder(frontiers, rowOffsets, lineNos, rnExponent));
     
   }
   
@@ -129,8 +129,8 @@ public class LogHasher extends ContextedHasher implements Channel {
       // this is why we record the EOL (not start) offset for the row, btw
       long eolOff = recorder.endOffset(index);
       logChannel.position(eolOff);
-      long lineNoEst = state.rowNumber(); // minimum (likely greater)
-      state = play((ReadableByteChannel) logChannel, new State(frontier, eolOff, lineNoEst));
+      long lineNo = state.lineNo();
+      state = play((ReadableByteChannel) logChannel, new State(frontier, eolOff, lineNo));
     }
     return state;
   }

@@ -33,9 +33,11 @@ public class LogHasherTest extends IoTestCase {
   
   final static ByteBuffer FHEADER = hBuffer("FT-2");
   final static ByteBuffer OHEADER = hBuffer("LO-23");
+  final static ByteBuffer LHEADER = hBuffer("LNOS");
   
   final static String FT = "FT";
   final static String LO = "LO";
+  final static String LN = "LN";
 
   
   final static int HD_SPLIT_OFFSET = 169;
@@ -101,10 +103,14 @@ public class LogHasherTest extends IoTestCase {
         createFile(new File(dir, LO), OHEADER),
         OHEADER.capacity());
     
+     var lineNos = new Alf(
+         createFile(new File(dir, LN), LHEADER),
+         LHEADER.capacity());
+    
     Predicate<ByteBuffer> cFilter =
         xComments ? (b) -> b.get(b.position()) == '#' : null;
     
-    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo);
     HashFrontier state;
     
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
@@ -128,7 +134,7 @@ public class LogHasherTest extends IoTestCase {
     boolean xComments = false;
     String tokenDelimiters = null;
     int splitOffset = 169;
-    int lineNo = 7;
+    int lineNo = 8;
     
     testPlayHd2x(label, rnExpo, xComments, tokenDelimiters, splitOffset, lineNo);
   }
@@ -185,7 +191,12 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(new File(dir, LO), OHEADER),
         OHEADER.capacity());
-    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, fTable, rnExpo);
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
+    
+    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, lineNos, fTable, rnExpo);
     
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
       hasher.play(log);
@@ -216,7 +227,12 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(new File(dir, LO), OHEADER),
         OHEADER.capacity());
-    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, fTable, rnExpo);
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
+    
+    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, lineNos, fTable, rnExpo);
     
     HashFrontier expectedState;
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
@@ -260,7 +276,12 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(new File(dir, LO), OHEADER),
         OHEADER.capacity());
-    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, fTable, rnExpo);
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
+    
+    var hasher = new LogHasher(salter.clone(), null, null, rowOffsets, lineNos, fTable, rnExpo);
     
     try (var log = getClass().getResourceAsStream(HD_LOG)) {
       hasher.play(log);
@@ -308,7 +329,11 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(new File(dir, LO), OHEADER),
         OHEADER.capacity());
-    var hasher = new LogHasher(salter, COMMENT_TEST, null, rowOffsets, fTable, rnExpo);
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
+    var hasher = new LogHasher(salter, COMMENT_TEST, null, rowOffsets, lineNos, fTable, rnExpo);
 
     long rn = 4;
     String expectedLine = "Sat on a wall and took a great fall";
@@ -339,7 +364,7 @@ public class LogHasherTest extends IoTestCase {
 
     String tokenDelimiters = null;
     int splitOffset = 169;
-    int lineNo = 7;
+    int lineNo = 8;
     
     testPlayHd2x(label, rnExpo, xComments, tokenDelimiters, splitOffset, lineNo);
   }
@@ -367,8 +392,12 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(offsetFile, OHEADER),
         OHEADER.capacity());
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
     
-    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo);
     
     File logFile = new File(dir, HD_LOG);
     copyResourceToFile(logFile, HD_LOG);
@@ -390,8 +419,13 @@ public class LogHasherTest extends IoTestCase {
     rowOffsets = new Alf(
         openReadWrite(offsetFile),
         OHEADER.capacity());
+
+    lineNos = new Alf(
+        openReadWrite(new File(dir, LN)),
+        LHEADER.capacity());
     
-    hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    
+    hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo);
     
     long rc = hasher.endOffsetsRecorded();
     assert rc > 0;
@@ -446,8 +480,12 @@ public class LogHasherTest extends IoTestCase {
     var rowOffsets = new Alf(
         createFile(offsetFile, OHEADER),
         OHEADER.capacity());
+
+    var lineNos = new Alf(
+        createFile(new File(dir, LN), LHEADER),
+        LHEADER.capacity());
     
-    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+    var hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo);
     
     File logFile = copyResource(dir, HD_LOG);
     HashFrontier state;
@@ -467,16 +505,19 @@ public class LogHasherTest extends IoTestCase {
         openReadWrite(offsetFile),
         OHEADER.capacity());
     
+    lineNos = new Alf(
+        openReadWrite(new File(dir, LN)),
+        LHEADER.capacity());
     
     if (noReplay)
-      hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo) {
+      hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo) {
           @Override
           protected int replayLimit() {
             return 2;
           }
         };
     else
-      hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, fTable, rnExpo);
+      hasher = new LogHasher(salter.clone(), cFilter, tokenDelimiters, rowOffsets, lineNos, fTable, rnExpo);
     
     // play the state post the split offset
     HashFrontier recomputedState;

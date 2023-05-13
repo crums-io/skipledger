@@ -44,6 +44,9 @@ public class BlockRecorder implements
   private final FrontierTable frontiers;
   
   private final Alf rowOffsets; // EOL offsets. The offsets rows end at (exc)
+  
+  private final Alf lineNos;
+  
   private final long rnMask;
   
   
@@ -55,13 +58,21 @@ public class BlockRecorder implements
    * 
    * @param frontiers   fixed-width table
    * @param rowOffsets  compact, ascending-longs format
+   * @param lineNos     compact, ascending-longs format
    * @param dex         delta exponent. {@code 0 <= dex <= 62}
    */
   public BlockRecorder(
-      FrontierTable frontiers, Alf rowOffsets, int dex) {
+      FrontierTable frontiers, Alf rowOffsets, Alf lineNos, int dex) {
     
     this.frontiers = Objects.requireNonNull(frontiers, "null frontier table");
-    this.rowOffsets = Objects.requireNonNull(rowOffsets, "null row offsets (Alf)");
+    this.rowOffsets = rowOffsets;
+    this.lineNos = lineNos;
+    
+    if (rowOffsets.size() != lineNos.size()) {
+      throw new IllegalArgumentException(
+          "row offsets count must match line no.s count: %d vs. %d"
+          .formatted(rowOffsets.size(), lineNos.size()));
+    }
 
     if (dex < 0 || dex > 62)
       throw new IllegalArgumentException("dex (delta exponent) out of bounds: " + dex);
@@ -85,6 +96,7 @@ public class BlockRecorder implements
     try (var closer = new TaskStack()) {
       closer.pushClose(frontiers);
       closer.pushCall(() -> { rowOffsets.close(true); return null; });
+      closer.pushCall(() -> { lineNos.close(true); return null; });
     }
   }
   
@@ -184,6 +196,7 @@ public class BlockRecorder implements
     if (index == oc) {
       
       rowOffsets.addNext(fro.eolOffset(), workBuff);
+      lineNos.addNext(fro.lineNo(), workBuff);
     
     } else {
       
@@ -193,6 +206,11 @@ public class BlockRecorder implements
             rn, eol, fro.eolOffset(),
             "row [%d] recorded EOL offset was %d; given EOL offset is %d (%d:%d)"
             .formatted(rn, eol, fro.eolOffset(), fro.lineNo(), offset));
+      long lineNo = lineNos.get(index, workBuff);
+      if (lineNo != fro.lineNo())
+        throw new LineNoConflictException(fro.rowNumber(),
+            eol, fro.eolOffset(),
+            lineNo, fro.lineNo());
     }
   }
   
@@ -229,8 +247,9 @@ public class BlockRecorder implements
       return state;
     
     long endOffset = rowOffsets.get(index);
+    long lineNo = lineNos.get(index);
     var frontier = readFrontier(index);
-    return new State(frontier, endOffset);
+    return new State(frontier, endOffset, lineNo);
   }
 
   
@@ -276,6 +295,15 @@ public class BlockRecorder implements
     return rowOffsets.get(index);
   }
   
+  /**
+   * Returns the line number recorded for the specified block.
+   * 
+   * @param index block index: {@code 0 <= index < endOffsetsRecorded()}
+   */
+  public long lineNo(long index) throws IOException {
+    return lineNos.get(index);
+  }
+  
   
   /** Returns the number of frontier row hashes (blocks) recorded. */
   public long frontiersRecorded() {
@@ -291,6 +319,7 @@ public class BlockRecorder implements
   /** Trims the number of row offsets recorded. */
   public void trimOffsetsRecorded(long count) throws IOException {
     rowOffsets.trimSize(count);
+    lineNos.trimSize(count);
   }
   
   /** Trims the number of frontier row hashes recorded. */

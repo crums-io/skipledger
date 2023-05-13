@@ -8,6 +8,8 @@ import static io.crums.sldg.logs.text.ContextedHasher.newLimitContext;
 import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_FILE;
 import static io.crums.sldg.logs.text.LogledgeConstants.FRONTIERS_MAGIC;
 import static io.crums.sldg.logs.text.LogledgeConstants.LOGNAME;
+import static io.crums.sldg.logs.text.LogledgeConstants.LINE_NOS_FILE;
+import static io.crums.sldg.logs.text.LogledgeConstants.LINE_NOS_MAGIC;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_FILE;
 import static io.crums.sldg.logs.text.LogledgeConstants.OFFSETS_MAGIC;
 import static io.crums.sldg.logs.text.LogledgeConstants.PREFIX;
@@ -162,6 +164,10 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   private final static int OFFSETS_HDR_LEN = magicHeaderLen(OFFSETS_MAGIC)
+      + 1; // dex
+  
+
+  private final static int LINE_NOS_HDR_LEN = magicHeaderLen(LINE_NOS_MAGIC)
       + 1; // dex
   
   
@@ -346,6 +352,40 @@ public class LogHashRecorder implements WitnessedRowRepo {
   
   
   
+  
+private record LineNosInfo(int dex) {
+    
+    LineNosInfo {
+      checkDex(dex);
+    }
+    
+    long zeroOffset() {
+      return LINE_NOS_HDR_LEN;
+    }
+    
+    
+    static LineNosInfo load(FileChannel file) throws IOException {
+
+      ByteBuffer work = ByteBuffer.allocate(LINE_NOS_HDR_LEN);
+      
+      ChannelUtils.readRemaining(file, 0, work).flip();
+      
+      assertMagicHeader(LINE_NOS_MAGIC, work);
+      int dex = 0xff & work.get();
+      return new LineNosInfo(dex);
+    }
+    
+    
+    static LineNosInfo create(FileChannel file, int dex) throws IOException {
+      var info = new LineNosInfo(dex);
+      var buffer = ByteBuffer.allocate(LINE_NOS_HDR_LEN);
+      writeHeader(buffer, LINE_NOS_MAGIC, dex).flip();
+      ChannelUtils.writeRemaining(file, 0, buffer);
+      return info;
+    }
+  } // LineNosInfo
+  
+  
 
   
   
@@ -471,11 +511,16 @@ public class LogHashRecorder implements WitnessedRowRepo {
         var off = Opening.CREATE.openChannel(offsetsFile());
         onFail.pushClose(off);
         
+        var lnos = Opening.CREATE.openChannel(lineNosFile());
+        onFail.pushClose(lnos);
+        
         var oInfo = OffsetsInfo.create(off, dex);
+        var lnInfo = LineNosInfo.create(lnos, dex);
         var fTable = new FrontierTableFile(ff, config.zeroOffset());
         var rowOffsets = new Alf(off, oInfo.zeroOffset());
+        var lineNos = new Alf(lnos, lnInfo.zeroOffset());
         
-        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, dex);
+        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, lineNos, dex);
       
       } else {
         
@@ -539,7 +584,11 @@ public class LogHashRecorder implements WitnessedRowRepo {
         var oFile = mode.openChannel(offsetsFile());
         onFail.pushClose(oFile);
         
+        var lnFile = mode.openChannel(lineNosFile());
+        onFail.pushClose(lnFile);
+        
         var oInfo = OffsetsInfo.load(oFile);
+        var lnInfo = LineNosInfo.load(lnFile);
         
         if (config.dex() != oInfo.dex())
           throw new IllegalArgumentException(
@@ -547,8 +596,9 @@ public class LogHashRecorder implements WitnessedRowRepo {
               .formatted(config.dex(), oInfo.dex()));
         
         var rowOffsets = new Alf(oFile, oInfo.zeroOffset());
+        var lineNos = new Alf(lnFile, lnInfo.zeroOffset());
         
-        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, config.dex);
+        this.blockRecorder = new BlockRecorder(fTable, rowOffsets, lineNos, config.dex);
         
       } else {
         
@@ -610,6 +660,13 @@ public class LogHashRecorder implements WitnessedRowRepo {
    */
   public File offsetsFile() {
     return new File(getIndexDir(), OFFSETS_FILE);
+  }
+  
+  
+  
+  public File lineNosFile() {
+    return new File(getIndexDir(), LINE_NOS_FILE);
+    
   }
   
   

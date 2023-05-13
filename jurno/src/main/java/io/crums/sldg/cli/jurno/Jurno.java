@@ -32,6 +32,7 @@ import io.crums.sldg.logs.text.ContextedHasher;
 import io.crums.sldg.logs.text.Fro;
 import io.crums.sldg.logs.text.FullRow;
 import io.crums.sldg.logs.text.Grammar;
+import io.crums.sldg.logs.text.HashingGrammar;
 import io.crums.sldg.logs.text.LogHashRecorder;
 import io.crums.sldg.logs.text.LogledgeConstants;
 import io.crums.sldg.logs.text.OffsetConflictException;
@@ -273,8 +274,8 @@ public class Jurno {
   }
   
   
-  public Optional<Seal> loadSeal() throws IOException {
-    return Sealer.loadForLog(journalFile);
+  public Optional<Seal> loadSeal() throws IOException, ParameterException {
+    return Sealer.loadForLog(getJournalFile());
   }
   
   
@@ -284,6 +285,14 @@ public class Jurno {
       return Optional.empty();
     var recorder = new LogHashRecorder(journalFile, readOnly);
     return Optional.of(recorder);
+  }
+  
+  
+  public boolean isTracked() {
+    getJournalFile(); // ensure not null
+    return
+        LogHashRecorder.trackDirExists(journalFile) ||
+        Sealer.getSealFile(journalFile).isPresent();
   }
   
   
@@ -518,8 +527,11 @@ class Status implements Runnable {
     description = {
         "Lists the ledgerable lines in the log",
         "",
-        "Blank lines, and comment-lines (if enabled), are not ledgered.",
-        "This works beyond the last ledgered row."
+        "Blank and comment-lines (if enabled), are not ledgered and hence ignored. If the",
+        "file is not yet tracked, then this is a dry run and you can experiment with the",
+        "token delimiters (@|fg(yellow) " + GrammarSettings.DEL  + "|@, @|fg(yellow) " + GrammarSettings.DEL_PLUS +  "|@) and comment-line prefix",
+        "(@|fg(yellow) " + GrammarSettings.COM + "|@) settings.",
+        "",
     }
     )
 class ListCmd implements Callable<Integer> {
@@ -567,8 +579,7 @@ class ListCmd implements Callable<Integer> {
           "Comma separated list of row no.s and/or ranges",
           "Ranges are expressed using dashes. Example:",
           "    2,3,53-58,99"
-      }
-      )
+      })
   public void setRows(String rows) {
     var nums = NumbersArg.parse(rows);
     if (nums == null)
@@ -584,71 +595,101 @@ class ListCmd implements Callable<Integer> {
   }
   
   
+  @Mixin
+  private GrammarSettings grammarSettings = new GrammarSettings();
+  
+  
   
   
   @Override
   public Integer call() throws IOException {
     
-    final File log = jurno.getJournalFile();
+    boolean dry = !jurno.isTracked();
+    if (!dry)
+      grammarSettings.checkNotSet(spec);
+    
     long rows;
-    try (var closer = new TaskStack()) {
-      if (rns.isEmpty()) {
+    
+    if (rns.isEmpty()) {
+      rows = printAllRows();
+    } else {
+      printSelectedRows();
+      rows = rns.size();
+    }
 
-        Context printer = new Context() {
-          @Override
-          public void observeRow(
-              HashFrontier preFrontier, List<ColumnValue> cols, long offset,
-              long endOffset, long lineNo) throws IOException {
-            printRow(preFrontier.rowNumber() + 1, cols, endOffset, lineNo);
-          }
-        };
-        
-        StateHasher hasher;
+    System.out.println();
+    if (dry)
+      System.out.println(Ansi.AUTO.string("@|fg(yellow),bold Dry run|@ (@|italic file not tracked|@)"));
+    
+    System.out.println(Strings.nOf(rows, "row") + " listed.");
+    return 0;
+  }
+  
+  
+  
+  
+  private long printAllRows() throws IOException {
+    final File log = jurno.getJournalFile();
+    try (var closer = new TaskStack()) {
+      
+      Context printer = new Context() {
+        @Override
+        public void observeRow(
+            HashFrontier preFrontier, List<ColumnValue> cols, long offset,
+            long endOffset, long lineNo) throws IOException {
+          printRow(preFrontier.rowNumber() + 1, cols, endOffset, lineNo);
+        }
+      };
+      
+      StateHasher hasher;
+      
+      if (!jurno.isTracked()) {
+        hasher = new HashingGrammar(grammarSettings.getGrammar()).stateHasher();
+      } else {
         var r = jurno.loadRecorder(true);
         if (r.isPresent()) {
           closer.pushClose(r.get());
           hasher = r.get().stateHasher();
         } else {
           hasher = Sealer.loadForLog(log)
-              .map(s -> s.rules().stateHasher()).orElseThrow(
-              jurno::notTracked);
+              .map(s -> s.rules().stateHasher()).get();
         }
-        rows = 
-            new ContextedHasher(hasher, printer).play(log)
-            .rowNumber();
-      
-      } else {
-        rows = rns.size();
-        
-        List<FullRow> fullRows;
-
-        var r = jurno.loadRecorder(true);
-        
-        if (r.isPresent())
-          fullRows = r.get().getFullRows(rns);
-        else {
-          StateHasher hasher = Sealer.loadForLog(log)
-              .map(s -> s.rules().stateHasher()).orElseThrow(
-              jurno::notTracked);
-          
-          fullRows = hasher.getFullRows(rns, log);
-        }
-        
-        
-        for (var row : fullRows)
-          printRow(row.rowNumber(), row.columns(), row.eolOffset(), row.lineNo());
-
       }
       
+      return 
+          new ContextedHasher(hasher, printer).play(log)
+          .rowNumber();
+    }
+  }
+  
+  
+  
+  private void printSelectedRows() throws IOException {
+    final File log = jurno.getJournalFile();
+    try (var closer = new TaskStack()) {
+      
+      var r = jurno.loadRecorder(true);
 
-      System.out.println();
-      System.out.println(Strings.nOf(rows, "row") + " listed.");
-      return 0;
+      List<FullRow> fullRows;
+      if (r.isPresent()) {
+        closer.pushClose(r.get());
+        fullRows = r.get().getFullRows(rns);
+      } else {
+        StateHasher hasher = Sealer.loadForLog(log)
+            .map(s -> s.rules().stateHasher()).orElse(
+                new HashingGrammar(grammarSettings.getGrammar()).stateHasher());
+        
+        fullRows = hasher.getFullRows(rns, log);
+      }
+      
+      
+      for (var row : fullRows)
+        printRow(row.rowNumber(), row.columns(), row.eolOffset(), row.lineNo());
+
     } catch (NoSuchElementException nsex) {
       throw new ParameterException(spec.commandLine(), nsex.getMessage());
     }
   }
-  
   
   
   
@@ -1425,9 +1466,10 @@ class Verify implements Callable<Integer> {
     name = FixOffsets.NAME,
     description = {
         "Attempts to repair recorded EOL offsets and/or line no.s",
-        "If the contents and order of the ledgerable lines have not logically changed",
-        "but their offsets or the their line numbers have (whether by the addition or",
-        "removal of space characters or comment-lines) then this command can fix it.",
+        "If the contents and order of the ledgerable lines have not logically changed but",
+        "their offsets and/or line no.s have (whether caused by the addition or removal of",
+        "whitespace characters or comment-lines) then this command will repair them.",
+        "Note: seals do not record offsets, so this command does not apply to them.",
         "",
     }
     )
@@ -1469,9 +1511,15 @@ class FixOffsets implements Callable<Integer> {
   @Override
   public Integer call() throws IOException {
     
+    
     var opt = jurno.loadRecorder(false);
     if (opt.isEmpty()) {
-      Status.printNotTracked(jurno.getJournalFile());
+      if (jurno.loadSeal().isEmpty()) {
+        System.out.println("File is not tracked: there are no offsets to repair.");
+      } else {
+        System.out.println(
+            "File tracked using seal file: there are no offsets to repair.");
+      }
       return 0;
     }
     
@@ -1763,60 +1811,80 @@ class History implements Runnable {
   
   @Override
   public void run() {
+    
+    if (!jurno.isTracked()) {
+      Status.printNotTracked(jurno.getJournalFile());
+      return;
+    }
+    
     try (var closer = new TaskStack()) {
       
       var opt = jurno.loadRecorder(true);
-      if (opt.isEmpty()) {
-        Status.printNotTracked(jurno.getJournalFile());
-        return;
+      
+      if (opt.isPresent()) {
+        closer.pushClose(opt.get());
+        listRepoHistory(opt.get());
+      } else {
+        Seal seal = Sealer.loadForLog(jurno.getJournalFile()).get();
+        printSealHistory(seal);
       }
-      
-      var recorder = opt.get();
-      
-      closer.pushClose(recorder);
-      
-      var witRns = recorder.getTrailedRowNumbers();
-      
-      int witIndex = getStartIndex(witRns); // (inclusive)
-      
-      if (witIndex == -1) {
-        System.out.println(
-            witRns.isEmpty() ?
-                "No ledgered rows witnessed." :
-                "No witnessed rows matched." );
-        return;
-      }
-      
-      final int lastIndex =     // (exclusive)
-          reverse ?
-              Math.max(-1, witIndex - maxCount) :
-                Math.min(witRns.size(), witIndex + maxCount);
-              
-      final int maxDigits;
-      {
-        int startDigits = Long.toString(witRns.get(witIndex)).length();
-        int lastIndexInc = reverse ? lastIndex + 1 : lastIndex - 1;
-        int endDigits = Long.toString(witRns.get(lastIndexInc)).length();
-        maxDigits = Math.max(startDigits, endDigits);
-      }
-      
-      do {
-        var trail = recorder.getTrailByIndex(witIndex);
-        long rn = trail.rowNumber();
-        System.out.println(Ansi.AUTO.string(
-            "  %s[@|bold %d|@]   %s".formatted(
-                pad(rn, maxDigits),
-                rn,
-                new Date(trail.utc()).toString())
-            ));
-        witIndex += reverse ? -1 : 1;
-      } while (witIndex != lastIndex);
-      
       
       
     } catch (IOException iox) {
       throw new UncheckedIOException(iox);
     }
+  }
+  
+  
+  private void printSealHistory(Seal seal) {
+    if (seal.isTrailed()) {
+      System.out.println(Ansi.AUTO.string(
+          "  [@|bold %d|@]   %s".formatted(
+              seal.rowNumber(),
+              new Date(seal.trail().get().utc()))
+          ));
+    } else {
+      System.out.println("No ledgered rows witnessed.");
+    }
+  }
+  
+  private void listRepoHistory(LogHashRecorder recorder) {
+    var witRns = recorder.getTrailedRowNumbers();
+    
+    int witIndex = getStartIndex(witRns); // (inclusive)
+    
+    if (witIndex == -1) {
+      System.out.println(
+          witRns.isEmpty() ?
+              "No ledgered rows witnessed." :
+              "No witnessed rows matched." );
+      return;
+    }
+    
+    final int lastIndex =     // (exclusive)
+        reverse ?
+            Math.max(-1, witIndex - maxCount) :
+              Math.min(witRns.size(), witIndex + maxCount);
+            
+    final int maxDigits;
+    {
+      int startDigits = Long.toString(witRns.get(witIndex)).length();
+      int lastIndexInc = reverse ? lastIndex + 1 : lastIndex - 1;
+      int endDigits = Long.toString(witRns.get(lastIndexInc)).length();
+      maxDigits = Math.max(startDigits, endDigits);
+    }
+    
+    do {
+      var trail = recorder.getTrailByIndex(witIndex);
+      long rn = trail.rowNumber();
+      System.out.println(Ansi.AUTO.string(
+          "  %s[@|bold %d|@]   %s".formatted(
+              pad(rn, maxDigits),
+              rn,
+              new Date(trail.utc()).toString())
+          ));
+      witIndex += reverse ? -1 : 1;
+    } while (witIndex != lastIndex);
   }
   
   
@@ -2171,7 +2239,8 @@ class Morsel implements Callable<Integer> {
         "Cleans backup files",
         "",
         "Fixup commands like @|bold " + FixOffsets.NAME + "|@ and @|bold " + Rollback.NAME + "|@ often backup",
-        "files before modifying them."
+        "files before modifying them.",
+        ""
     }
     )
 class Clean implements Callable<Integer> {

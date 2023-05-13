@@ -82,6 +82,18 @@ public class Sealer {
   }
   
   
+  /**
+   * Returns the seal file for the given {@code log}, if any.
+   */
+  public static Optional<File> getSealFile(File log) {
+    var sFile = sealFile(log);
+    if (sFile.isFile())
+      return Optional.of(sFile);
+    sFile = pendingSealFile(log);
+    return sFile.isFile() ? Optional.of(sFile) : Optional.empty();
+  }
+  
+  
   
   /**
    * Loads and returns a seal from the given seal file. File extensions are ignored.

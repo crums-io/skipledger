@@ -60,12 +60,15 @@ public class LogledgeConstants {
   public final static String FRONTIERS_FILE = "fhash";
   /** EOR (end-of-row/line) offsets filename. */
   public final static String OFFSETS_FILE = "eor";
+  /** Line no.s filename. */
+  public final static String LINE_NOS_FILE = "lno";
 
 
 
   public final static String SEAL_MAGIC = "seal";
   public final static String FRONTIERS_MAGIC = FRONTIERS_FILE;
   public final static String OFFSETS_MAGIC = OFFSETS_FILE;
+  public final static String LINE_NOS_MAGIC = LINE_NOS_FILE;
   public final static String STATE_MAGIC = "fstate";
   
   
