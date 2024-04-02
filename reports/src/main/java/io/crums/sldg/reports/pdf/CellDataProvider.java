@@ -15,7 +15,10 @@ import io.crums.sldg.reports.pdf.CellData.ImageCell;
 import io.crums.sldg.reports.pdf.CellData.TextCell;
 
 /**
+ * Provides both semantic and display customizations for a specific
+ * types of (source) column value.
  * 
+ * @param <T> the source column value type.
  */
 public interface CellDataProvider<T> {
   
@@ -49,7 +52,12 @@ public interface CellDataProvider<T> {
   
   
   
-  
+  /**
+   * Base text provider. This supports an optional {@linkplain #prefix()} and
+   * {@linkplain #postfix()}.
+   * 
+   * @param <T>   the source value type
+   */
   public static abstract class BaseTextProvider<T> implements CellDataProvider<T> {
     
     protected final String prefix;
@@ -82,12 +90,17 @@ public interface CellDataProvider<T> {
       return other.prefix.equals(prefix) && other.postfix.equals(postfix);
     }
     
-    
+    /**
+     * Optional prefix. If present, then the string is not empty.
+     */
     public Optional<String> prefix() {
       return ofNotEmpty(prefix);
     }
     
-    
+
+    /**
+     * Optional postfix. If present, then the string is not empty.
+     */
     public Optional<String> postfix() {
       return ofNotEmpty(postfix);
     }
@@ -105,6 +118,11 @@ public interface CellDataProvider<T> {
   }
   
   
+  /**
+   * Base class for patterned providers such as dates, numbers, etc.
+   * 
+   * @param <T> the column value type
+   */
   public static abstract class PatternedProvider<T> extends BaseTextProvider<T> {
     
     protected final String pattern;
@@ -142,28 +160,6 @@ public interface CellDataProvider<T> {
   }
   
   
-  
-  
-  
-//  static class ChainedProvider<T, B> implements CellDataProvider<T> {
-//    
-//    private final CellDataProvider<B> baseProvider;
-//    private final Function<T, B> mapper;
-//    
-//    
-//    ChainedProvider(CellDataProvider<B> baseProvider, Function<T, B> mapper) {
-//      this.baseProvider = Objects.requireNonNull(baseProvider, "null base provider");
-//      this.mapper = Objects.requireNonNull(mapper, "null mapper");
-//    }
-//    
-//    
-//
-//    @Override
-//    public CellData getCellData(T value, CellFormat cellFormat) {
-//      return baseProvider.getCellData(mapper.apply(value), cellFormat);
-//    }
-//    
-//  }
   
   
   
@@ -313,7 +309,7 @@ public interface CellDataProvider<T> {
   }
   
   
-  
+  /** Interprets a blob of bytes as an image. */
   public static class ImageProvider implements CellDataProvider<ByteBuffer> {
     
     private final float width;
@@ -322,11 +318,24 @@ public interface CellDataProvider<T> {
     private final CellData fallback;
     
     
-    
+    /**
+     * Creates an instance with a blank cell as a fallback.
+     * 
+     * @param width     &gt; 1
+     * @param height    &gt; 1
+     */
     public ImageProvider(float width, float height) {
       this(width, height, TextCell.BLANK);
     }
 
+    /**
+     * Full constructor. Sets the image dimensions and the fallback.
+     * 
+     * @param width     &gt; 1
+     * @param height    &gt; 1
+     * @param fallback  fallback cell in the event an image cannot be constructed from
+     *                  the source column bytes
+     */
     public ImageProvider(float width, float height, CellData fallback) {
       this.width = width;
       this.height = height;

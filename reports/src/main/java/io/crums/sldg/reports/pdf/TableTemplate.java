@@ -588,11 +588,11 @@ public class TableTemplate {
   
   
   private void injectFirstColumnCell(Iterator<CellData> cells, Rectangle borders, PdfPTable table) {
-    cells.next().appendTable(borders, columns.get(0).getFormat(), table);
+    cells.next().appendToTable(borders, columns.get(0).getFormat(), table);
   }
   
   private void injectLastColumnCell(Iterator<CellData> cells, Rectangle borders, PdfPTable table) {
-    cells.next().appendTable(borders, columns.get(columns.size() - 1).getFormat(), table);
+    cells.next().appendToTable(borders, columns.get(columns.size() - 1).getFormat(), table);
   }
   
 
@@ -600,7 +600,7 @@ public class TableTemplate {
   private void injectMidColumns(Iterator<CellData> cells, Rectangle borders, PdfPTable table) {
     final int lastIndex = columns.size() - 1;
     for (int index = 1; index < lastIndex; ++index)
-      cells.next().appendTable(borders, columns.get(index).getFormat(), table);
+      cells.next().appendToTable(borders, columns.get(index).getFormat(), table);
   }
   
   

@@ -1197,8 +1197,12 @@ private record LineNosInfo(int dex) {
       lastRn = record.rowNum();
       if (!record.isTrailed())
         continue;
+
+      System.out.println("last UTC: " + lastUtc);
+      System.out.println("record UTC: " + record.utc());
       
       if (lastUtc > record.utc()) {
+        
         toStore.add(record);
         lastUtc = record.utc();
       }

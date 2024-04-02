@@ -925,7 +925,7 @@ class RepoSettings {
         "",
         "Seals record the minimum data necessary for documenting the witnessed state",
         "of ledgers and are suited for one-shot, write-once logs. Unless overridden,",
-        "journals (logs) are first tracked and recorded using hiddent seal files.",
+        "journals (logs) are first tracked and recorded using hidden seal files.",
         "",
         "Repo directories are better suited for evolving, append-only ledgers. They",
         "may contain multiple witness records (a seal contains at most one), as well",
@@ -964,7 +964,7 @@ class SealCmd implements Callable<Integer> {
     if (max <= 0)
       throw new ParameterException(
           spec.commandLine(),
-          "max-rows " + max + " <= 0");
+          "invalid " + ADD_OPT + " argument " + max + " (must be greater than zero)");
     this.max = max;
   }
   

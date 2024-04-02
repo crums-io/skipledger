@@ -75,6 +75,8 @@ public abstract class SourcedCell extends CellData {
    * o.w. the instance is initialized via {@linkplain #init(SourceRow)}. Invoking
    * the wrong {@code init(..)} method results in an {@code UnsupportedOperationException}
    * being thrown.
+   * 
+   * @return defaults to {@code false}
    */
   public boolean isCompound() {
     return false;
@@ -82,6 +84,8 @@ public abstract class SourcedCell extends CellData {
   
   /**
    * Initializes the instance with the given {@code rowset} and returns the generated cell.
+   * By default, this is not supported.
+   * 
    * @see #isCompound()
    * @see #isInitialized()
    * @see #generatedCell */
@@ -100,35 +104,70 @@ public abstract class SourcedCell extends CellData {
    * {@linkplain #generatedCell}, or a blank cell, if not initialized.
    */
   @Override
-  public void appendTable(Rectangle borders, CellFormat format, PdfPTable table) {
-    CellData delegate = generatedCell == null ? TextCell.BLANK : generatedCell;
-    delegate.appendTable(borders, format, table);
+  public void appendToTable(Rectangle borders, CellFormat format, PdfPTable table) {
+    CellData delegate = effectiveCell();
+    delegate.appendToTable(borders, format, table);
   }
 
 
   
   
-  public CellData effectiveCell() {
+  public final CellData effectiveCell() {
     return generatedCell == null ? TextCell.BLANK : generatedCell;
   }
   
   
   
   
-  
+  /**
+   * Row number cell generator.
+   */
+  public static class RowNumCell extends SourcedCell {
+
+    /**
+     * Full constructor.
+     * 
+     * @param provider  required
+     * @param format    optional (may be null)
+     */
+    public RowNumCell(NumberProvider provider, CellFormat format) {
+      super(provider, format);
+    }
+
+    
+    @Override
+    public CellData init(SourceRow sourceRow) {
+      return generatedCell = provider().getCellData(sourceRow.rowNumber(), format);
+    }
+    
+
+    @Override
+    public NumberProvider provider() {
+      return (NumberProvider) provider;
+    }
+    
+  }
   
   
   
 
+  /**
+   * A {@code SourcedCell} pinned to a particular column value in a <em>source row</em>.
+   * Note, the "column" moniker here is not referring to the column in the PDF table
+   * (my bad for overloading these terms).
+   */
   public static abstract class ColumnCell extends SourcedCell {
 
     final int columnIndex;
     
     
-    ColumnCell(int columnIndex, CellDataProvider<?> provider) {
-      this(columnIndex, provider, null);
-    }
-    
+    /**
+     * Base constructor.
+     * 
+     * @param columnIndex   zero-based column index (&ge; 0)
+     * @param provider      not null
+     * @param format        optional (may be null)
+     */
     ColumnCell(int columnIndex, CellDataProvider<?> provider, CellFormat format) {
       super(provider, format);
       this.columnIndex = columnIndex;
@@ -136,20 +175,28 @@ public abstract class SourcedCell extends CellData {
         throw new IndexOutOfBoundsException("columnIndex " + columnIndex);
     }
     
-    
+    /** Returns the instance's zero-based column index. */
     public final int getColumnIndex() {
       return columnIndex;
     }
 
     
+    /** Determines whether the given source row has this column index. */
     boolean hasColumn(SourceRow sourceRow) {
       return sourceRow.getColumns().size() > columnIndex;
     }
     
+    /** Determines whether the given source row has this column index and {@code type}. */
     boolean hasColumn(SourceRow sourceRow, ColumnType type) {
       return hasColumn(sourceRow) && hasColumnType(sourceRow, type);
     }
     
+    /**
+     * Determines whether the given source row has the given column {@code type}
+     * at this {@linkplain #getColumnIndex() column index}.
+     * 
+     * @throws IndexOutOfBoundsException if {@linkplain #hasColumn(SourceRow)} is {@code false}
+     */
     boolean hasColumnType(SourceRow sourceRow, ColumnType type) throws IndexOutOfBoundsException {
       return sourceRow.getColumns().get(columnIndex).getType() == type;
     }
@@ -174,6 +221,9 @@ public abstract class SourcedCell extends CellData {
   }
   
   
+  /**
+   * A pinned date cell.
+   */
   public static class DateCell extends ColumnCell {
     
     private final static int CH = DateCell.class.hashCode();
@@ -216,11 +266,20 @@ public abstract class SourcedCell extends CellData {
   }
   
   
+  /** A {@code SourcedCell} pinned to a numeric column value. */
   static abstract class BaseNumber extends ColumnCell {
 
 
     final BaseNumFunc func;
     
+    /**
+     * Base constructor.
+     *    
+     * @param columnIndex   zero-based column index (&ge; 0)
+     * @param provider      required number provider (encapsulates number formatting and such)
+     * @param func          optional function with one argument
+     * @param format        optional cell format
+     */
     BaseNumber(int columnIndex, NumberProvider provider, BaseNumFunc func, CellFormat format) {
       super(columnIndex, provider, format);
       this.func = func;
@@ -253,6 +312,7 @@ public abstract class SourcedCell extends CellData {
     }
     
     
+    /** Determines whether the given row has a number value at this column index. */
     boolean hasNumberType(SourceRow sourceRow) {
       return
           hasColumn(sourceRow) && (
@@ -305,6 +365,11 @@ public abstract class SourcedCell extends CellData {
   }
   
   
+  /**
+   * A sum over <em>multiple</em> source rows.
+   * 
+   * @see #isCompound()
+   */
   public static class Sum extends BaseNumber {
     
     private final static int CH = Sum.class.hashCode();
@@ -503,7 +568,7 @@ public abstract class SourcedCell extends CellData {
   }
   
   
-  
+  /** String-type cell pinned to the value at a specific column index. */
   public static class StringCell extends ColumnCell {
     
     private final static int CH = StringCell.class.hashCode();
@@ -539,16 +604,27 @@ public abstract class SourcedCell extends CellData {
   }
   
   
+  /**
+   * String-type cell pinned to values at specific column indices.
+   * This concatenates values using a {@linkplain #getSeparator() separator}.
+   */
   public static class MultiStringCell extends SourcedCell {
     
     private final static int CH = MultiStringCell.class.hashCode();
     
+    /** Default separator. Comma + space. */
     public final static String DEFAULT_SEP = ", ";
 
     private final List<Integer> columns;
     
     private String separator = DEFAULT_SEP;
     
+    /**
+     * 
+     * @param columns   zero-based column indices
+     * @param provider  customizable string provider
+     * @param format    optional presentation format
+     */
     public MultiStringCell(List<Integer> columns, StringProvider provider, CellFormat format) {
       super(provider, format);
       Objects.requireNonNull(columns, "null columns");
@@ -561,11 +637,13 @@ public abstract class SourcedCell extends CellData {
         throw new IllegalArgumentException("column indices not sorted or contains duplicates: " + columns);
     }
     
-    
+    /** Returns the separator. Never null. */
     public String getSeparator() {
       return separator;
     }
     
+    
+    /** Sets the separator. Null means {@linkplain #DEFAULT_SEP}. */
     public MultiStringCell setSeparator(String separator) {
       this.separator = separator == null ? DEFAULT_SEP : separator;
       return this;

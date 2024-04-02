@@ -23,7 +23,7 @@ import io.crums.util.Lists;
  * Data for a PDF table cells. May optionally contain presentation / formatting
  * information.
  * 
- * @see #appendTable(Rectangle, CellFormat, PdfPTable)
+ * @see #appendToTable(Rectangle, CellFormat, PdfPTable)
  * @see #getFormat()
  */
 public abstract class CellData {
@@ -106,7 +106,7 @@ public abstract class CellData {
   
   /**
    * Returns the optional <em>override</em> format for this cell. If set, then it
-   * <em>overrides</em> the one given in {@linkplain #appendTable(Rectangle, CellFormat, PdfPTable)}.
+   * <em>overrides</em> the one given in {@linkplain #appendToTable(Rectangle, CellFormat, PdfPTable)}.
    */
   public final Optional<CellFormat> getFormat() {
     return Optional.ofNullable(format);
@@ -133,7 +133,7 @@ public abstract class CellData {
    *                 then this argument is ignored.
    * @param table    the table the cell is appended to
    */
-  public abstract void appendTable(Rectangle borders, CellFormat format, PdfPTable table);
+  public abstract void appendToTable(Rectangle borders, CellFormat format, PdfPTable table);
   
   
   CellFormat format(CellFormat fmt) {
@@ -150,7 +150,7 @@ public abstract class CellData {
     public abstract String getText();
 
     @Override
-    public void appendTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
+    public void appendToTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
       fmt = format(fmt);
       Paragraph p = new Paragraph(getText(), fmt.getFont().getFont());
       p.setLeading(fmt.getLeading());
@@ -275,7 +275,7 @@ public abstract class CellData {
     }
 
     @Override
-    public void appendTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
+    public void appendToTable(Rectangle borders, CellFormat fmt, PdfPTable table) {
       fmt = format(fmt);
       var img = Image.getInstance(image);
       PdfPCell cell = new PdfPCell();
