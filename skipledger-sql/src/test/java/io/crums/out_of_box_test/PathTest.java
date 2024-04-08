@@ -15,7 +15,7 @@ import io.crums.sldg.CompactSkipLedger;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.mem.VolatileTable;
+import io.crums.sldg.VolatileTable;
 
 /**
  * 

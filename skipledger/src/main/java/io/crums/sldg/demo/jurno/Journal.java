@@ -10,11 +10,11 @@ import java.util.Objects;
 
 import io.crums.io.FileUtils;
 import io.crums.io.Opening;
-import io.crums.sldg.HashLedger;
-import io.crums.sldg.Ledger;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.fs.HashLedgerDir;
 import io.crums.sldg.fs.TableSaltFile;
+import io.crums.sldg.ledgers.HashLedger;
+import io.crums.sldg.ledgers.Ledger;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.TaskStack;
 

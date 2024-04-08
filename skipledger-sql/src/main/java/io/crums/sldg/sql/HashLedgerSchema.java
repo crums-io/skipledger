@@ -6,7 +6,7 @@ package io.crums.sldg.sql;
 
 import java.util.Objects;
 
-import io.crums.sldg.HashLedger;
+import io.crums.sldg.ledgers.HashLedger;
 import io.crums.util.Base64_32;
 
 /**

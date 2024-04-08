@@ -72,13 +72,10 @@ public abstract class RowHash implements Digest {
    */
   @Override
   public final boolean equals(Object o) {
-    if (o == this)
-      return true;
-    else if (o instanceof RowHash) {
-      RowHash other = (RowHash) o;
-      return other.rowNumber() == rowNumber() && other.hash().equals(hash());
-    } else
-      return false;
+    return o == this
+        || o instanceof RowHash other
+        && other.rowNumber() == rowNumber()
+        && other.hash().equals(hash());
   }
   
 

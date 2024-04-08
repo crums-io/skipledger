@@ -12,7 +12,8 @@ import java.util.SortedSet;
 import io.crums.util.IntegralStrings;
 
 /**
- * A row in a ledger. Instances have immutable state.
+ * A row in a ledger.
+ * Concrete instances must have immutable state.
  * 
  * @see RowHash#prevLevels()
  * @see RowHash#prevRowNumber(int)
@@ -20,10 +21,7 @@ import io.crums.util.IntegralStrings;
 public abstract class Row extends RowHash {
   
   
-  /**
-   * Concrete (base) implementations defined only in this package.
-   */
-  Row() {  }
+  
   
 
   /**

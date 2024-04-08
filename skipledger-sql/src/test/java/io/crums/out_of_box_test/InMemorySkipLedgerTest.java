@@ -5,7 +5,7 @@ package io.crums.out_of_box_test;
 
 
 import io.crums.sldg.SkipTable;
-import io.crums.sldg.mem.VolatileTable;
+import io.crums.sldg.VolatileTable;
 
 /**
  * 

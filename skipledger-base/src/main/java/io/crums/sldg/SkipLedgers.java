@@ -7,8 +7,6 @@ import java.io.File;
 import java.io.IOException;
 
 import io.crums.io.Opening;
-import io.crums.sldg.fs.SkipLedgerFile;
-import io.crums.sldg.mem.VolatileTable;
 
 /**
  * 

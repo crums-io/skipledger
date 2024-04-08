@@ -1,14 +1,13 @@
 /*
  * Copyright 2020-2021 Babak Farhang
  */
-package io.crums.sldg.mem;
+package io.crums.sldg;
 
 
 import java.nio.ByteBuffer;
 import java.util.ConcurrentModificationException;
 
 import io.crums.io.buffer.ReadWriteBuffer;
-import io.crums.sldg.SkipTable;
 
 /**
  * 

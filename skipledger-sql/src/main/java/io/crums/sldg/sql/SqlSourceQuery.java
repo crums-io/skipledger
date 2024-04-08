@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.SourceLedger;
+import io.crums.sldg.ledgers.SourceLedger;
 import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.DateValue;

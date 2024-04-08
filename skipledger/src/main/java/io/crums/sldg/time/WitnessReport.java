@@ -15,11 +15,11 @@ import java.util.TreeSet;
 import io.crums.client.Client;
 import io.crums.client.ClientException;
 import io.crums.model.CrumRecord;
-import io.crums.sldg.HashLedger;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.SldgException;
+import io.crums.sldg.ledgers.HashLedger;
 
 /**
  * Summary of the witnessing of a {@linkplain HashLedger}.

@@ -6,9 +6,9 @@ package io.crums.sldg.sql;
 
 import java.sql.Connection;
 
-import io.crums.sldg.HashLedger;
-import io.crums.sldg.Ledger;
-import io.crums.sldg.SourceLedger;
+import io.crums.sldg.ledgers.HashLedger;
+import io.crums.sldg.ledgers.Ledger;
+import io.crums.sldg.ledgers.SourceLedger;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.TaskStack;
 import io.crums.util.ticker.Ticker;

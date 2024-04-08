@@ -335,6 +335,11 @@ Other changes:
 
 ## Roadmap
 
+This project uses the crums.io time chain to record witness proofs of ledger state.
+The crums.io time chain itself, however, can benefit from this skip ledger data
+structure. To make that redesign possible, the core package should not know about
+(depend on) the time chain. So a (hopefully small) refactoring is underway.
+
 The following are planned for the next releases:
 
 - Hashing logs/text; eyeing checkpoints, instead of building full ledgers

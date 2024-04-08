@@ -12,8 +12,9 @@ import java.util.List;
 import java.util.Objects;
 
 import io.crums.io.Opening;
-import io.crums.sldg.HashLedger;
 import io.crums.sldg.SkipLedger;
+import io.crums.sldg.SkipLedgerFile;
+import io.crums.sldg.ledgers.HashLedger;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.TaskStack;

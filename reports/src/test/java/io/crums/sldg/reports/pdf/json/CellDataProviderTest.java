@@ -6,7 +6,7 @@ package io.crums.sldg.reports.pdf.json;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
+import io.crums.testing.SelfAwareTestCase;
 
 import io.crums.sldg.reports.pdf.CellDataProvider;
 import io.crums.sldg.reports.pdf.CellDataProvider.DateProvider;

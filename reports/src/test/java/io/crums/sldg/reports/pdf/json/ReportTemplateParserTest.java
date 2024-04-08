@@ -9,17 +9,13 @@ import static io.crums.sldg.reports.pdf.ReportTemplateTest.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
-import java.io.PrintStream;
-import java.nio.ByteBuffer;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.IoTestCase;
+import io.crums.testing.IoTestCase;
 
-import io.crums.io.FileUtils;
 import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONObject;
-import io.crums.util.json.simple.parser.JSONParser;
 
 /**
  * Leans on {@linkplain ReportTemplateTest}

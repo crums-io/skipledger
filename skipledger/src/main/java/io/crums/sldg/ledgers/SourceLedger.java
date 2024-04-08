@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.ledgers;
 
 import io.crums.sldg.src.SourceRow;
 

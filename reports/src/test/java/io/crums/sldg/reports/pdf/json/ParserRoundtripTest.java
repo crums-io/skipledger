@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.BeforeEach;
 
-import com.gnahraf.test.SelfAwareTestCase;
+import io.crums.testing.SelfAwareTestCase;
 
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonPrinter;

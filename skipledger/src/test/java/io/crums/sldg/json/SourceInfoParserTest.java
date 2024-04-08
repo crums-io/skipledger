@@ -10,7 +10,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
+import io.crums.testing.SelfAwareTestCase;
 
 import io.crums.sldg.src.ColumnInfo;
 import io.crums.sldg.src.SourceInfo;

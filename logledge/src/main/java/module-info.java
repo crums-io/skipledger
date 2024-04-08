@@ -3,7 +3,7 @@
  */
 module io.crums.sldg.logs {
   
-  requires transitive io.crums.sldg.base;
+  requires transitive io.crums.sldg.ledgers;
   
   requires io.crums.util.xp;
   

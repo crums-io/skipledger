@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.crums.sldg.BaggedRow;
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
 import io.crums.sldg.SkipLedger;

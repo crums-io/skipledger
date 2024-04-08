@@ -6,7 +6,6 @@ package io.crums.sldg;
 
 import java.lang.System.Logger;
 
-import io.crums.client.repo.TrailRepo;
 import io.crums.util.hash.Digest;
 import io.crums.util.hash.Digests;
 
@@ -36,10 +35,6 @@ public class SldgConstants {
   public static final String MRSL_EXT = ".mrsl";
   
   public final static String DB_LEDGER = "ledger";
-  
-  public final static String DB_CT_IDX = TrailRepo.IDX_FILE;
-  
-  public final static String DB_CT_BLOB = TrailRepo.BLOB_FILE;
 
   public final static int DEF_TOOTHED_WIT_COUNT = 8;
 

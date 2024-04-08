@@ -23,7 +23,7 @@ import io.crums.io.buffer.BufferUtils;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.SourceLedger;
+import io.crums.sldg.ledgers.SourceLedger;
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
 import io.crums.util.Strings;

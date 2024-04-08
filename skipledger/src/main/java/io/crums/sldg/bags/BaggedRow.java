@@ -1,12 +1,14 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.bags;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import io.crums.sldg.bags.RowBag;
+import io.crums.sldg.Path;
+import io.crums.sldg.Row;
+import io.crums.sldg.SkipLedger;
 
 /**
  * Row backed by data in a {@linkplain RowBag}. This is a departure

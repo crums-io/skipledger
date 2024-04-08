@@ -1,5 +1,5 @@
 module io.crums.sldg.mrsl_cli {
-  requires io.crums.sldg.base;
+  requires io.crums.sldg.ledgers;
   requires io.crums.core;
   requires io.crums.util;
   requires io.crums.sldg.reports.pdf;

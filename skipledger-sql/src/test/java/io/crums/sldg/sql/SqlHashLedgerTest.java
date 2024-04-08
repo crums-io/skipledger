@@ -8,7 +8,7 @@ import java.io.File;
 import java.sql.Connection;
 
 import io.crums.out_of_box_test.AbstractHashLedgerTest;
-import io.crums.sldg.HashLedger;
+import io.crums.sldg.ledgers.HashLedger;
 
 /**
  * 

@@ -17,8 +17,8 @@ import java.util.logging.Logger;
 
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
-import io.crums.sldg.HashLedger;
 import io.crums.sldg.SkipLedger;
+import io.crums.sldg.ledgers.HashLedger;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 import io.crums.util.Base64_32;

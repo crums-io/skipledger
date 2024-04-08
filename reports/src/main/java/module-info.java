@@ -1,5 +1,5 @@
 module io.crums.sldg.reports.pdf {
-  requires transitive io.crums.sldg.base;
+  requires transitive io.crums.sldg.ledgers;
   
   requires java.desktop;
   requires com.github.librepdf.openpdf;

@@ -4,7 +4,8 @@
 package io.crums.sldg.reports.pdf.json;
 
 
-import com.gnahraf.test.SelfAwareTestCase;
+import io.crums.testing.SelfAwareTestCase;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.crums.sldg.reports.pdf.func.BaseNumFunc;

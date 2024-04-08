@@ -19,7 +19,7 @@
   
   
   <properties>
-    <revision>0.5.2-SNAPSHOT</revision>
+    <revision>0.6.0-SNAPSHOT</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
@@ -85,6 +85,7 @@
   
   
   <modules>
+    <module>skipledger-base</module>
     <module>skipledger</module>
     <module>skipledger-sql</module>
     <module>reports</module>
@@ -182,10 +183,10 @@
             <tr>
             <td style="text-align: left;">&nbsp;io.crums:]]>${project.artifactId} v${revision}
             <![CDATA[ <br/>
-            &nbsp;Licensed under the GNU Affero General Public License v3
+            &nbsp;GNU Affero General Public License v3
             (<a href="https://www.gnu.org/licenses/agpl-3.0.txt">AGPL</a>)
             </td>
-            <td style="text-align: right;"><br/>&copy; 2020-2023 <a href="http://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
+            <td style="text-align: right;"><br/>&copy; 2020-2024 <a href="http://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
             </tr>
             </table>
             ]]>
@@ -246,6 +247,7 @@
     </dependency>
 
     <!-- TEST scope -->
+    
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -254,9 +256,9 @@
     </dependency>
     
     <dependency>
-      <groupId>com.gnahraf</groupId>
-      <artifactId>junit-io</artifactId>
-      <version>0.0.1</version>
+      <groupId>io.crums</groupId>
+      <artifactId>unit-io</artifactId>
+      <version>1.0.0</version>
       <scope>test</scope>
     </dependency>
 

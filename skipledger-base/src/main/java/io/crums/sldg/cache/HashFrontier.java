@@ -34,8 +34,8 @@ import io.crums.util.Lists;
  * </p>
  * <ol>
  * <li><em>Verifying a source ledger matches its skipledger.</em><p>In order to verify that a
- * sequence of input-hashes from a source ledger (whether from a {@linkplain io.crums.sldg.SourceLedger SourceLedger} or
- * another application-defined format) matches the state of a skipledger across a range of row
+ * sequence of input-hashes from a source
+ * matches the state of a skipledger across a range of row
  * numbers, one loads an instance starting from the previous row number (via {@linkplain
  * #loadFrontier(SkipLedger, long)}) and then runs it forward (consuming the sequence of hashes)
  * to the last row number in the range (which doesn't involve accessing the skipledger) and then

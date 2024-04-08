@@ -53,6 +53,12 @@
       <artifactId>jsonimple</artifactId>
       <version>${crums.util}</version>
     </dependency>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger-base</artifactId>
+      <version>${revision}</version>
+    </dependency>
 
     <dependency>
       <groupId>io.crums</groupId>

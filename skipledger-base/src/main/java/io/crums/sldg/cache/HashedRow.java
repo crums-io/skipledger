@@ -4,9 +4,10 @@
 package io.crums.sldg.cache;
 
 
+import static io.crums.sldg.SldgConstants.HASH_WIDTH;
+
 import java.nio.ByteBuffer;
 
-import io.crums.model.Constants;
 import io.crums.sldg.RowHash;
 
 /**
@@ -32,7 +33,9 @@ public class HashedRow extends RowHash {
    * @param hash      32 bytes. Not copied. (Do not modify!)
    */
   public HashedRow(long rowNumber, byte[] hash) {
-    this(rowNumber, ByteBuffer.wrap(hash));
+    this.rowNumber = rowNumber;
+    this.hash = ByteBuffer.wrap(hash);
+    checkArgs();
   }
   
 
@@ -44,14 +47,23 @@ public class HashedRow extends RowHash {
    */
   public HashedRow(long rowNumber, ByteBuffer hash) {
     this.rowNumber = rowNumber;
-    if (rowNumber < 1)
-      throw new IllegalArgumentException("rowNumber " + rowNumber);
     
     this.hash = hash.slice();
-    if (this.hash.remaining() != Constants.HASH_WIDTH)
-      throw new IllegalArgumentException("hash buffer: " + hash);
-    
+    checkArgs();
   }
+  
+  
+  private void checkArgs() {
+    if (rowNumber < 1)
+      throw new IllegalArgumentException(
+          "rowNumber " + rowNumber);
+    if (hash.remaining() != HASH_WIDTH)
+      throw new IllegalArgumentException(
+          "illegal remaining bytes in hash buffer: " + hash);
+  }
+  
+  
+  
 
   @Override
   public long rowNumber() {

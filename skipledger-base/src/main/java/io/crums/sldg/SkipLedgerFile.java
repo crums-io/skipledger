@@ -1,16 +1,13 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.fs;
+package io.crums.sldg;
 
 
 import java.io.File;
 import java.io.IOException;
 
 import io.crums.io.Opening;
-import io.crums.sldg.CompactSkipLedger;
-import io.crums.sldg.Row;
-import io.crums.sldg.SerialRow;
 import io.crums.sldg.cache.RowCache;
 
 /**

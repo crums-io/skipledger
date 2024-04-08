@@ -12,11 +12,10 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
-
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SkipLedgers;
 import io.crums.sldg.SldgConstants;
+import io.crums.testing.SelfAwareTestCase;
 
 /**
  * 

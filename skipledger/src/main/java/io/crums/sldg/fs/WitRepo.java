@@ -13,7 +13,7 @@ import io.crums.client.repo.TrailRepo;
 import io.crums.io.Opening;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.WitnessedRowRepo;
+import io.crums.sldg.ledgers.WitnessedRowRepo;
 import io.crums.sldg.time.TrailedRow;
 import io.crums.sldg.time.WitnessRecord;
 

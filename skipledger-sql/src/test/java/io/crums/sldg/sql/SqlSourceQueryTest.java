@@ -16,7 +16,7 @@ import static io.crums.sldg.sql.SqlTestHarness.*;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.IoTestCase;
+import io.crums.testing.IoTestCase;
 
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.src.ColumnType;

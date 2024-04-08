@@ -13,7 +13,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.IoTestCase;
+import io.crums.testing.IoTestCase;
 
 import io.crums.sldg.CompactSkipLedger;
 import io.crums.sldg.Row;

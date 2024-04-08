@@ -12,7 +12,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
+import io.crums.testing.SelfAwareTestCase;
 
 import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.ColumnValue;

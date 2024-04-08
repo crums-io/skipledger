@@ -1,7 +1,7 @@
 /*
  * Copyright 2023 Babak Farhang
  */
-package io.crums.sldg;
+package io.crums.sldg.ledgers;
 
 import java.util.ArrayList;
 import java.util.Collection;

@@ -11,9 +11,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import com.gnahraf.test.SelfAwareTestCase;
-
-import io.crums.sldg.mem.VolatileTable;
+import io.crums.testing.SelfAwareTestCase;
 
 /**
  * 
