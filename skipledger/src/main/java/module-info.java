@@ -4,6 +4,8 @@ module io.crums.sldg.ledgers {
   
   requires transitive io.crums.core;
   
+  requires io.crums.util.xp;
+  
   exports io.crums.sldg.bags;
   exports io.crums.sldg.fs;
   exports io.crums.sldg.json;

@@ -22,7 +22,7 @@
 
     <dependency>
       <groupId>io.crums</groupId>
-      <artifactId>io-xp</artifactId>
+      <artifactId>io-util</artifactId>
       <version>${crums.util}</version>
     </dependency>
     
