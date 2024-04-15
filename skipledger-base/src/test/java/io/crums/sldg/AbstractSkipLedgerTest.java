@@ -19,6 +19,9 @@ import io.crums.testing.IoTestCase;
  * 
  */
 public abstract class AbstractSkipLedgerTest extends IoTestCase {
+  
+  /** System property name. */
+  public final static String TEST_ALL = "testAll";
 
   private final static ByteBuffer SENTINEL_HASH = DIGEST.sentinelHash();
 
@@ -116,15 +119,30 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
     testAppendEnBloc(rows, label, rows);
   }
   
+  @Test
+  public void test128k_in_4k_blocks() throws Exception {
+
+    int rows = 128 * 1024 + 5;
+    int blockSize = 4 * 1024;
+    Object label = new Object() { };
+    testAppendEnBloc(rows, label, blockSize);
+  }
+  
+  
+  
+  
   
   
   @Test
   public void test1M_plus33() throws Exception {
 
+    
     final int rows = 1024*1024 + 33;
     final int blockSize = 16 * 1024;
     Object label = new Object() { };
-    testAppendEnBloc(rows, label, blockSize);
+    
+    if (checkEnabled(TEST_ALL, label, true))
+      testAppendEnBloc(rows, label, blockSize);
   }
   
   
@@ -133,6 +151,7 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
 
     String method = method(label);
     System.out.print("== " + method + ":");
+    System.out.flush();
     
     try (SkipLedger ledger = newLedger(label)) {
 
@@ -157,6 +176,7 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
     
     String method = method(label);
     System.out.print("== " + method + ": " + rows + " rows, " + blockSize + " rows per block ");
+    System.out.flush();
 
     
     try (SkipLedger ledger = newLedger(label)) {

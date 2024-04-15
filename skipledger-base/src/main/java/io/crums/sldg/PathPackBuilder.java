@@ -3,10 +3,14 @@
  */
 package io.crums.sldg;
 
+
+import static io.crums.sldg.SldgConstants.HASH_WIDTH;
+
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -14,7 +18,7 @@ import io.crums.util.Lists;
 import io.crums.util.Sets;
 
 /**
- * 
+ * Builder for a {@linkplain PathPack}.
  */
 public class PathPackBuilder implements PathBag {
 
@@ -34,6 +38,7 @@ public class PathPackBuilder implements PathBag {
    */
   private final HashMap<Long, ByteBuffer> memoHashes = new HashMap<>();
   
+  @SuppressWarnings("unused")
   private boolean corrupted;
   
   /**
@@ -315,6 +320,28 @@ public class PathPackBuilder implements PathBag {
     if (hash == null)
       hash = memoHashes.get(rn);
     return hash;
+  }
+  
+  
+  
+  /**
+   * Returns the state of this builder as a {@code PathPack}.
+   */
+  public PathPack toPack() {
+    synchronized (lock) {
+      var fullRns = getFullRowNumbers();
+      var inputsBlock = gatherHashes(inputHashes);
+      var refsBlock = gatherHashes(refHashes);
+      return new PathPack(fullRns, refsBlock, inputsBlock);
+    }
+  }
+  
+  
+  private ByteBuffer gatherHashes(SortedMap<Long, ByteBuffer> map) {
+    var block = ByteBuffer.allocate(HASH_WIDTH * map.size());
+    map.values().forEach(h -> block.put(h.slice()));
+    assert !block.hasRemaining();
+    return block.flip().asReadOnlyBuffer();
   }
   
   
