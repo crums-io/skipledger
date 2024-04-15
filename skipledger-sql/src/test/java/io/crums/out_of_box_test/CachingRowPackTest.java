@@ -6,8 +6,8 @@ package io.crums.out_of_box_test;
 
 import java.util.List;
 
+import io.crums.sldg.RowBag;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.bags.RowBag;
 import io.crums.sldg.packs.CachingRowPack;
 import io.crums.sldg.packs.RowPack;
 import io.crums.sldg.packs.RowPackBuilder;

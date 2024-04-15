@@ -131,6 +131,9 @@ public class HashFrontier extends Frontier implements Serial {
   
   
   
+  
+  
+  
   /**
    * Loads an instance from the given skipledger at the given row number.
    * 

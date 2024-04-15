@@ -14,8 +14,8 @@ import java.util.SortedSet;
 
 import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.ByteFormatException;
+import io.crums.sldg.RowBag;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.bags.RowBag;
 import io.crums.util.Lists;
 
 /**

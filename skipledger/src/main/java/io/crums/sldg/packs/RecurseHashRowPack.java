@@ -6,8 +6,8 @@ package io.crums.sldg.packs;
 
 import java.nio.ByteBuffer;
 
+import io.crums.sldg.RowBag;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.bags.RowBag;
 
 
 /**

@@ -1,20 +1,16 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.bags;
+package io.crums.sldg;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import io.crums.sldg.Path;
-import io.crums.sldg.Row;
-import io.crums.sldg.SkipLedger;
-
 /**
- * Row backed by data in a {@linkplain RowBag}. This is a departure
- * (loosening up) from previous guarantees. Oh well, it's convenient,
- * plus other classes like {@linkplain Path} validate data on construction,
- * besides.
+ * Row backed by data in a {@linkplain RowBag}.
+ * Note the base implementation computes the row's hash
+ * from the input hash and previous rows' hashes.
+ * It does not memo-ise the result.
  */
 public class BaggedRow extends Row {
   

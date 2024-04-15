@@ -3,6 +3,7 @@
  */
 package io.crums.sldg.bags;
 
+import io.crums.sldg.RowBag;
 import io.crums.sldg.packs.MorselPackBuilder;
 
 /**

@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * A row loaded from serial form.
+ * A self-contained row laid out in serial form.
  */
 public class SerialRow extends Row {
 
@@ -39,27 +39,27 @@ public class SerialRow extends Row {
   }
   
   /**
+   * Copy / promotion constructor.
+   */
+  public SerialRow(SerialRow copy) {
+    this.rowNumber = copy.rowNumber;
+    this.data = copy.data;
+  }
+  
+  /**
    * Copy constructor.
-   * 
-   * @throws NullPointerException if the argument is null
    */
   public SerialRow(Row copy) {
-    this.rowNumber = copy.rowNumber();
-    this.data = copy.data();
-    // we can do above cuz subclass cannot be defined outside package
-    // (well not exactly: I broke this rule with BaggedRow)
+    this(copy.rowNumber(), copy.data(), false);
   }
 
   SerialRow(long rowNumber, ByteBuffer data, boolean ignored) {
     this.rowNumber = rowNumber; // (bounds checked below)
-    int remaining = Objects.requireNonNull(data, "null data").remaining();
-    if (remaining != data.capacity())
-      data = data.slice();
-    this.data = data;
+    this.data = data.slice();
     
     int cellsInRow = 1 + SkipLedger.skipCount(rowNumber); // (bounds checked)
     int expectedBytes = cellsInRow * hashWidth();
-    if (remaining != expectedBytes)
+    if (this.data.capacity() != expectedBytes)
       throw new IllegalArgumentException(
           "expected " + expectedBytes + " bytes for rowNumber " + rowNumber +
           "; actual given is " + data);

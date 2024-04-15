@@ -5,7 +5,6 @@ package io.crums.sldg;
 
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -45,7 +44,7 @@ import io.crums.util.hash.Digest;
  * Serialization footprint, maybe; clock-cycles NO(!).
  * </p>
  */
-public class Path implements Digest {
+public class Path /* implements Digest */ {
   
   
   /**
@@ -64,7 +63,7 @@ public class Path implements Digest {
   
   
   
-  Path(List<Row> path, boolean copy) {
+  public Path(List<Row> path, boolean copy) {
     
     if (Objects.requireNonNull(path, "null path").isEmpty())
       throw new IllegalArgumentException("empth path");
@@ -83,6 +82,9 @@ public class Path implements Digest {
   }
   
   
+  Path(List<Row> rows, Object trustMe) {
+    this.rows = Objects.requireNonNull(rows);
+  }
 
   
   
@@ -93,18 +95,18 @@ public class Path implements Digest {
     this.rows = Objects.requireNonNull(copy, "null copy").rows;
   }
 
-
-  // D I G E S T     M E T H O D S
-  
-  @Override
-  public final int hashWidth() {
-    return rows.get(0).hashWidth();
-  }
-
-  @Override
-  public final String hashAlgo() {
-    return rows.get(0).hashAlgo();
-  }
+//
+//  // D I G E S T     M E T H O D S
+//  
+//  @Override
+//  public final int hashWidth() {
+//    return rows.get(0).hashWidth();
+//  }
+//
+//  @Override
+//  public final String hashAlgo() {
+//    return rows.get(0).hashAlgo();
+//  }
   
 
   
@@ -197,8 +199,28 @@ public class Path implements Digest {
   /**
    * Determines if this path has a (full) row with this row-number (not just a reference to it).
    */
-  public final boolean hasRow(long rowNumber) {
+  public boolean hasRow(long rowNumber) {
     return Collections.binarySearch(rowNumbers(), rowNumber) >= 0;
+  }
+  
+
+  
+  public boolean hasRowCovered(long rowNumber) {
+    int searchIndex = Collections.binarySearch(rowNumbers(), rowNumber);
+    if (searchIndex >= 0)
+      return true;
+    searchIndex = -1 - searchIndex;
+    if (searchIndex == rows.size())
+      return false;
+    Row candidateRef = rows.get(searchIndex);
+    final int levels = candidateRef.prevLevels();
+    for (int level = 0; level < levels; ++level) {
+      long refRn = candidateRef.prevRowNumber(level);
+      if (refRn > rowNumber)
+        continue;
+      return refRn == rowNumber;
+    }
+    return false;
   }
   
   
@@ -212,9 +234,10 @@ public class Path implements Digest {
    * 
    * @see #getRowHash(long)
    */
-  public final SortedSet<Long> rowNumbersCovered() {
+  public SortedSet<Long> rowNumbersCovered() {
     return SkipLedger.coverage(rowNumbers());
   }
+  
   
   /**
    * Returns the hash of the row with the given <code>rowNumber</code>. This is not
@@ -226,10 +249,10 @@ public class Path implements Digest {
    * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
    * set returned by {@linkplain #rowNumbersCovered()}
    */
-  public final ByteBuffer getRowHash(long rowNumber) throws IllegalArgumentException {
+  public ByteBuffer getRowHash(long rowNumber) throws IllegalArgumentException {
     return
         rowNumber == 0 ?
-            sentinelHash() :
+            SldgConstants.DIGEST.sentinelHash() :
               getRowOrReferringRow(rowNumber).hash(rowNumber);
   }
   
@@ -244,7 +267,7 @@ public class Path implements Digest {
     if (index < 0)
       throw new IllegalArgumentException("no such row [" + rowNumber + "]");
     
-    return rows().get(index);
+    return rows.get(index);
   }
   
   
@@ -262,7 +285,7 @@ public class Path implements Digest {
    * 
    * @see #getRowHash(long)
    */
-  public final Row getRowOrReferringRow(long rowNumber) throws IllegalArgumentException {
+  public Row getRowOrReferringRow(long rowNumber) throws IllegalArgumentException {
     
     final List<Long> rowNumbers = rowNumbers();
     {
@@ -271,28 +294,16 @@ public class Path implements Digest {
       if (index >= 0)
         return rows().get(index);
       
-      else if (-1 - index == rowNumbers.size())
+      index = -1 - index;
+      if (index == rowNumbers.size())
         throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
-    }
-
-    final int pointerLevels = SkipLedger.skipCount(rowNumber);
-    
-    for (int exp = 0; exp < pointerLevels; ++exp) {
       
-      long referrerNum = rowNumber + (1L << exp);
-      int index = Collections.binarySearch(rowNumbers, referrerNum);
-      
-      if (index >= 0) {
-        Row row = rows.get(index);
-        assert row.prevLevels() > exp;
-        return row;
-        
-      } else if (-1 - index == rowNumbers.size())
-        break;
+      Row row = rows.get(index);
+      if (SkipLedger.rowsLinked(rowNumber, row.rowNumber()))
+        throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
+      return row;
     }
     
-    
-    throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
   }
   
   
@@ -302,11 +313,35 @@ public class Path implements Digest {
   
   
   
+  /**
+   * Instances are equal if they have the same rows. This only needs
+   * to verify 2 paths have the same row numbers and that the
+   * hash of their <em>last</em> rows are the same.
+   */
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o == this ||
+        o instanceof Path other
+        && rows.size() == other.rows.size()
+        && loRowNumber() == other.loRowNumber()
+        && last().equals(other.last())
+        // this last check is also necessary
+        && rowNumbers().equals(other.rowNumbers());
+  }
   
   
   
-  
-  
+  /**
+   * Consistent with {@link #equals(Object)}.
+   */
+  @Override
+  public final int hashCode() {
+    long lhash = hiRowNumber();
+    lhash = lhash * 255 + rows.size();
+    int cryptFuzz = last().hash().limit(16).hashCode();
+    return Long.hashCode(lhash) ^ cryptFuzz;
+  }
   
   
   
@@ -327,7 +362,7 @@ public class Path implements Digest {
   
   private void verify() {
 
-    MessageDigest digest = rows.get(0).newDigest();
+    var digest = SldgConstants.DIGEST.newDigest();
 
     // artifact of deciding to reverse the order of the displayed rows
     List<Row> rpath = Lists.reverse(this.rows);
@@ -336,10 +371,10 @@ public class Path implements Digest {
       Row row = rpath.get(index);
       Row prev = rpath.get(index + 1);
       
-      if (!Digest.equal(row, prev))
-        throw new IllegalArgumentException(
-            "digest conflict at index " + index + ": " +
-                rpath.subList(index, index + 2));
+//      if (!Digest.equal(row, prev))
+//        throw new IllegalArgumentException(
+//            "digest conflict at index " + index + ": " +
+//                rpath.subList(index, index + 2));
       
       long rowNumber = row.rowNumber();
       long prevNumber = prev.rowNumber();

@@ -1,21 +1,18 @@
 /*
- * Copyright 2021 Babak Farhang
+ * Copyright 2021-2024 Babak Farhang
  */
-package io.crums.sldg.bags;
+package io.crums.sldg;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.crums.sldg.Path;
-import io.crums.sldg.Row;
-import io.crums.sldg.SkipLedger;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
 
 /**
- * <p>A bag of rows. The general contract is that if a row's
+ * <p>A bag of rows from a ledger. The general contract is that if a row's
  * {@linkplain #inputHash(long) input hash} is known, then
  * the {@linkplain #rowHash(long) row hash}es the row links
  * to are also known.
@@ -81,7 +78,8 @@ public interface RowBag {
    */
   default long hi() {
     List<Long> rns = getFullRowNumbers();
-    return rns.isEmpty() ? 0L : rns.get(rns.size() - 1);
+    int size = rns.size();
+    return size == 0 ? 0L : rns.get(size - 1);
   }
   
   
@@ -96,6 +94,8 @@ public interface RowBag {
   
   /**
    * Returns the row in this bag with the given number.
+   * <p>
+   * The default implementation return's a {@linkplain BaggedRow}.
    * 
    * @param rowNumber one of the {@linkplain #getFullRowNumbers() full-row-numbers}
    * 

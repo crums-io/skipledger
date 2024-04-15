@@ -15,8 +15,8 @@ import  org.junit.jupiter.api.Test;
 
 import io.crums.sldg.Path;
 import io.crums.sldg.Row;
+import io.crums.sldg.RowBag;
 import io.crums.sldg.SkipLedger;
-import io.crums.sldg.bags.RowBag;
 
 /**
  * Template test for implementation

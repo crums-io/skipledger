@@ -32,7 +32,7 @@ import io.crums.io.IoBridges;
 import io.crums.model.CrumTrail;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.HashConflictException;
-import io.crums.sldg.bags.RowBag;
+import io.crums.sldg.RowBag;
 import io.crums.sldg.json.MorselDumpWriter;
 import io.crums.sldg.json.SourceInfoParser;
 import io.crums.sldg.json.SourceRowParser;

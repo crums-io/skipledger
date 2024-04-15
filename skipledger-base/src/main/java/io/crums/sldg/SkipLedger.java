@@ -99,6 +99,11 @@ import io.crums.util.hash.Digest;
  * zero-bytes (as wide as the hash algo requires), the contents of which.. well who knows. (And
  * for our purposes, it wouldn't matter if it were discovered by chance (practically impossible), by say some Bitcoin miner).
  * </p>
+ * <h2>TODO</h2>
+ * <ul>
+ * <li>Remove {@code Digest} interface. It's not a good way to set the hashing algo
+ * and besides.. the code doesn't really use it.</li>
+ * </ul>
  */
 public abstract class SkipLedger implements Digest, AutoCloseable {
   
@@ -281,9 +286,30 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
             orderedRns.toArray(new Long[orderedRns.size()])));
   }
   
+
+  /**
+   * Stitches and returns a sorted list of row numbers.
+   * 
+   * @param orderedRns set of positive row no.s
+   * 
+   * @return a new, not empty, read-only list of unique, sorted numbers
+   * @see #stitch(List)
+   */
+  public static List<Long> stitchSet(SortedSet<Long> orderedRns) {
+    {
+      var trivial = checkTrivial(orderedRns);
+      if (trivial != null)
+        return trivial;
+    }
+    checkRealRowNumber(orderedRns.first());
+    return stitch(
+        Lists.asReadOnlyList(
+            orderedRns.toArray(new Long[orderedRns.size()])));
+  }
+  
   
   private static List<Long> checkTrivial(Collection<Long> rowNumbers) {
-    final int count = Objects.requireNonNull(rowNumbers, "null rowNumbers").size();
+    final int count = rowNumbers.size();
     
     switch (count) {
     case 0:
