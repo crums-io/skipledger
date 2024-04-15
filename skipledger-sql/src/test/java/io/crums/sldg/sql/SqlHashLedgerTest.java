@@ -7,13 +7,12 @@ package io.crums.sldg.sql;
 import java.io.File;
 import java.sql.Connection;
 
-import io.crums.out_of_box_test.AbstractHashLedgerTest;
 import io.crums.sldg.ledgers.HashLedger;
 
 /**
  * 
  */
-public class SqlHashLedgerTest extends AbstractHashLedgerTest {
+public class SqlHashLedgerTest extends CopiedBaseTests.AbstractHashLedgerTest {
   
   
   

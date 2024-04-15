@@ -323,6 +323,8 @@ public class PathPackBuilder implements PathBag {
     final List<Long> snapshotRns = getFullRowNumbers();
     return new Path(Lists.map(snapshotRns, rn -> getRow(rn)), null);
   }
+  
+  
 
   @Override
   public ByteBuffer inputHash(long rowNumber) {

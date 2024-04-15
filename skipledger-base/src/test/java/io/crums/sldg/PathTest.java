@@ -1,7 +1,7 @@
 /*
- * Copyright 2021 Babak Farhang
+ * Copyright 2024 Babak Farhang
  */
-package io.crums.out_of_box_test;
+package io.crums.sldg;
 
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -10,12 +10,6 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
-
-import io.crums.sldg.CompactSkipLedger;
-import io.crums.sldg.Row;
-import io.crums.sldg.SkipLedger;
-import io.crums.sldg.SldgConstants;
-import io.crums.sldg.VolatileTable;
 
 /**
  * 
@@ -93,17 +87,6 @@ public class PathTest {
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 

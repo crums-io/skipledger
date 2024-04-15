@@ -4,8 +4,6 @@
 package io.crums.out_of_box_test;
 
 
-import static io.crums.out_of_box_test.PathTest.newLedger;
-import static io.crums.out_of_box_test.PathTest.newRandomLedger;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
@@ -22,10 +20,12 @@ import io.crums.testing.IoTestCase;
 import io.crums.model.Crum;
 import io.crums.model.CrumTrail;
 import io.crums.model.HashUtc;
+import io.crums.sldg.CompactSkipLedger;
 import io.crums.sldg.Path;
 import io.crums.sldg.PathInfo;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
+import io.crums.sldg.VolatileTable;
 import io.crums.sldg.bags.MorselBag;
 import io.crums.sldg.mrsl.MorselFile;
 import io.crums.sldg.packs.MorselPack;
@@ -34,7 +34,6 @@ import io.crums.sldg.src.ColumnInfo;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.TableSalt;
-import io.crums.util.hash.Digests;
 import io.crums.util.mrkl.Builder;
 import io.crums.util.mrkl.FixedLeafBuilder;
 import io.crums.util.mrkl.Proof;
@@ -47,6 +46,40 @@ import io.crums.util.mrkl.Tree;
  * development
  */
 public class MorselPackTest extends IoTestCase {
+
+  
+  
+  public static SkipLedger newRandomLedger(int rows) {
+    if (rows <= 0)
+      throw new IllegalArgumentException("rows " + rows);
+    
+    SkipLedger ledger = newLedger();
+    
+    Random random = new Random(rows);
+    
+    addRandomRows(ledger, random, rows);
+    
+    assertEquals(rows, ledger.size());
+    return ledger;
+  }
+  
+  
+  public static SkipLedger newLedger() {
+    return new CompactSkipLedger(new VolatileTable());
+  }
+  
+  
+  public static void addRandomRows(SkipLedger ledger, Random random, int count) {
+
+    byte[] mockHash = new byte[SldgConstants.HASH_WIDTH];
+    ByteBuffer mockHashBuffer = ByteBuffer.wrap(mockHash);
+    
+    for (; count-- > 0; ) {
+      random.nextBytes(mockHash);
+      mockHashBuffer.clear();
+      ledger.appendRows(mockHashBuffer);
+    }
+  }
   
   
   private final static long MIN_UTC = HashUtc.INCEPTION_UTC + 100_000;
@@ -616,12 +649,12 @@ public class MorselPackTest extends IoTestCase {
     
     Crum crum = new Crum(hash, utc);
 
-    MessageDigest digest = Digests.SHA_256.newDigest();
+    MessageDigest digest = SldgConstants.DIGEST.newDigest();
     digest.update(crum.serialForm());
     
     byte[] hashOfCrum = digest.digest();
 
-    Builder builder = new FixedLeafBuilder(Digests.SHA_256.hashAlgo());
+    Builder builder = new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo());
     
     for (int i = 0; i < index; ++i) {
       random.nextBytes(hash);

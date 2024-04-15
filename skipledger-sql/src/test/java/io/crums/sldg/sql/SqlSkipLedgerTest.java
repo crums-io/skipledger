@@ -9,14 +9,13 @@ import java.sql.Connection;
 
 import org.junit.jupiter.api.Assertions;
 
-import io.crums.out_of_box_test.AbstractSkipLedgerTest;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SkipTable;
 
 /**
  * 
  */
-public class SqlSkipLedgerTest extends AbstractSkipLedgerTest {
+public class SqlSkipLedgerTest extends CopiedBaseTests.AbstractSkipLedgerTest {
   
   
 

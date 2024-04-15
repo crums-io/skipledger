@@ -201,13 +201,15 @@ public class PathPack implements PathBag, Serial {
     if (inputRns.isEmpty())
       throw new IllegalArgumentException("inputRns is empty");
     
-    if (hashRns.size() * HASH_WIDTH != hashes.remaining())
+    if (hashRns.size() * HASH_WIDTH != this.hashes.remaining())
       throw new IllegalArgumentException(
-          "hash row numbers / buffer size mismatch:\n" + hashRns + "\n  " + hashes);
+          "hash row numbers / buffer size mismatch:\n" +
+           hashRns + "\n  " + this.hashes);
 
-    if (inputRns.size() * HASH_WIDTH != inputs.remaining())
+    if (inputRns.size() * HASH_WIDTH != this.inputs.remaining())
       throw new IllegalArgumentException(
-          "input row numbers / buffer size mismatch:\n" + inputRns + "\n  " + inputs);
+          "input row numbers / buffer size mismatch:\n" +
+          inputRns + "\n  " + this.inputs);
     
   }
   
