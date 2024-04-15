@@ -4,8 +4,6 @@
 package io.crums.sldg;
 
 
-import io.crums.sldg.SkipTable;
-import io.crums.sldg.VolatileTable;
 
 /**
  * 

@@ -15,11 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import io.crums.testing.IoTestCase;
 
-import io.crums.sldg.CompactSkipLedger;
-import io.crums.sldg.Row;
-import io.crums.sldg.SkipLedger;
-import io.crums.sldg.SkipTable;
-
 /**
  * 
  */

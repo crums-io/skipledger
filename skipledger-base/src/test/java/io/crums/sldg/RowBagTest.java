@@ -3,13 +3,12 @@
  */
 package io.crums.sldg;
 
+
 import static io.crums.sldg.PathTest.newRandomLedger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 
