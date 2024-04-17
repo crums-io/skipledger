@@ -44,7 +44,7 @@ import io.crums.util.hash.Digest;
  * Serialization footprint, maybe; clock-cycles NO(!).
  * </p>
  */
-public class Path /* implements Digest */ {
+public class Path {
   
   
   /**
@@ -58,28 +58,19 @@ public class Path /* implements Digest */ {
   
   
   public Path(List<Row> path) throws IllegalArgumentException, HashConflictException {
-    this(path, true);
-  }
-  
-  
-  
-  public Path(List<Row> path, boolean copy) {
-    
-    if (Objects.requireNonNull(path, "null path").isEmpty())
+    if (path.isEmpty())
       throw new IllegalArgumentException("empth path");
     else if (path.size() > MAX_ROWS)
       throw new IllegalArgumentException("too many rows: " + path.size());
-    
-    if (copy) {
-      Row[] rows = new Row[path.size()];
-      rows = path.toArray(rows);
-      this.rows = Lists.asReadOnlyList(rows);
-    } else
-      this.rows = path;
-    
+
+    Row[] rows = new Row[path.size()];
+    rows = path.toArray(rows);
+    this.rows = Lists.asReadOnlyList(rows);
     
     verify();
   }
+  
+  
   
   
   Path(List<Row> rows, Object trustMe) {
@@ -95,18 +86,6 @@ public class Path /* implements Digest */ {
     this.rows = Objects.requireNonNull(copy, "null copy").rows;
   }
 
-//
-//  // D I G E S T     M E T H O D S
-//  
-//  @Override
-//  public final int hashWidth() {
-//    return rows.get(0).hashWidth();
-//  }
-//
-//  @Override
-//  public final String hashAlgo() {
-//    return rows.get(0).hashAlgo();
-//  }
   
 
   
@@ -119,13 +98,21 @@ public class Path /* implements Digest */ {
    * @return non-empty list of rows with ascending row numbers, each successive row linked to
    *  the previous via one of the next row's hash pointers
    */
-  public List<Row> rows() {
+  public final List<Row> rows() {
     return rows;
   }
   
   
 
-  
+  /**
+   * Returns this instance as a {@code PathPack}. The returned
+   * instance is not necessarily memo-ised.
+   * 
+   * @see MemoPathPack
+   */
+  public PathPack pack() {
+    return PathPack.forPath(this);
+  }
   
   
   

@@ -328,9 +328,24 @@ public class PathPack implements PathBag, Serial {
   }
   
   
+  private class PackedPath extends Path {
+
+    PackedPath(List<Row> rows, Object trustMe) {
+      super(rows, trustMe);
+    }
+    
+    
+    @Override
+    public PathPack pack() {
+      return PathPack.this;
+    }
+    
+  }
+  
+  
   @Override
   public Path path() {
-    return new Path(Lists.map(inputRns, rn -> getRow(rn)), null);
+    return new PackedPath(Lists.map(inputRns, rn -> getRow(rn)), null);
   }
   
   
