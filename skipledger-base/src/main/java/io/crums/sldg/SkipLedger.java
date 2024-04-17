@@ -55,13 +55,6 @@ import io.crums.util.hash.Digest;
  * a skip ledger, the number of rows in such hash proofs is on the order of the logarithm
  * of the number of rows in the ledger.
  * </p>
- * <h2>Historical Annotations</h2>
- * <p>
- * The skip ledger data structure itself encodes no information about time. 
- * Historical information is annotated to ledger rows using tamper proof witness-records called
- * <em>crumtrails</em>. A crumtrail (crums.io witness record) of a row's hash is annotated
- * to the row. This is establishes the minumum age of the row (and every row that precedes it).
- * </p>
  * <h2>Abbreviated State</h2>
  * <p>
  * Since our ledger is composed entirely of opaque hashes, we <em>could</em> share the entire ledger
@@ -152,6 +145,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
           "row numbers must be non-negative. Actual given: " + rowNumA + ", " + rowNumB);
     
     long diff = hi - lo;
+    
     return diff == Long.highestOneBit(diff) && diff <= (1L << (skipCount(hi) - 1));
   }
   
@@ -374,6 +368,61 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     trim(stitch);
     
     return Collections.unmodifiableList(stitch);
+  }
+  
+  
+  /**
+   * Returns the given path row numbers in pre-stitched form.
+   * The returned list is potentially far fewer the input
+   * list. It can then be uncompressed via the {@linkplain #stitch(List)}
+   * method.
+   * 
+   * @param pathRns path row no.s
+   * @return a subset of the {@code pathRns}
+   * 
+   */
+  public static List<Long> stitchCompress(List<Long> pathRns) {
+    final int pSize = pathRns.size();
+    if (pSize < 2)
+      return pathRns;
+    
+    var candidate = List.of(pathRns.get(0), pathRns.get(pSize - 1));
+    List<Long> skipRns = SkipLedger.stitch(candidate);
+    if (skipRns.equals(pathRns))
+      return candidate;
+    
+    var stitchList = new ArrayList<Long>(candidate);
+    // invariants: stitchList.get(0) == lo(); stitchList.last() == hi()
+    for (int index = 1; index < pSize - 1; ++index) {
+      Long rn = pathRns.get(index);
+      if (Collections.binarySearch(skipRns, rn) >= 0)
+        continue;
+      
+      final int ssize = stitchList.size();
+      if (ssize > 2) {
+        // remove the previous target
+        // add the new target and see if on expanding
+        // whether it includes the prev stitch no.
+        
+        Long prev = stitchList.remove(ssize - 2);
+        // assert stitchList.size() == ssize - 1;
+        stitchList.add(ssize - 2, rn);
+        skipRns = SkipLedger.stitch(stitchList);
+        
+        if (Collections.binarySearch(skipRns, prev) < 0) {
+          // ..if it doesn't, put it back
+          assert stitchList.size() == ssize;
+          stitchList.add(ssize - 3, prev);
+          skipRns = SkipLedger.stitch(stitchList);
+        }
+      } else {
+        assert stitchList.size() == 2;
+        stitchList.add(1, rn);
+        skipRns = SkipLedger.stitch(stitchList);
+      }
+    }
+    
+    return Collections.unmodifiableList(stitchList);
   }
   
 

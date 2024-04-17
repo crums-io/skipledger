@@ -81,7 +81,6 @@ import io.crums.util.Lists;
 public class PathPack implements PathBag, Serial {
   
   
-  public final static PathPack EMPTY = new PathPack();
   
   /** int size */
   private final static int STITCH_COUNT_SIZE = 4;
@@ -97,48 +96,29 @@ public class PathPack implements PathBag, Serial {
       throws ByteFormatException, BufferUnderflowException {
     
     final int bytes = in.remaining();
-    if (bytes < STITCH_COUNT_SIZE)
-      throw new ByteFormatException(
-          "must have at least " + STITCH_COUNT_SIZE + " bytes: " + in);
+//    if (bytes < STITCH_COUNT_SIZE)
+//      throw new ByteFormatException(
+//          "must have at least " + STITCH_COUNT_SIZE + " bytes: " + in);
     try {
       
       final int stitchRnCount = in.getInt();
       
       if (stitchRnCount <= 0) {
-        if (stitchRnCount == 0)
-          return EMPTY;
-        throw new ByteFormatException("full row count " + stitchRnCount);
+//        if (stitchRnCount == 0)
+//          return EMPTY;
+        throw new ByteFormatException("stitch row count " + stitchRnCount);
       }
       
       
       
       List<Long> stitchRns = readAscendingLongs(in, stitchRnCount);
-      List<Long> inputRns = SkipLedger.stitch(stitchRns);
       
-      int inputSize = HASH_WIDTH * stitchRnCount;
-      int hashSize = HASH_WIDTH * (
-          SkipLedger.coverage(inputRns).tailSet(1L).size() -
-          inputRns.size());
-      {
-        int reqSize = inputSize + hashSize;
-        if (in.remaining() < reqSize)
-          throw new ByteFormatException(
-              "required " + reqSize + " more bytes; actual is " + in.remaining());
-      }
-      
-      
-      
-      ByteBuffer hashes = BufferUtils.slice(in, hashSize);
-      ByteBuffer inputs = BufferUtils.slice(in, inputSize);
-
-      return new PathPack(inputRns, hashes, inputs);
+      return load(stitchRns, in, false);
       
     } catch (BufferUnderflowException bux) {
       throw new ByteFormatException("eof after reading " + bytes + "bytes", bux);
     }
   }
-  
-  
 
   private static List<Long> readAscendingLongs(ByteBuffer in, int count) {
     Long[] rowNums = new Long[count];
@@ -157,6 +137,84 @@ public class PathPack implements PathBag, Serial {
   
   
   
+  /**
+   * Pseudo-constructor, also used by the JSON parser.
+   * Do not modify the contents of {@code hashBlock}; on
+   * return its position is advanced to 1 beyond the last
+   * byte read.
+   * 
+   * @param stitchRns   abbreviate path row no.s
+   * @param hashBlock   block of hashes
+   * @param strict      if {@code true} then {@code hashBlock} must be
+   *                    exactly the right size
+   */
+  public static PathPack load(List<Long> stitchRns, ByteBuffer hashBlock, boolean strict) {
+
+    List<Long> inputRns = SkipLedger.stitch(stitchRns);
+    
+    int inputSize = HASH_WIDTH * inputRns.size();
+    int hashSize = HASH_WIDTH * (
+        SkipLedger.coverage(inputRns).tailSet(1L).size() -
+        inputRns.size());
+    {
+      int reqSize = inputSize + hashSize;
+      if (hashBlock.remaining() != reqSize) {
+        if (hashBlock.remaining() < reqSize)
+          throw new ByteFormatException(
+              "underflow: required " + reqSize + " bytes; actual is " +
+              hashBlock.remaining());
+        else if (strict)
+          throw new ByteFormatException(
+              "overflow: required " + reqSize + " bytes; actual is " +
+              hashBlock.remaining());
+      }
+    }
+    
+    
+    ByteBuffer hashes = BufferUtils.slice(hashBlock, hashSize);
+    ByteBuffer inputs = BufferUtils.slice(hashBlock, inputSize);
+
+    return new PathPack(inputRns, hashes, inputs);
+  }
+  
+  
+
+  public static PathPack forPath(Path path) {
+    
+    // flatten the row no.s list
+    // so the returned pack object doesn't internally
+    // reference the given path argument
+    
+    List<Long> inputRns = Lists.readOnlyCopy(path.rowNumbers());
+    
+    var refOnlyRns = SkipLedger.refOnlyCoverage(inputRns).tailSet(1L);
+    
+    var refHashes = ByteBuffer.allocate(
+        refOnlyRns.size() * SldgConstants.HASH_WIDTH);
+    
+    refOnlyRns.forEach(rn -> refHashes.put(path.getRowHash(rn)));
+    assert !refHashes.hasRemaining();
+    
+    refHashes.flip();
+    
+    ByteBuffer inputHashes = ByteBuffer.allocate(
+        inputRns.size() * SldgConstants.HASH_WIDTH);
+    
+    
+    for (int index = 0, count = inputRns.size(); index < count; ++index) {
+      inputHashes.put(path.rows().get(index).inputHash());
+    }
+    assert !inputHashes.hasRemaining();
+    
+    inputHashes.flip();
+    
+    return new PathPack(inputRns, refHashes, inputHashes);
+  }
+  
+  
+  
+  
+  
   
 
   
@@ -169,13 +227,13 @@ public class PathPack implements PathBag, Serial {
   
   
 
-  /**
-   * 
-   */
-  private PathPack() {
-    hashRns = inputRns = List.of();
-    hashes = inputs = BufferUtils.NULL_BUFFER;
-  }
+//  /**
+//   * 
+//   */
+//  private PathPack() {
+//    hashRns = inputRns = List.of();
+//    hashes = inputs = BufferUtils.NULL_BUFFER;
+//  }
   
   
   /**
@@ -223,6 +281,18 @@ public class PathPack implements PathBag, Serial {
     
     this.hashes = copy.hashes;
     this.inputs = copy.inputs;
+  }
+  
+  
+  
+  public ByteBuffer inputsBlock() {
+    return inputs.asReadOnlyBuffer();
+  }
+  
+
+  
+  public ByteBuffer refsBlock() {
+    return hashes.asReadOnlyBuffer();
   }
   
   
@@ -330,27 +400,7 @@ public class PathPack implements PathBag, Serial {
     
     // calculate the stitch row no.s..
     
-    List<Long> stitchRns;
-    {
-      var candidate = List.of(lo(), hi());
-      
-      List<Long> skipRns = SkipLedger.stitch(candidate);
-      if (skipRns.equals(inputRns))
-        stitchRns = candidate;
-      
-      else {
-        var stitchSet = new TreeSet<Long>(candidate);
-        for (int index = inputsCount - 1; index-- > 1; ) {
-          Long rn = inputRns.get(index);
-          if (Collections.binarySearch(skipRns, rn) >= 0)
-            continue;
-          stitchSet.add(rn);
-          skipRns = SkipLedger.stitchSet(stitchSet);
-        }
-        stitchRns = Lists.asReadOnlyList(
-            stitchSet.toArray(new Long[stitchSet.size()]));
-      }
-    }
+    List<Long> stitchRns = compressedRowNos();
 
     // haven't written anything yet.. write it all out
     out.putInt(stitchRns.size());
@@ -358,6 +408,23 @@ public class PathPack implements PathBag, Serial {
     
     return out;
   }
+  
+  
+  
+  /**
+   * Returns the full row numbers in pre-stitched form.
+   */
+  public List<Long> compressedRowNos() {
+    
+    return SkipLedger.stitchCompress(inputRns);
+  }
+  
+  
+  
+  
+  
+  
+  
   
   private ByteBuffer writeLongs(List<Long> rns, ByteBuffer out) {
     final int size = rns.size();

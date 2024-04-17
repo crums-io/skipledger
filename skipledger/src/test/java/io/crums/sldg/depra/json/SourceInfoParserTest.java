@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.json;
+package io.crums.sldg.depra.json;
 
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -11,7 +11,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import io.crums.testing.SelfAwareTestCase;
-
 import io.crums.sldg.src.ColumnInfo;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.util.Lists;

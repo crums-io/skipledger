@@ -8,7 +8,7 @@ module io.crums.sldg.ledgers {
   
   exports io.crums.sldg.bags;
   exports io.crums.sldg.fs;
-  exports io.crums.sldg.json;
+  exports io.crums.sldg.depra.json;
   exports io.crums.sldg.ledgers;
   exports io.crums.sldg.mrsl;
   exports io.crums.sldg.packs;

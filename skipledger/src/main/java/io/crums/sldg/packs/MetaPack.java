@@ -10,7 +10,7 @@ import java.util.Optional;
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
 import io.crums.sldg.ByteFormatException;
-import io.crums.sldg.json.SourceInfoParser;
+import io.crums.sldg.depra.json.SourceInfoParser;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.util.BigShort;
 import io.crums.util.Strings;

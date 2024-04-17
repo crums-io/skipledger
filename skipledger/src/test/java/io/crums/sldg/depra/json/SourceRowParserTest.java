@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.json;
+package io.crums.sldg.depra.json;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,7 +13,6 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import io.crums.testing.SelfAwareTestCase;
-
 import io.crums.sldg.src.BytesValue;
 import io.crums.sldg.src.ColumnValue;
 import io.crums.sldg.src.DateValue;

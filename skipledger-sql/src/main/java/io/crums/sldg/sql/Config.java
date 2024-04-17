@@ -18,7 +18,7 @@ import java.util.logging.Logger;
 
 import io.crums.io.FileUtils;
 import io.crums.sldg.SldgConstants;
-import io.crums.sldg.json.SourceInfoParser;
+import io.crums.sldg.depra.json.SourceInfoParser;
 import io.crums.sldg.src.SourceInfo;
 import io.crums.sldg.src.TableSalt;
 import io.crums.util.IntegralStrings;

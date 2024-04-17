@@ -273,37 +273,44 @@ public class Path /* implements Digest */ {
   
   
   /**
-   * Returns the row with lowest row-number that knows about the given <code>rowNumber</code>.
-   * I.e. if this path instance has a row with the given <code>rowNumber</code> then that row
+   * Returns the row with lowest row-number that knows about the given <code>rowNo</code>.
+   * I.e. if this path instance has a row with the given <code>rowNo</code> then that row
    * is returned. Otherwise, the <em>first</em> row that references the row with given
    * row-number is returned.
    * 
-   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <code>rowNumber</code>
+   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <code>rowNo</code>
    * 
    * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
    * set returned by {@linkplain #rowNumbersCovered()}
    * 
    * @see #getRowHash(long)
    */
-  public Row getRowOrReferringRow(long rowNumber) throws IllegalArgumentException {
+  public Row getRowOrReferringRow(final long rowNo) throws IllegalArgumentException {
     
-    final List<Long> rowNumbers = rowNumbers();
+    final List<Long> rowNos = rowNumbers();
+    final int insertIndex;
     {
-      int index = Collections.binarySearch(rowNumbers, rowNumber);
+      int index = Collections.binarySearch(rowNos, rowNo);
       
       if (index >= 0)
         return rows().get(index);
       
-      index = -1 - index;
-      if (index == rowNumbers.size())
-        throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
-      
-      Row row = rows.get(index);
-      if (SkipLedger.rowsLinked(rowNumber, row.rowNumber()))
-        throw new IllegalArgumentException("rowNumber " + rowNumber + " not covered");
-      return row;
+      insertIndex = -1 - index;
     }
     
+    final long maxRefRn = rowNo + (1L << (SkipLedger.skipCount(rowNo) - 1));
+    
+    for (int index = insertIndex; index < rowNos.size(); ++index) {
+      long rn = rows.get(index).rowNumber();
+      if (SkipLedger.rowsLinked(rowNo, rn))
+        return rows.get(index);
+      
+      if (rn > maxRefRn)
+        break;
+    }
+    
+    throw new IllegalArgumentException(
+        "row [" + rowNo + "] not covered: " + this);
   }
   
   
@@ -346,6 +353,9 @@ public class Path /* implements Digest */ {
   
   
   
+  public String toString() {
+    return "Path" + rowNumbers();
+  }
   
   
   

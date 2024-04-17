@@ -1,7 +1,7 @@
 /*
  * Copyright 2021 Babak Farhang
  */
-package io.crums.sldg.json;
+package io.crums.sldg.depra.json;
 
 
 import static io.crums.util.IntegralStrings.hexToBytes;

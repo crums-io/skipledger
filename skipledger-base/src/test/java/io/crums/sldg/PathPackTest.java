@@ -3,7 +3,7 @@
  */
 package io.crums.sldg;
 
-import java.nio.ByteBuffer;
+
 import java.util.List;
 
 /**
@@ -14,28 +14,16 @@ public class PathPackTest extends RowBagTest {
   @Override
   protected PathPack newBag(SkipLedger ledger, List<Long> rowNumbers) {
     
-    var refOnlyRns = SkipLedger.refOnlyCoverage(rowNumbers).tailSet(1L);
+    // note: don't use SkipLedger.getPath(..)
+    // The SkipLedger class itself might use
+    // PathPack instances to return paths. Instead,
+    // construct the rows, one at a time.
     
-    ByteBuffer refHashes = ByteBuffer.allocate(
-        refOnlyRns.size() * SldgConstants.HASH_WIDTH);
+    List<Row> rows = ledger.getRows(rowNumbers);
+    Path path = new Path(rows);
     
+    return PathPack.forPath(path);
     
-    refOnlyRns.forEach(rn -> refHashes.put(ledger.rowHash(rn)));
-    
-    assert !refHashes.hasRemaining();
-    
-    refHashes.flip();
-    
-    ByteBuffer inputHashes = ByteBuffer.allocate(
-        rowNumbers.size() * SldgConstants.HASH_WIDTH);
-    
-    rowNumbers.forEach(rn -> inputHashes.put(ledger.getRow(rn).inputHash()));
-    
-    assert !inputHashes.hasRemaining();
-    
-    inputHashes.flip();
-    
-    return new PathPack(rowNumbers, refHashes, inputHashes);
   }
 
 }

@@ -8,4 +8,4 @@
  * <p>This package is legacy. If we keep it, it needs a good update to remove
  * all this redundancy.</p>
  */
-package io.crums.sldg.json;
+package io.crums.sldg.depra.json;
