@@ -19,6 +19,15 @@ import io.crums.util.Strings;
  * the <em>Path</em> moniker is that the given "row-set" must be structurally
  * linked (usually through other rows) in order for this declaration
  * to be valid.
+ * <h2>TODO: remove or fix me</h2>
+ * <p>
+ * This represents too many things. A path no. encoding, and meta info.
+ * The path no. encoding part made it into
+ * {@linkplain SkipLedger#stitch(List)} and
+ * {@linkplain SkipLedger#stitchCompress(List)}; the meta info part, well..
+ * not sure it necessarily belongs with every path: it's more like a
+ * one-to-many relationship.
+ * </p>
  */
 public class PathInfo implements Serial {
   

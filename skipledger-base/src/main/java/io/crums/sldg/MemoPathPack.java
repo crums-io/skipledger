@@ -51,14 +51,20 @@ public class MemoPathPack extends PathPack {
   
   @Override
   public Row getRow(long rowNumber) {
-    
+
+    int index = indexOfExistingFullRow(rowNumber);
+    return new MemoRow(rowNumber, index);
+  }
+  
+  
+  
+  private int indexOfExistingFullRow(long rn) {
     int index = Collections.binarySearch(
-        getFullRowNumbers(), rowNumber);
+        getFullRowNumbers(), rn);
     if (index < 0)
       throw new IllegalArgumentException(
-          "row " + rowNumber + " is not in pack");
-    
-    return new MemoRow(rowNumber, index);
+          "row [" + rn + "] is not in pack");
+    return index;
   }
   
   
@@ -85,11 +91,7 @@ public class MemoPathPack extends PathPack {
 
 
   private ByteBuffer getMemoedRowHash(long rn) {
-    int index = Collections.binarySearch(
-        getFullRowNumbers(), rn);
-    if (index < 0)
-      throw new IllegalArgumentException(
-          "row " + rn + " is not in pack");
+    int index = indexOfExistingFullRow(rn);
     return memoedHash(index);
   }
   

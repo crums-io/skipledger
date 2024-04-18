@@ -330,8 +330,8 @@ public class PathPack implements PathBag, Serial {
   
   private class PackedPath extends Path {
 
-    PackedPath(List<Row> rows, Object trustMe) {
-      super(rows, trustMe);
+    PackedPath(List<Row> rows) {
+      super(rows, null);
     }
     
     
@@ -345,7 +345,7 @@ public class PathPack implements PathBag, Serial {
   
   @Override
   public Path path() {
-    return new PackedPath(Lists.map(inputRns, rn -> getRow(rn)), null);
+    return new PackedPath(Lists.map(inputRns, rn -> getRow(rn)));
   }
   
   
