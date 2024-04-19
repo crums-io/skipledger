@@ -2,7 +2,7 @@ module io.crums.sldg.ledgers {
   
   requires transitive io.crums.sldg.base;
   
-  requires transitive io.crums.core;
+  requires transitive io.crums.legacy.tc1;
   
   requires io.crums.util.xp;
   

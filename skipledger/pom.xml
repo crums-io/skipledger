@@ -13,7 +13,7 @@
   
   <name>${project.groupId}:${project.artifactId}</name>
   <description>
-    The skip ledger, the base data structure as a commitment scheme for append-only
+    Builds on the base data structure as a commitment scheme for append-only
     ledgers. Differentially proves any cell value in the ledger using compact
     packaged proofs called morsels.
   </description>
