@@ -770,7 +770,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
           "targets out-of-bounds, size=" + size() + ": " + targets);
     
     var rows = getRows(stitched);
-    return new Path(rows, false);
+    return new Path(rows, null);
   }
   
   

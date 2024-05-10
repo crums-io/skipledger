@@ -59,4 +59,30 @@ public enum HashEncoding {
             IntegralStrings.hexToBytes(hash) :
             Base64_32.decode(hash);
   }
+  
+  
+  /**
+   * Length of ASCII string representing a 32-byte value.
+   * 
+   * @return {@code this == HEX ? 64 : 43}
+   */
+  public int length() {
+    return this == HEX ? 64 : 43;
+  }
+  
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
