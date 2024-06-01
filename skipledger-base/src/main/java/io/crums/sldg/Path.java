@@ -459,6 +459,16 @@ public class Path {
   
   
   public String toString() {
+    var rns = rowNumbers();
+    final int size = rns.size();
+    if (size > 12) {
+      var str = "Path" + rns.subList(0, 6);
+      str = str.substring(0, str.length() - 1) +
+          ", .. (" + (size - 12) + " more), " +
+          rns.subList(size - 6, size).toString().substring(1);
+
+      return str;
+    }
     return "Path" + rowNumbers();
   }
   
