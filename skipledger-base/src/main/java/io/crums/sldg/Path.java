@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.SortedSet;
+import java.util.TreeSet;
 
 import io.crums.util.Lists;
 import io.crums.util.hash.Digest;
@@ -169,6 +170,112 @@ public class Path {
   
   
 
+
+  /**
+   * Returns a subsequence of this path. This is equivalent to
+   * returning {@code new Path(rows().subList(fromIndex, toIndex))}
+   * --sans the overhead for checking row hashes.
+   * 
+   * @param fromIndex   the starting index (inclusive)
+   * @param toIndex     the ending index (exclusive)
+   * 
+   * @throws IndexOutOfBoundsException
+   *         beyond the usual requirements, the subpath cannot be empty
+   */
+  public final Path subPath(int fromIndex, int toIndex) {
+    final int rc = rows.size();
+    if (fromIndex < 0 || fromIndex >= toIndex || toIndex > rc)
+      throw new IndexOutOfBoundsException(
+          "fromIndex (" + fromIndex + "), toIndex (" + toIndex + "); size = " +
+          rc);
+
+    return new Path(rows.subList(fromIndex, toIndex), null);
+  }
+
+
+  /** Shorthand for {@link #subPath(int, int) subpath(fromIndex, rows().size())}. */
+  public final Path subPath(int fromIndex) {
+    return fromIndex == 0 ? this : subPath(fromIndex, rows.size());
+  }
+
+
+
+  /**
+   * Returns the longest subsequence of this path such that the first row
+   * is numbered no less than {@code rn}.
+   * 
+   * @param rn    row number (inclusive)
+   * 
+   * @throws IllegalArgumentException  if {@code rn > hiRowNumber()}
+   */
+  public final Path tailPath(long rn) {
+    int index = Collections.binarySearch(rowNumbers(), rn);
+    if (index < 0) {
+      index = -1 - index;
+      if (index == rows.size())
+        throw new IllegalArgumentException(
+          "[" + rn + "] out of range [" + loRowNumber() + "-" + hiRowNumber() +
+          "]");
+    }
+    return subPath(index);
+  }
+
+
+
+  /**
+   * Returns the longest subsequence of this path such that the last row
+   * is numbered less than {@code rn}.
+   * 
+   * @param rn    row number (exclusive)
+   * 
+   * @throws IllegalArgumentException  if {@code rn <= loRowNumber()}
+   */
+  public final Path headPath(long rn) {
+    int index = Collections.binarySearch(rowNumbers(), rn);
+    if (index < 0) {
+      index = -1 - index;
+      if (index == rows.size())
+        return this;
+    }
+    if (index == 0)
+      throw new IllegalArgumentException(
+        "[" + rn + "] out of range [" + loRowNumber() + "-" + hiRowNumber() +
+        "]");
+    
+    return subPath(0, index);
+  }
+
+
+  
+
+
+  /**
+   * Returns the highest row number whose hash is known by both this and the
+   * {@code other} instance (from the same ledger). If the 2 paths do not
+   * intersect, zero is returned.
+   * 
+   * @throws HashConflictException if the row hashes conflict at that row number
+   */
+  public final long highestCommonNo(Path other) throws HashConflictException {
+    
+    final long hiNo;
+    {
+      var intersect = new TreeSet<Long>();
+      intersect.addAll(rowNumbersCovered());
+      intersect.retainAll(other.rowNumbers());
+      if (intersect.isEmpty())
+        return 0L;
+      hiNo = intersect.last();
+    }
+
+    if (hiNo != 0L && !getRowHash(hiNo).equals(other.getRowHash(hiNo)))
+      throw new HashConflictException("at [" + hiNo + "]");
+
+    return hiNo;
+  }
+
+
+
   
   
   /**
@@ -191,21 +298,30 @@ public class Path {
   }
   
 
-  
+  /**
+   * Determines whether this path references (knows the hash) of the given row number.
+   */
   public boolean hasRowCovered(long rowNumber) {
-    int searchIndex = Collections.binarySearch(rowNumbers(), rowNumber);
+    if (rowNumber == 0)
+      return true;
+      
+    var rns = rowNumbers();
+    final int rnCount = rns.size();
+    
+    int searchIndex = Collections.binarySearch(rns, rowNumber);
     if (searchIndex >= 0)
       return true;
-    searchIndex = -1 - searchIndex;
-    if (searchIndex == rows.size())
+    if (-1 - searchIndex == rnCount)
       return false;
-    Row candidateRef = rows.get(searchIndex);
-    final int levels = candidateRef.prevLevels();
-    for (int level = 0; level < levels; ++level) {
-      long refRn = candidateRef.prevRowNumber(level);
-      if (refRn > rowNumber)
-        continue;
-      return refRn == rowNumber;
+    
+    final int rnLevels = SkipLedger.skipCount(rowNumber);
+    for (int level = 0; level < rnLevels; ++level) {
+      long rn = rowNumber + (1L << level);
+      searchIndex = Collections.binarySearch(rns, rn);
+      if (searchIndex >= 0)
+        return true;
+      if (-1 - searchIndex == rnCount)
+        return false;
     }
     return false;
   }
@@ -221,7 +337,7 @@ public class Path {
    * 
    * @see #getRowHash(long)
    */
-  public SortedSet<Long> rowNumbersCovered() {
+  public final SortedSet<Long> rowNumbersCovered() {
     return SkipLedger.coverage(rowNumbers());
   }
   
@@ -301,8 +417,10 @@ public class Path {
   }
   
   
-  
-  
+  /** Returns the number of rows. */
+  public int length() {
+    return rows.size();
+  }
   
   
   
@@ -333,7 +451,7 @@ public class Path {
   public final int hashCode() {
     long lhash = hiRowNumber();
     lhash = lhash * 255 + rows.size();
-    int cryptFuzz = last().hash().limit(16).hashCode();
+    int cryptFuzz = last().hash().getInt();
     return Long.hashCode(lhash) ^ cryptFuzz;
   }
   
