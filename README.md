@@ -26,14 +26,12 @@ The number of full rows in a *path* (a hash proof asserting the hash of every ro
 the proof is derived from the hashes of previous rows) goes by (order of) the logarithm of the
 difference in the path's high and low row no.s. However, the average no. of skip pointers
 (32-byte hashes) *per row* in such proofs also goes by the logarithm of the no. of rows.
-Thus, unmerklized, the byte-size of each proof, spanning *n* rows is actually of order (big **O**)
-
-    [log(*n*)]<sup>2</sup>
+Thus, unmerklized, the byte-size of each proof, spanning *n* rows is actually of order (big **O**) (*log n*)<sup>2</sup>.
 
 That might seem like no big deal, but it starts adding up on a timechain with millions plus blocks. Merklizing the row's hash pointers, otoh, allows the byte-size of the proof to
-be of order
+be of order *log*(*log n*) x *log*(*n*).
 
-    log(log(*n*)) x log(*n*)
+
 
 
 ## Contents
