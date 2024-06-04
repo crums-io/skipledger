@@ -3,6 +3,39 @@ skipledger
 
 Tools for maintaining tamper proof evolving historical private ledgers and for disclosing any of their parts in an efficient, provable way.
 
+## Notes & Changes
+
+I am redesigning the Crums timechain to use the skip ledger data model. Since a good part
+of this code already uses the legacy timechain model, the code has been refactored so that
+the base library does not know about timechains. Once the new timechain is deployed, the
+submodules will be retrofitted (refactored). For more info on the new timechain, see this
+rough [design doc](https://github.com/crums-io/crums-pub/blob/main/tc2.md).
+
+### Row Hash
+
+The algorithm for calculating a row's hash from hash pointers to previous row no.s has
+changed. A row's hash is still computed using the same information (it's *input* hash,
+and the hash pointers at that row no. to rows at lower no.s); now, however, if a row
+references 2 or more rows, the hash pointers to all are first merklized,
+and then their Merkle root hash, in combination with the row's input hash, determines
+the row's final hash.
+
+#### Motivation
+
+The number of full rows in a *path* (a hash proof asserting the hash of every row in
+the proof is derived from the hashes of previous rows) goes by (order of) the logarithm of the
+difference in the path's high and low row no.s. However, the average no. of skip pointers
+(32-byte hashes) *per row* in such proofs also goes by the logarithm of the no. of rows.
+Thus, unmerklized, the byte-size of each proof, spanning *n* rows is actually of order (big **O**)
+
+    [log(*n*)]<sup>2</sup>
+
+That might seem like no big deal, but it starts adding up on a timechain with millions plus blocks. Merklizing the row's hash pointers, otoh, allows the byte-size of the proof to
+be of order
+
+    log(log(*n*)) x log(*n*)
+
+
 ## Contents
 
 - [Overview](#overview)

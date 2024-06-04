@@ -50,6 +50,12 @@ public abstract class RowBagTest extends IoTestCase {
       testAllToHi(size);
   }
   
+  
+  @Test
+  public void test258() {
+    testAllToHi(258);
+  }
+  
 
 //  @Test
 //  public void testComboBagWith2Paths() {
@@ -118,7 +124,7 @@ public abstract class RowBagTest extends IoTestCase {
   private void assertPath(Path path, RowBag bag) {
     int index = 0;
     for (Row row : path.rows()) {
-      long rn = row.rowNumber();
+      long rn = row.no();
       Row out = bag.getRow(rn);
       
       if (!out.equals(row))

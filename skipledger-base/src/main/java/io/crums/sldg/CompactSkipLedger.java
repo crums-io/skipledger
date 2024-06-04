@@ -8,9 +8,11 @@ import static io.crums.sldg.SldgConstants.*;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.cache.RowCache;
+import io.crums.util.Lists;
 
 /**
  * Base implementation. This uses a pluggable storage abstraction
@@ -90,28 +92,42 @@ public class CompactSkipLedger extends SkipLedger {
     
     final long nextRowNum = table.size() + 1;
     
-    byte[] nextRowHash;
-    {
-      int skipCount = skipCount(nextRowNum);
+    // byte[] nextRowHash;
+    // {
+    //   int skipCount = skipCount(nextRowNum);
       
-      ByteBuffer nextRowData = ByteBuffer.allocate((1 + skipCount) * HASH_WIDTH);
+    //   ByteBuffer nextRowData = ByteBuffer.allocate((1 + skipCount) * HASH_WIDTH);
       
-      nextRowData.put(entryHash);
-      for (int p = 0; p < skipCount; ++p) {
-        long referencedRowNum = nextRowNum - (1L << p);
-        ByteBuffer hashPtr = rowHash(referencedRowNum, table);
-        assert hashPtr.remaining() == HASH_WIDTH;
-        nextRowData.put(hashPtr);
-      }
-      nextRowData.flip();
+    //   nextRowData.put(entryHash);
+    //   for (int p = 0; p < skipCount; ++p) {
+    //     long referencedRowNum = nextRowNum - (1L << p);
+    //     ByteBuffer hashPtr = rowHash(referencedRowNum, table);
+    //     assert hashPtr.remaining() == HASH_WIDTH;
+    //     nextRowData.put(hashPtr);
+    //   }
+    //   nextRowData.flip();
       
-      MessageDigest digest = newDigest();
-      digest.update(nextRowData);
-      nextRowHash = digest.digest();
-    }
+    //   MessageDigest digest = newDigest();
+    //   digest.update(nextRowData);
+
+    //   nextRowHash = digest.digest();
+
+    // }
+
+
+
+
+    final int levels = skipCount(nextRowNum);
+    final List<Long> prevRns = Lists.functorList(
+        levels,
+        level -> nextRowNum - (1L << level));
+
+    var prevHashes = Lists.map(prevRns, rn -> rowHash(rn, table));
+    
+    var rowHash = SkipLedger.rowHash(nextRowNum, entryHash, prevHashes);
     
     ByteBuffer tableRow =
-        ByteBuffer.allocate(SkipTable.ROW_WIDTH).put(ehCopy).put(nextRowHash).flip();
+        ByteBuffer.allocate(SkipTable.ROW_WIDTH).put(ehCopy).put(rowHash).flip();
     
     return table.addRows(tableRow, nextRowNum - 1);
     

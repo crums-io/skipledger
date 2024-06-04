@@ -1,5 +1,7 @@
 module io.crums.sldg.base {
   
+  requires io.crums.util.mrkl;
+
   requires transitive io.crums.util;
   requires transitive io.crums.jsonimple;
   

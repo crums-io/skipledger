@@ -418,8 +418,23 @@ public class HashFrontier extends Frontier implements Serial {
    */
   public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
     
-    inputHash = sliceInput(inputHash);
     final long rn = rowNumber() + 1;
+
+    var prevHashes = Lists.functorList(
+        SkipLedger.skipCount(rn),
+        level -> level == levelFrontier.length ?
+            DIGEST.sentinelHash() :
+            levelFrontier[level].hash());
+
+    var rowHash = SkipLedger.rowHash(rn, sliceInput(inputHash), prevHashes);
+
+
+
+
+
+
+
+    // inputHash = sliceInput(inputHash);
     
     final int skipCount = SkipLedger.skipCount(rn);
     
@@ -433,21 +448,21 @@ public class HashFrontier extends Frontier implements Serial {
 
     // compute the hash for the new row
     
-    if (digest == null)
-      digest = DIGEST.newDigest();
-    else
-      digest.reset();
+    // if (digest == null)
+    //   digest = DIGEST.newDigest();
+    // else
+    //   digest.reset();
     
     // update the digest with a sequence consisting of the new row's input hash
     // followed by each row hash referenced by that row, from its 0th level to
     // to (skipCount - 1)'th, in that order.
-    digest.update(inputHash);
+    // digest.update(inputHash);?
     
     // (exclusive):
     final int lastNonSentinelLevel = expand ? levelFrontier.length : skipCount;
     
-    for (int level = 0; level < lastNonSentinelLevel; ++level)
-      digest.update(levelFrontier[level].hash());
+    // for (int level = 0; level < lastNonSentinelLevel; ++level)
+    //   digest.update(levelFrontier[level].hash());
     
     
     // the digest is prepared, excepting 1 corner case: when we expand
@@ -458,7 +473,8 @@ public class HashFrontier extends Frontier implements Serial {
       
       // when a new highest level row is created, it's highest level pointer
       // points to row zero (whose hash is just a string of zeros).
-      digest.update(DIGEST.sentinelHash());
+      // digest.update(DIGEST.sentinelHash());
+
       nextLevels = new RowHash[skipCount];
     
     } else
@@ -466,7 +482,8 @@ public class HashFrontier extends Frontier implements Serial {
       nextLevels = new RowHash[levelFrontier.length];
     
     // the digest is ready.
-    HashedRow next = new HashedRow(rn, digest.digest());
+    // HashedRow next = new HashedRow(rn, digest.digest());
+    HashedRow next = new HashedRow(rn, rowHash);
 
     // copy the unaffected levels, back-to-front
     // (falls thru if *expand*-ed)

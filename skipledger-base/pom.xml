@@ -31,6 +31,12 @@
       <artifactId>jsonimple</artifactId>
       <version>${crums.util}</version>
     </dependency>
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>merkle-tree</artifactId>
+      <version>1.0.0</version>
+    </dependency>
     
   </dependencies>
 

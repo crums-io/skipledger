@@ -27,9 +27,22 @@ public abstract class RowHash implements Digest {
    * 
    * @return &ge; 1
    * 
+   * @deprecated to be replaced by {@link #no()}
    * @see #equals(Object)
    */
   public abstract long rowNumber();
+
+
+  /**
+   * Returns the row no.
+   * 
+   * @return &ge; 1
+   * 
+   * @see #equals(Object)
+   */
+  public long no() {
+    return rowNumber();
+  }
   
   /**
    * Returns the hash of this row.
@@ -39,14 +52,26 @@ public abstract class RowHash implements Digest {
 
   /**
    * Returns the number of hash pointers in this row referencing previous rows.
-   * These are called levels, because each successive {@linkplain #prevRowNumber(int)}
+   * These are called levels, because each successive {@linkplain #prevNo(int)}
    * is twice as far away.
    * 
    * @return &ge; 1
    */
   public final int prevLevels() {
-    return SkipLedger.skipCount(rowNumber());
+    return SkipLedger.skipCount(no());
   }
+
+
+
+  /**
+   * Returns the [level] index of the highest non-sentinel row.
+   * Usually this is just {@code prevLevels() - 1}.
+   */
+  public final int hiPtrLevel() {
+    return SkipLedger.hiPtrLevel(no());
+  }
+
+
   
   /**
    * Returns the row number linked to at the given {@code level}.
@@ -54,9 +79,22 @@ public abstract class RowHash implements Digest {
    * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
    * 
    * @return {@code rowNumber() - (1L << level)}
+   * @deprecated to be replaced by {@link #prevNo(int)}
    */
   public final long prevRowNumber(int level) {
-    long rn = rowNumber();
+    return prevNo(level);
+  }
+
+
+  /**
+   * Returns the row number linked to at the given {@code level}.
+   * 
+   * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
+   * 
+   * @return {@code no() - (1L << level)}
+   */
+  public final long prevNo(int level) {
+    long rn = no();
     Objects.checkIndex(level, SkipLedger.skipCount(rn));
     return rn - (1L << level);
   }
@@ -66,7 +104,7 @@ public abstract class RowHash implements Digest {
 
   /**
    * Equality semantics depend on {@linkplain #hash() hash}, and
-   * {@linkplain #rowNumber() row number}.
+   * row {@linkplain #no() no.}
    * 
    * @see #hashCode()
    */
@@ -74,7 +112,7 @@ public abstract class RowHash implements Digest {
   public final boolean equals(Object o) {
     return o == this
         || o instanceof RowHash other
-        && other.rowNumber() == rowNumber()
+        && other.no() == no()
         && other.hash().equals(hash());
   }
   

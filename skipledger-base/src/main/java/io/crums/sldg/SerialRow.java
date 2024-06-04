@@ -20,6 +20,23 @@ public class SerialRow extends Row {
   public static SerialRow toInstance(Row row) {
     return (row instanceof SerialRow) ? (SerialRow) row : new SerialRow(row);
   }
+
+
+  public static ByteBuffer toDataBuffer(Row row) {
+    if (row instanceof SerialRow sr)
+      return sr.data();
+    
+    final int levels = row.prevLevels();
+    final int cellsInRow = 1 + levels;
+    int size = cellsInRow * SldgConstants.HASH_WIDTH;
+    var buffer = ByteBuffer.allocate(size);
+    buffer.put(row.inputHash());
+    for (int level = 0; level < levels; ++level)
+      buffer.put(row.prevHash(level));
+
+    assert !buffer.hasRemaining();
+    return buffer.flip().asReadOnlyBuffer();
+  }
   
   
   
@@ -50,7 +67,7 @@ public class SerialRow extends Row {
    * Copy constructor.
    */
   public SerialRow(Row copy) {
-    this(copy.rowNumber(), copy.data(), false);
+    this(copy.no(), toDataBuffer(copy), false);
   }
 
   SerialRow(long rowNumber, ByteBuffer data, boolean ignored) {
@@ -70,13 +87,17 @@ public class SerialRow extends Row {
   
   
   
-  @Override
   public final ByteBuffer data() {
     return data.asReadOnlyBuffer();
   }
 
   @Override
   public final long rowNumber() {
+    return rowNumber;
+  }
+
+  @Override
+  public final long no() {
     return rowNumber;
   }
 

@@ -4,7 +4,11 @@
 package io.crums.sldg;
 
 
+import static io.crums.sldg.SldgConstants.DIGEST;
+import static java.util.Collections.emptyEnumeration;
+
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -15,9 +19,12 @@ import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import io.crums.io.buffer.BufferUtils;
 import io.crums.util.EasyList;
 import io.crums.util.Lists;
+import io.crums.util.Strings;
 import io.crums.util.hash.Digest;
+import io.crums.util.mrkl.FixedLeafBuilder;
 
 /**
  * <p>
@@ -120,7 +127,208 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     checkRealRowNumber(rowNumber);
     return 1 + Long.numberOfTrailingZeros(rowNumber);
   }
-  
+
+
+
+  public static ByteBuffer rowHash(
+      long rn, ByteBuffer inputHash, List<ByteBuffer> prevHashes) {
+    
+    final int levels = skipCount(rn);
+
+    final boolean power2 = rn == 1L << (levels - 1);
+
+
+    
+    final int pSize = prevHashes.size();
+
+    if (pSize != levels && (!power2 || pSize == levels - 1))
+      throw new IllegalArgumentException(
+          "expected " + Strings.nOf(levels, "hash") + " for row [" + rn +
+          "]; actual was " + Strings.nOf(pSize, "hash"));
+
+    if (power2 &&
+        pSize == levels &&
+        !SldgConstants.DIGEST.sentinelHash().equals(
+            prevHashes.get(levels - 1).slice()))
+      
+      throw new IllegalArgumentException(
+          "expected sentinel at last prevHashes for row [" + rn + "]");
+    
+    var hiPtrHash = hiPtrHash(rn, prevHashes);
+    var basePtrsHash = basePtrsHash(rn, prevHashes);
+
+    return rowHash(rn, inputHash, hiPtrHash, basePtrsHash);
+  }
+
+
+  /**
+   * Returns the deepest non-zero hash-pointer from the given
+   * list of level hashes. With one exception ({@code rn = 1L}), this always
+   * returns a 32-byte buffer; row [1] is the <em>only</em> row that
+   * doesn't have such a hash pointer.
+   * 
+   * @param rn          &ge; 1
+   * @param prevHashes  of size {@link #skipCount(long) skipCount(rn)},
+   *                    unless the last hash is sentinel (zeroes), in
+   *                    which case, it may
+   * 
+   * @see #hiPtrLevel(long)
+   * 
+   * @throws IndexOutOfBoundsException
+   *         if {@code prevHashes} has fewer than
+   *         {@link #hiPtrLevel(long) hiPtrLevelIndex(rn) + 1} hashes
+   */
+  public static ByteBuffer hiPtrHash(long rn, List<ByteBuffer> prevHashes) {
+    int index = hiPtrLevel(rn);
+    return
+        index < 0 ?
+            BufferUtils.NULL_BUFFER :
+            dupAndCheck(prevHashes.get(index));
+  }
+
+
+  public static boolean alwaysAllLevels(long rn) {
+    return skipCount(rn) <= 2 || rn == 4L;
+  }
+
+
+
+  /**
+   * Returns highest level (deepest) index that does <em>does not reference
+   * row zero</em>, the sentine hash. With one exception [1], every row no.
+   * references a previous row.
+   * 
+   * @param rn    row no. &ge; 1
+   * @return {@code -1} if {@code rn} equals {@code 1}; non-negative, o.w.
+   */
+  public static int hiPtrLevel(long rn) {
+    final int levels = skipCount(rn);
+    final boolean power2 = rn == (1L << (levels - 1));
+    assert power2 == (rn == Long.highestOneBit(rn));
+    return power2 ? levels - 2 : levels - 1;
+  }
+
+
+
+  /**
+   * Returns the <em>smallest</em>, non-zero referenced row no. If
+   * there is no such reference, then zero is returned. But note, the
+   * only case this happens is for the origin no. (1L).
+   * 
+   * @param rn    row no. &ge; 1
+   * @return  {@code rn == 1L ? 0 : rn - (1L << hiPtrLevel(rn))}
+   * @see #hiPtrLevel(long)
+   */
+  public static long hiPtrNo(long rn) {
+    return rn == 1L ? 0 : rn - (1L << hiPtrLevel(rn));
+  }
+
+
+
+  /**
+   * 
+   * @param rn
+   * @param inputHash
+   * @param hiPtr
+   * @param basePtrsHash
+   * @return
+   */
+  public static ByteBuffer rowHash(
+      long rn, ByteBuffer inputHash,
+      ByteBuffer hiPtr, ByteBuffer basePtrsHash) {
+    
+    final int levels = skipCount(rn);
+
+    final boolean power2 = rn == 1L << (levels - 1);
+
+    final int baseLevels = basePtrLevels(rn);
+
+
+
+    var digest = DIGEST.newDigest();
+    digest.update(dupAndCheck(inputHash));
+
+
+    if (power2)
+      digest.update(DIGEST.sentinelHash());
+    
+    if (rn != 1L)
+      digest.update(dupAndCheck(hiPtr));
+
+    if (baseLevels > 0)
+      digest.update(dupAndCheck(basePtrsHash));
+
+    return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
+
+  }
+
+
+
+  /**
+   * Returns the no. of level hash pointers in the "base-group".
+   * 
+   * 
+   * 
+   * @param rn
+   * @return &ge; 0
+   */
+  public static int basePtrLevels(final long rn) {
+
+    final int levels = skipCount(rn);
+    final boolean power2 = rn == 1L << (levels - 1);
+    final int baseLevels;
+    
+    if (power2) {
+      assert levels > 1 || rn == 1L;
+      baseLevels = rn == 1L ? 0 : levels - 2;
+
+    } else
+      baseLevels = levels - 1;
+    
+    return baseLevels;
+  }
+
+
+
+  public static ByteBuffer basePtrsHash(long rn, List<ByteBuffer> prevHashes) {
+    int baseLevels = basePtrLevels(rn);
+    if (prevHashes.size() < baseLevels)
+      throw new IllegalArgumentException(
+          "expected at least " + Strings.nOf(baseLevels, "hash") +
+          "; actual was " + Strings.nOf(prevHashes.size(), "hash"));
+    
+    return basePtrsHash(prevHashes, baseLevels);
+  }
+
+
+  private static ByteBuffer basePtrsHash(
+      List<ByteBuffer> prevHashes, int remainingLevels) {
+
+    if (remainingLevels == 0)
+      return BufferUtils.NULL_BUFFER;
+    
+    if (remainingLevels == 1)
+      return dupAndCheck(prevHashes.get(0));
+    
+    var builder =
+        new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), false);
+    byte[] hptr = new byte[SldgConstants.HASH_WIDTH];
+    for (int level = remainingLevels; level-- > 0; ) {
+      dupAndCheck(prevHashes.get(level)).get(hptr);
+      builder.add(hptr);
+    }
+    
+    return ByteBuffer.wrap(builder.build().hash());
+  }
+
+
+  private static ByteBuffer dupAndCheck(ByteBuffer buffer) {
+    var out = buffer.slice();
+    if (out.remaining() != SldgConstants.HASH_WIDTH)
+      throw new IllegalArgumentException(
+        "expected " + SldgConstants.HASH_WIDTH + " remaining bytes: " + buffer);
+    return out;
+  }
   
   
   /**

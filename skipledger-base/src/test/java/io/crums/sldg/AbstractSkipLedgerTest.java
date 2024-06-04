@@ -14,6 +14,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import io.crums.testing.IoTestCase;
+import io.crums.util.Lists;
 
 /**
  * 
@@ -61,24 +62,26 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
       assertEquals(1, ledger.size());
       Row row = ledger.getRow(1);
       
-      assertEquals(1L, row.rowNumber());
+      assertEquals(1L, row.no());
       assertEquals(ByteBuffer.wrap(mockHash), row.inputHash());
       
       assertEquals(SkipLedger.skipCount(1L), row.prevLevels());
       assertEquals(SENTINEL_HASH, row.prevHash(0));
       
-      ByteBuffer expectedData = ByteBuffer.allocate(2* HASH_WIDTH);
-      expectedData.put(mockHash).put(SENTINEL_HASH.duplicate()).flip();
-      assertEquals(expectedData, row.data());
+      // ByteBuffer expectedData = ByteBuffer.allocate(2* HASH_WIDTH);
+      // expectedData.put(mockHash).put(SENTINEL_HASH.duplicate()).flip();
+      // assertEquals(expectedData, row.data());
       
-      ByteBuffer expectedHash;
-      {
-        MessageDigest digest = DIGEST.newDigest();
-        // this taxes the lazy-loading implementation
-        digest.update(row.data());
-        expectedHash = ByteBuffer.wrap(digest.digest());
-      }
-      assertEquals(expectedHash, row.hash());
+      // ByteBuffer expectedHash;
+      // {
+      //   MessageDigest digest = DIGEST.newDigest();
+      //   // this taxes the lazy-loading implementation
+      //   digest.update(row.data());
+      //   expectedHash = ByteBuffer.wrap(digest.digest());
+      // }
+      // assertEquals(expectedHash, row.hash());
+
+
     }
   }
   
@@ -228,33 +231,40 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
     
     Row row = ledger.getRow(rowNumber);
     
-    assertEquals(rowNumber, row.rowNumber());
+    assertEquals(rowNumber, row.no());
     assertEquals(entryHash, row.inputHash());
     
 
     final int skipPtrCount = SkipLedger.skipCount(rowNumber);
     assertEquals(skipPtrCount, row.prevLevels());
+
+    var prevHashes = Lists.functorList(
+        skipPtrCount,
+        level -> ledger.rowHash(rowNumber - (1L << level)));
+
+    var expectedHash = SkipLedger.rowHash(rowNumber, entryHash, prevHashes);
+    assertEquals(expectedHash, row.hash());
     
-    ByteBuffer expectedData = ByteBuffer.allocate((1 + skipPtrCount) * HASH_WIDTH);
-    expectedData.put(entryHash.duplicate());
+    // ByteBuffer expectedData = ByteBuffer.allocate((1 + skipPtrCount) * HASH_WIDTH);
+    // expectedData.put(entryHash.duplicate());
     
-    for (int p = 0; p < skipPtrCount; ++p) {
-      long referencedRowNum = rowNumber - (1 << p);
-      ByteBuffer hashPtr = row.prevHash(p);
-      ByteBuffer referencedRowHash = ledger.rowHash(referencedRowNum);
-      assertEquals(referencedRowHash, hashPtr);
-      expectedData.put(referencedRowHash);
-    }
+    // for (int p = 0; p < skipPtrCount; ++p) {
+    //   long referencedRowNum = rowNumber - (1 << p);
+    //   ByteBuffer hashPtr = row.prevHash(p);
+    //   ByteBuffer referencedRowHash = ledger.rowHash(referencedRowNum);
+    //   assertEquals(referencedRowHash, hashPtr);
+    //   expectedData.put(referencedRowHash);
+    // }
     
-    assertFalse(expectedData.hasRemaining());
-    expectedData.flip();
+    // assertFalse(expectedData.hasRemaining());
+    // expectedData.flip();
     
     
-    MessageDigest digest = DIGEST.newDigest();
-    digest.update(expectedData);
+    // MessageDigest digest = DIGEST.newDigest();
+    // digest.update(expectedData);
     
-    ByteBuffer expectedRowHash = ByteBuffer.wrap(digest.digest());
-    assertEquals(expectedRowHash, row.hash());
+    // ByteBuffer expectedRowHash = ByteBuffer.wrap(digest.digest());
+    // assertEquals(expectedRowHash, row.hash());
   }
   
   

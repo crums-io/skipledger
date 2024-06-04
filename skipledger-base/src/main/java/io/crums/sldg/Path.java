@@ -4,9 +4,15 @@
 package io.crums.sldg;
 
 
+import static io.crums.sldg.SkipLedger.hiPtrHash;
+import static io.crums.sldg.SldgConstants.DIGEST;
+import static java.util.Collections.binarySearch;
+
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.HashMap;
+// import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -209,7 +215,7 @@ public class Path {
    * @throws IllegalArgumentException  if {@code rn > hiRowNumber()}
    */
   public final Path tailPath(long rn) {
-    int index = Collections.binarySearch(rowNumbers(), rn);
+    int index = indexOf(rn);
     if (index < 0) {
       index = -1 - index;
       if (index == rows.size())
@@ -218,6 +224,11 @@ public class Path {
           "]");
     }
     return subPath(index);
+  }
+
+
+  private int indexOf(long rn) {
+    return binarySearch(rowNumbers(), rn);
   }
 
 
@@ -231,7 +242,7 @@ public class Path {
    * @throws IllegalArgumentException  if {@code rn <= loRowNumber()}
    */
   public final Path headPath(long rn) {
-    int index = Collections.binarySearch(rowNumbers(), rn);
+    int index = indexOf(rn);
     if (index < 0) {
       index = -1 - index;
       if (index == rows.size())
@@ -276,6 +287,10 @@ public class Path {
 
 
 
+
+
+
+
   
   
   /**
@@ -293,38 +308,48 @@ public class Path {
   /**
    * Determines if this path has a (full) row with this row-number (not just a reference to it).
    */
-  public boolean hasRow(long rowNumber) {
-    return Collections.binarySearch(rowNumbers(), rowNumber) >= 0;
+  public final boolean hasRow(long rowNumber) {
+    return indexOf(rowNumber) >= 0;
   }
   
 
   /**
-   * Determines whether this path references (knows the hash) of the given row number.
+   * Determines whether this path references (knows the hash of) the given row no.
    */
-  public boolean hasRowCovered(long rowNumber) {
-    if (rowNumber == 0)
+  public final boolean hasRowCovered(long rowNumber) {
+    if (rowNumber == 0L)
       return true;
-      
-    var rns = rowNumbers();
+    {
+      int index = indexOf(rowNumber);
+      if (index >= 0)
+        return true;
+      if (-1 - index == rows.size())
+        return false;
+    }
+
+    return linkedAbove(rowNumber);
+  }
+
+
+  private boolean linkedAbove(long rowNumber) {
+
+    final var rns = rowNumbers();
     final int rnCount = rns.size();
-    
-    int searchIndex = Collections.binarySearch(rns, rowNumber);
-    if (searchIndex >= 0)
-      return true;
-    if (-1 - searchIndex == rnCount)
-      return false;
-    
     final int rnLevels = SkipLedger.skipCount(rowNumber);
+    
     for (int level = 0; level < rnLevels; ++level) {
       long rn = rowNumber + (1L << level);
-      searchIndex = Collections.binarySearch(rns, rn);
-      if (searchIndex >= 0)
+      int index = binarySearch(rns, rn);
+      if (index >= 0)
         return true;
-      if (-1 - searchIndex == rnCount)
+      if (-1 - index == rnCount)
         return false;
     }
     return false;
   }
+
+
+
   
   
   /**
@@ -332,7 +357,7 @@ public class Path {
    * the path's {@linkplain #rowNumbers() row numbers} as well other rows referenced thru the rows'
    * skip pointers.
    * <p>The upshot of this accounting is that the hash of every row number returned
-   * is known by the instance. 
+   * is known by the instance. <em>Note, this may contain zero, the sentinel row.</em>
    * </p>
    * 
    * @see #getRowHash(long)
@@ -362,11 +387,7 @@ public class Path {
   
   
   public Row getRowByNumber(long rowNumber) throws IllegalArgumentException {
-    
-    final List<Long> rowNumbers = rowNumbers();
-    
-    int index = Collections.binarySearch(rowNumbers, rowNumber);
-    
+    int index = indexOf(rowNumber);
     if (index < 0)
       throw new IllegalArgumentException("no such row [" + rowNumber + "]");
     
@@ -390,10 +411,9 @@ public class Path {
    */
   public Row getRowOrReferringRow(final long rowNo) throws IllegalArgumentException {
     
-    final List<Long> rowNos = rowNumbers();
     final int insertIndex;
     {
-      int index = Collections.binarySearch(rowNos, rowNo);
+      int index = indexOf(rowNo);
       
       if (index >= 0)
         return rows().get(index);
@@ -403,7 +423,7 @@ public class Path {
     
     final long maxRefRn = rowNo + (1L << (SkipLedger.skipCount(rowNo) - 1));
     
-    for (int index = insertIndex; index < rowNos.size(); ++index) {
+    for (int index = insertIndex; index < rows.size(); ++index) {
       long rn = rows.get(index).rowNumber();
       if (SkipLedger.rowsLinked(rowNo, rn))
         return rows.get(index);
@@ -479,50 +499,137 @@ public class Path {
   
   
   
+  private void addRefs(Row row, HashMap<Long,ByteBuffer> rowHashes) {
+    final long rn = row.no();
+    addRef(rn, row.hash(), rowHashes, true);
+    if (rn == 1L)
+      return;
+
+    final boolean validImpl;
+    if (row.hasAllLevels()) {
+      final int levels = row.hiPtrLevel() + 1;
+      for (int lv = levels; lv-- > 0; )
+        addRef(rn - (1L << lv), row.prevHash(lv), rowHashes);
+
+      validImpl =
+          SkipLedger.rowHash(
+              rn,
+              row.inputHash(),
+              row.prevHashes()).equals(row.hash());
+    } else {
+
+      long hiPtrNo = row.hiPtrNo();
+      if (hiPtrNo != 0)
+        addRef(row.hiPtrNo(), row.hiPtrHash(), rowHashes);
   
+      validImpl =
+          SkipLedger.rowHash(
+              rn,
+              row.inputHash(),
+              row.hiPtrHash(),
+              row.basePtrsHash()).equals(row.hash());
+    }
+
+
+    if (!validImpl)
+      throw new HashConflictException(
+          "invalid hash at [" + rn + "]. Implementation class: " +
+          row.getClass().getName());
+  }
   
+
   
+  private boolean addRef(
+      long no, ByteBuffer hash, HashMap<Long,ByteBuffer> rowHashes) {
+    return addRef(no, hash, rowHashes, false);
+  }
+  
+  private boolean addRef(
+      long no, ByteBuffer hash, HashMap<Long,ByteBuffer> rowHashes,
+      boolean assertUnknown) {
+
+    var known = rowHashes.put(no, hash);
+    if (known == null)
+      return true;
+    
+    if (!known.equals(hash))
+      throw new HashConflictException(
+          "at row [" + no + "]; (assertUnknown=" + assertUnknown + ")");
+
+    assert !assertUnknown;
+    return false;
+  }
   
   
   
   private void verify() {
 
-    var digest = SldgConstants.DIGEST.newDigest();
 
-    // artifact of deciding to reverse the order of the displayed rows
-    List<Row> rpath = Lists.reverse(this.rows);
-    
-    for (int index = 0, nextToLast = rpath.size() - 2; index < nextToLast; ++index) {
-      Row row = rpath.get(index);
-      Row prev = rpath.get(index + 1);
-      
-//      if (!Digest.equal(row, prev))
-//        throw new IllegalArgumentException(
-//            "digest conflict at index " + index + ": " +
-//                rpath.subList(index, index + 2));
-      
-      long rowNumber = row.rowNumber();
-      long prevNumber = prev.rowNumber();
-      long deltaNum = rowNumber - prevNumber;
-      
-      if (deltaNum < 1 || rowNumber % deltaNum != 0)
+    if (rows.get(0).no() <= 0L)
+      throw new IllegalArgumentException(
+          "illegal row no. at index [0]: " + rows.get(0).no());
+
+    HashMap<Long,ByteBuffer> rowHashes = new HashMap<>();
+    rowHashes.put(0L, DIGEST.sentinelHash());
+
+    long prevNo = rows.get(0).no() - 1L;
+    for (int index = 0; index < rows.size(); ++index) {
+      final Row row = rows.get(index);
+      final long rn = row.no();
+      if (rn <= prevNo)
         throw new IllegalArgumentException(
-            "row numbers at index " + index + ": " + rpath.subList(index, index + 2));
-      if (Long.highestOneBit(deltaNum) != deltaNum)
+            "out-of-sequence rows after index [" + (index - 1) + "]: " +
+            prevNo + ", " + rn);
+
+      if (!SkipLedger.rowsLinked(prevNo, rn))
         throw new IllegalArgumentException(
-            "non-power-of-2 delta " + deltaNum + " at index " + index + ": " +
-                rpath.subList(index, index + 2));
+            "unlinked rows after index (" + (index - 1) +
+            "): " + prevNo + ", " + rn);
       
-      digest.reset();
-      digest.update(prev.data());
-      ByteBuffer prevRowHash = ByteBuffer.wrap(digest.digest());
+
+      addRefs(row, rowHashes);
       
-      int pointerIndex = Long.numberOfTrailingZeros(deltaNum);
-      ByteBuffer hashPointer = row.prevHash(pointerIndex);
-      if (!prevRowHash.equals(hashPointer))
-        throw new HashConflictException(
-            "hash conflict at index " + index + ": " + rpath.subList(index, index + 2));
+      prevNo = rn;
+
     }
+
+
+//     var digest = SldgConstants.DIGEST.newDigest();
+
+//     // artifact of deciding to reverse the order of the displayed rows
+//     List<Row> rpath = Lists.reverse(this.rows);
+    
+//     for (int index = 0, nextToLast = rpath.size() - 2; index < nextToLast; ++index) {
+//       Row row = rpath.get(index);
+//       Row prev = rpath.get(index + 1);
+      
+// //      if (!Digest.equal(row, prev))
+// //        throw new IllegalArgumentException(
+// //            "digest conflict at index " + index + ": " +
+// //                rpath.subList(index, index + 2));
+      
+//       long rowNumber = row.rowNumber();
+//       long prevNumber = prev.rowNumber();
+//       long deltaNum = rowNumber - prevNumber;
+      
+//       if (deltaNum < 1 || rowNumber % deltaNum != 0)
+//         throw new IllegalArgumentException(
+//             "row numbers at index " + index + ": " + rpath.subList(index, index + 2));
+//       if (Long.highestOneBit(deltaNum) != deltaNum)
+//         throw new IllegalArgumentException(
+//             "non-power-of-2 delta " + deltaNum + " at index " + index + ": " +
+//                 rpath.subList(index, index + 2));
+      
+//       digest.reset();
+//       digest.update(prev.data());
+//       ByteBuffer prevRowHash = ByteBuffer.wrap(digest.digest());
+      
+//       int pointerIndex = Long.numberOfTrailingZeros(deltaNum);
+//       ByteBuffer hashPointer = row.prevHash(pointerIndex);
+//       if (!prevRowHash.equals(hashPointer))
+//         throw new HashConflictException(
+//             "hash conflict at index " + index + ": " + rpath.subList(index, index + 2));
+//     }
   }
   
 }
