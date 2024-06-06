@@ -82,7 +82,7 @@ public class PathTest {
           assertEquals(0, hash.get());
         continue;
       }
-      Row refRow = refNum == row.rowNumber() ? row : ledger.getRow(refNum);
+      Row refRow = refNum == row.no() ? row : ledger.getRow(refNum);
       assertEquals(refRow.hash(), hash);
     }
   }

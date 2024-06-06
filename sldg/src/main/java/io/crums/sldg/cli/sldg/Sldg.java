@@ -279,7 +279,7 @@ abstract class CommandBase {
     var ledger = getLedger();
     TrailedRow trailedRow = ledger.getHashLedger().getTrailByIndex(index);
     long utc = trailedRow.utc();
-    table.printRow("row #: ", trailedRow.rowNumber());
+    table.printRow("row #: ", trailedRow.no());
     table.printRow("witnessed:", new Date(utc), "UTC: " + utc);
     table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
     table.printRow("ref URL:", trailedRow.trail().getRefUrl());
@@ -910,7 +910,7 @@ class Rollback implements Runnable {
     if (trail != null) {
       out.printf(
         "   Crumtrails (witness records) dating back to row [%d] will also be lost%n",
-        trail.rowNumber());
+        trail.no());
       out.printf(
         "   (witnessed on %s)%n", new Date(trail.utc()));
     }

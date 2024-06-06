@@ -70,7 +70,7 @@ public class Seal implements Serial {
   
   /** Returns the last row number (equivalently, the number of ledgerable lines in the log).  */
   public long rowNumber() {
-    return rowHash.rowNumber();
+    return rowHash.no();
   }
   
   

@@ -44,7 +44,7 @@ public class RowHashWriter implements JsonEntityWriter<RowHash> {
 
   @Override
   public JSONObject injectEntity(RowHash row, JSONObject jObj) {
-    return injectImpl(row.rowNumber(), row.hash(), jObj);
+    return injectImpl(row.no(), row.hash(), jObj);
   }
 
 }

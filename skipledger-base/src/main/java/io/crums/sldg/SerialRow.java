@@ -25,6 +25,9 @@ public class SerialRow extends Row {
   public static ByteBuffer toDataBuffer(Row row) {
     if (row instanceof SerialRow sr)
       return sr.data();
+    if (row.isCondensed())
+      throw new IllegalArgumentException(
+          "insufficient info, row [" + row.no() + "] is condensed: " + row);
     
     final int levels = row.prevLevels();
     final int cellsInRow = 1 + levels;
@@ -75,7 +78,7 @@ public class SerialRow extends Row {
     this.data = data.slice();
     
     int cellsInRow = 1 + SkipLedger.skipCount(rowNumber); // (bounds checked)
-    int expectedBytes = cellsInRow * hashWidth();
+    int expectedBytes = cellsInRow * SldgConstants.HASH_WIDTH;
     if (this.data.capacity() != expectedBytes)
       throw new IllegalArgumentException(
           "expected " + expectedBytes + " bytes for rowNumber " + rowNumber +
@@ -91,10 +94,6 @@ public class SerialRow extends Row {
     return data.asReadOnlyBuffer();
   }
 
-  @Override
-  public final long rowNumber() {
-    return rowNumber;
-  }
 
   @Override
   public final long no() {
@@ -103,13 +102,14 @@ public class SerialRow extends Row {
 
   @Override
   public final ByteBuffer inputHash() {
-    return data().limit(hashWidth());
+    return data().limit(SldgConstants.HASH_WIDTH);
   }
+  
 
   @Override
   public final ByteBuffer prevHash(int level) {
     Objects.checkIndex(level, prevLevels());
-    int cellWidth = hashWidth();
+    int cellWidth = SldgConstants.HASH_WIDTH;
     int pos = (1 + level) * cellWidth;
     int limit = pos + cellWidth;
     return data().position(pos).limit(limit).slice();

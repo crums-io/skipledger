@@ -203,7 +203,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
     // add the rows in reverse
     for (int index = rows.size(); index-- > 0; ) {
       Row row = rows.get(index);
-      if (row.rowNumber() > hi)
+      if (row.no() > hi)
         continue;
       if (add(row))
         ++count;
@@ -229,7 +229,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
    *         the given row doesn't come from this bag's ledger.
    */
   public synchronized boolean add(Row row) throws HashConflictException {
-    final long rn = row.rowNumber();
+    final long rn = row.no();
     if (rn > hi())
       throw new IllegalArgumentException(
           "attempt to extend bag with row [" + rn + "]; hi is " + hi());
@@ -271,7 +271,7 @@ public class RowPackBuilder extends RecurseHashRowPack implements Serial {
   
   private void addSansCheck(Row row) {
     
-    Long rn = row.rowNumber();
+    Long rn = row.no();
     
     
 

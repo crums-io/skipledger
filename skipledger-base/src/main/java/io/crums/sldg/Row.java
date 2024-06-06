@@ -4,23 +4,18 @@
 package io.crums.sldg;
 
 
-import static io.crums.sldg.SldgConstants.DIGEST;
-
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.List;
 import java.util.SortedSet;
 
-import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
-import io.crums.util.mrkl.FixedLeafBuilder;
 
 /**
  * A row in a ledger.
  * Concrete instances must have immutable state.
  * 
  * @see RowHash#prevLevels()
- * @see RowHash#prevRowNumber(int)
+ * @see RowHash#prevNo(int)
  */
 public abstract class Row extends RowHash {
   
@@ -32,7 +27,7 @@ public abstract class Row extends RowHash {
    * Returns the user-inputed hash. This is the hash of the abstract object (whatever it is, we
    * don't know).
    * 
-   * @return non-null, {@linkplain #hashWidth()} bytes remaining
+   * @return non-null, 32-bytes remaining
    */
   public abstract ByteBuffer inputHash();
   
@@ -106,7 +101,7 @@ public abstract class Row extends RowHash {
    * of these referenced rows is available thru the {@linkplain #hash(long)} method.
    */
   public final SortedSet<Long> coveredRowNumbers() {
-    return SkipLedger.coverage(Collections.singletonList(no()));
+    return SkipLedger.coverage(List.of(no()));
   }
   
 
@@ -115,53 +110,11 @@ public abstract class Row extends RowHash {
    * 
    * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
    * 
-   * @return non-null, {@linkplain #hashWidth()} bytes wide
+   * @return non-null, 32-bytes wide
    */
   public abstract ByteBuffer prevHash(int level);
   
   
-  @Override
-  public String toString() {
-    int skipCount = prevLevels();
-
-    StringBuilder string;
-    {
-      // estimate req builder cap
-      int cellCount = skipCount + 1;
-      int len = 18 /* (row number + space) */ + cellCount * CELL_DISPLAY_LENGTH;
-      string = new StringBuilder(len);
-    }
-    
-    string.append('[').append(no()).append("] ");
-    while(string.length() < 8)
-      string.append(' ');
-    
-    appendCellToString(inputHash(), string);
-
-    for (int p = 0; p < skipCount; ++p)
-      appendCellToString(prevHash(p), string);
-    
-    return string.toString();
-  }
-  
-  
-  
-  private void appendCellToString(ByteBuffer cell, StringBuilder string) {
-    string.append(CELL_DISPLAY_PREFIX);
-    cell.limit(cell.position() + HEX_DISPLAY_BYTES);
-    IntegralStrings.appendHex(cell, string);
-    string.append(CELL_DISPLAY_POSTFIX);
-  }
-  
-  
-
-
-  private final static int HEX_DISPLAY_BYTES = 3;
-  private final static String CELL_DISPLAY_PREFIX = "  ";
-  private final static String CELL_DISPLAY_POSTFIX = "..";
-  private final static int CELL_DISPLAY_LENGTH =
-      2 * HEX_DISPLAY_BYTES + CELL_DISPLAY_PREFIX.length() + CELL_DISPLAY_POSTFIX.length();
-
 }
 
 

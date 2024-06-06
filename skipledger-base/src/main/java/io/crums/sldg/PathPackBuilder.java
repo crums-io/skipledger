@@ -50,7 +50,7 @@ public class PathPackBuilder implements PathBag {
   
   public int addRow(Row row) {
     
-    final Long rn = row.rowNumber();
+    final Long rn = row.no();
 
     synchronized (lock) {
       
@@ -101,7 +101,7 @@ public class PathPackBuilder implements PathBag {
         // check the row's hash pointers to rows below hiRn (if any) match
         final int hiRnSkipCount = SkipLedger.skipCount(hiRn);
         for (int level = levels; level-- > hiRnSkipCount; ) {
-          long refNo = row.prevRowNumber(level);
+          long refNo = row.prevNo(level);
           var existingRef = findHash(refNo);  // (can't be null)
           if (!existingRef.equals(row.prevHash(level)))
             throw new HashConflictException(
@@ -257,7 +257,7 @@ public class PathPackBuilder implements PathBag {
    *                        in advance)
    */
   private int addSansLinkCheck(SerialRow safeRow) {
-    final long rn = safeRow.rowNumber();
+    final long rn = safeRow.no();
     final int levels = safeRow.prevLevels();
     
     final var rowHash = safeRow.hash();

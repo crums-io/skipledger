@@ -782,7 +782,7 @@ class Entry implements Callable<Integer> {
     } else {
       trails = pack.getTrailedRows();
       nextTrail = trails.get(trailIndex);
-      nextTrailedRn = nextTrail.rowNumber();
+      nextTrailedRn = nextTrail.no();
       trails = pack.getTrailedRows();
     }
     
@@ -817,7 +817,7 @@ class Entry implements Callable<Integer> {
           nextTrailedRn = Long.MAX_VALUE;
         } else {
           nextTrail = trails.get(trailIndex);
-          nextTrailedRn = nextTrail.rowNumber();
+          nextTrailedRn = nextTrail.no();
         }
       }
     }
@@ -921,7 +921,7 @@ class Entry implements Callable<Integer> {
       } else {
         trails = pack.getTrailedRows();
         nextTrail = trails.get(trailIndex);
-        nextTrailedRn = nextTrail.rowNumber();
+        nextTrailedRn = nextTrail.no();
         trails = pack.getTrailedRows();
       }
       
@@ -981,7 +981,7 @@ class Entry implements Callable<Integer> {
             nextTrailedRn = Long.MAX_VALUE;
           } else {
             nextTrail = trails.get(trailIndex);
-            nextTrailedRn = nextTrail.rowNumber();
+            nextTrailedRn = nextTrail.no();
           }
         }
       }
@@ -1001,7 +1001,7 @@ class Entry implements Callable<Integer> {
     Date date = new Date(nextTrail.utc());
     String msg = "<< Witnessed " + (dateFormat == null ? date : dateFormat.format(date)) + " >>";
     if (includeRn)
-      table.printRow("[" + nextTrail.rowNumber() + "]", msg);
+      table.printRow("[" + nextTrail.no() + "]", msg);
     else
       table.println(msg);
   }

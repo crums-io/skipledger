@@ -156,7 +156,7 @@ public class StateHasherTest extends IoTestCase {
     }
     assertEquals(rns.length, rows.size());
     for (int index = 0; index < rns.length; ++index)
-      assertEquals(rns[index], rows.get(index).rowNumber());
+      assertEquals(rns[index], rows.get(index).no());
   }
   
   

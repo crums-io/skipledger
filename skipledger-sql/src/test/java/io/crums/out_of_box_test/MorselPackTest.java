@@ -612,7 +612,7 @@ public class MorselPackTest extends IoTestCase {
   
   
   public static void assertInBag(Path expected, MorselBag bag) {
-    expected.rows().forEach(r -> assertEquals(r, bag.getRow(r.rowNumber())));
+    expected.rows().forEach(r -> assertEquals(r, bag.getRow(r.no())));
   }
   
   

@@ -29,7 +29,7 @@ public class BaggedRow extends Row {
   }
 
   @Override
-  public final long rowNumber() {
+  public final long no() {
     return rowNumber;
   }
 

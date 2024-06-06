@@ -29,7 +29,6 @@ public class HashedRow extends RowHash {
   
   /**
    * 
-   * @param rowNumber
    * @param hash      32 bytes. Not copied. (Do not modify!)
    */
   public HashedRow(long rowNumber, byte[] hash) {
@@ -41,7 +40,6 @@ public class HashedRow extends RowHash {
 
   /**
    * 
-   * @param rowNumber 
    * @param hash      32 remaining bytes remaining. Sliced, not copied. (Do not modify the contents
    *                  of the remaining bytes!)
    */
@@ -66,7 +64,7 @@ public class HashedRow extends RowHash {
   
 
   @Override
-  public long rowNumber() {
+  public long no() {
     return rowNumber;
   }
 

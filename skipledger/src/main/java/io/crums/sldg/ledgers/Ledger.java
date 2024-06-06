@@ -1016,12 +1016,12 @@ public class Ledger implements AutoCloseable {
     if (!trails.isEmpty()) {
       
       var trailedPathRns = new TreeSet<Long>(initPath.rowNumbers());
-      trailedPathRns.addAll(Lists.map(trails, TrailedRow::rowNumber));
+      trailedPathRns.addAll(Lists.map(trails, TrailedRow::no));
       var targetRns = trailedPathRns.toArray(new Long[trailedPathRns.size()]);
       var trailedPath = hashLedger.getSkipLedger().getPath(targetRns);
       builder.addPath(trailedPath);
       for (var trail : trails)
-        builder.addTrail(trail.rowNumber(), trail.trail());
+        builder.addTrail(trail.no(), trail.trail());
       
     }
     

@@ -4,33 +4,28 @@
 package io.crums.sldg;
 
 
-import static io.crums.sldg.SldgConstants.DIGEST;
-import static io.crums.sldg.SldgConstants.HASH_WIDTH;
-
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.Objects;
 
 import io.crums.util.IntegralStrings;
-import io.crums.util.hash.Digest;
 
 /**
  * Superclass data type for {@linkplain Row} (and extracted from there).
  * Turns out, I need this--at least conceptually.
  */
-public abstract class RowHash implements Digest {
+public abstract class RowHash {
 
   
   
-  /**
-   * Returns the row number.
-   * 
-   * @return &ge; 1
-   * 
-   * @deprecated to be replaced by {@link #no()}
-   * @see #equals(Object)
-   */
-  public abstract long rowNumber();
+  // /**
+  //  * Returns the row number.
+  //  * 
+  //  * @return &ge; 1
+  //  * 
+  //  * @deprecated to be replaced by {@link #no()}
+  //  * @see #equals(Object)
+  //  */
+  // public abstract long rowNumber();
 
 
   /**
@@ -40,9 +35,7 @@ public abstract class RowHash implements Digest {
    * 
    * @see #equals(Object)
    */
-  public long no() {
-    return rowNumber();
-  }
+  public abstract long no();
   
   /**
    * Returns the hash of this row.
@@ -71,19 +64,6 @@ public abstract class RowHash implements Digest {
     return SkipLedger.hiPtrLevel(no());
   }
 
-
-  
-  /**
-   * Returns the row number linked to at the given {@code level}.
-   * 
-   * @param level &ge; 0 and &lt; {@linkplain #prevLevels()}
-   * 
-   * @return {@code rowNumber() - (1L << level)}
-   * @deprecated to be replaced by {@link #prevNo(int)}
-   */
-  public final long prevRowNumber(int level) {
-    return prevNo(level);
-  }
 
 
   /**
@@ -123,7 +103,7 @@ public abstract class RowHash implements Digest {
    */
   @Override
   public final int hashCode() {
-    return Long.hashCode(rowNumber());
+    return Long.hashCode(no());
   }
   
 
@@ -137,30 +117,30 @@ public abstract class RowHash implements Digest {
    */
   @Override
   public String toString() {
-    return rowNumber() + ":" + IntegralStrings.toHex(hash().slice().limit(3));
+    return no() + ":" + IntegralStrings.toHex(hash().slice().limit(3));
   }
   
 
   
-  @Override
-  public final int hashWidth() {
-    return HASH_WIDTH;
-  }
+  // @Override
+  // public final int hashWidth() {
+  //   return HASH_WIDTH;
+  // }
 
-  @Override
-  public final String hashAlgo() {
-    return DIGEST.hashAlgo();
-  }
+  // @Override
+  // public final String hashAlgo() {
+  //   return DIGEST.hashAlgo();
+  // }
 
-  @Override
-  public final MessageDigest newDigest() {
-    return DIGEST.newDigest();
-  }
+  // @Override
+  // public final MessageDigest newDigest() {
+  //   return DIGEST.newDigest();
+  // }
 
-  @Override
-  public final ByteBuffer sentinelHash() {
-    return DIGEST.sentinelHash();
-  }
+  // @Override
+  // public final ByteBuffer sentinelHash() {
+  //   return DIGEST.sentinelHash();
+  // }
   
 
 }

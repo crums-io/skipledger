@@ -49,7 +49,7 @@ import io.crums.sldg.SkipLedger;
  * <h4>State Path Caching Prop</h4>
  * <p>
  * We're specially storing row 1 here because it always lies on the state path. But the same can be
- * said of rows 2, 4, 8, and so on. (And also on the way down.) TODO
+ * said of rows 2, 4, 8, and so on. (And also on the way down)
  * </p>
  */
 public class RowCache {
@@ -144,7 +144,7 @@ public class RowCache {
    */
   private SerialRow lastRow(long rowNumber) {
     SerialRow last = lastRow;
-    return last != null && last.rowNumber() == rowNumber ? last : null;
+    return last != null && last.no() == rowNumber ? last : null;
   }
   
   
@@ -166,7 +166,7 @@ public class RowCache {
       cachedRow = treeCache[serialIndex];
     }
     
-    return cachedRow != null && cachedRow.rowNumber() == rowNumber ? cachedRow : null;
+    return cachedRow != null && cachedRow.no() == rowNumber ? cachedRow : null;
   }
   
   
@@ -214,7 +214,7 @@ public class RowCache {
   
   public void pushRow(Row row) {
     
-    final long rn = row.rowNumber();
+    final long rn = row.no();
     
     if (rn == 1) {
       this.rowOne = SerialRow.toInstance(row);
@@ -250,27 +250,6 @@ public class RowCache {
   
   
   
-//  /**
-//   * Conditionally pushes the given row to the cache tree.
-//   */
-//  private void pushToTree(Row row) {
-//    
-//    final long rn = row.rowNumber();
-//
-//    // below, same as SkipLedger.skipCount(rn) - 1
-//    int rowLevel = Long.numberOfTrailingZeros(rn);
-//    int reqMaxLevel = 64 - Long.numberOfLeadingZeros(rn);
-//    int maxLevelSnap = this.maxLevel;
-//    
-//    int index = indexInTree(rn, rowLevel, maxLevelSnap);
-//    if (index != -1) {
-//      synchronized (treeCache) {
-//        if (this.maxLevel == maxLevelSnap) {
-//          treeCache[index] = SerialRow.toInstance(row);
-//        } 
-//      }
-//    }
-//  }
   
   
   /**
@@ -279,53 +258,15 @@ public class RowCache {
    * @see #pushToTree(Row)
    */
   private void setLastRowNumber(Row row) {
-    long rn = row.rowNumber();
+    long rn = row.no();
     synchronized (lastRowLock) {
-      if (lastRow == null || lastRow.rowNumber() < rn) {
+      if (lastRow == null || lastRow.no() < rn) {
         this.lastRow = SerialRow.toInstance(row);
         this.lastRowNumber = rn;
       }
     }
   }
   
-  
-//  /**
-//   * Note there are indeed better ways to optimize this operation, but
-//   * are not worthwhile since it can only run a finitely small number (&lt; 62)
-//   * of times.
-//   * 
-//   * @param newMaxLevel
-//   */
-//  private void raiseTreeRoot(int newMaxLevel) {
-//    
-//    synchronized (treeCache) {
-//      if (this.maxLevel >= newMaxLevel)
-//        return;
-//      
-//      
-//      for (int index = treeCache.length; index-- > 0; ) {
-//        SerialRow row = treeCache[index];
-//        if (row == null)
-//          continue;
-//        
-//        long rn = row.rowNumber();
-//        int rowLevel = Long.numberOfTrailingZeros(rn);
-//        
-//        int newIndex = indexInTree(rn, rowLevel, newMaxLevel);
-//        if (newIndex != -1) {
-//          treeCache[newIndex] = row;
-//        }
-//      }
-//      
-//      this.maxLevel = newMaxLevel;
-//    }
-//  }
-  
-  
-  public void clearAll() {
-    
-    
-  }
 
 }
 

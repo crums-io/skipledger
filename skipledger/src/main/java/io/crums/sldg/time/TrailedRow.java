@@ -37,7 +37,8 @@ public class TrailedRow extends RowHash {
   /**
    * Returns the row number.
    */
-  public final long rowNumber() {
+  @Override
+  public final long no() {
     return rowNumber;
   }
 

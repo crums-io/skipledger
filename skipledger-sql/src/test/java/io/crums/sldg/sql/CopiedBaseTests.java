@@ -6,13 +6,11 @@ package io.crums.sldg.sql;
 import static io.crums.sldg.SldgConstants.DIGEST;
 import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.File;
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
@@ -78,14 +76,14 @@ public class CopiedBaseTests {
         assertNotNull(trailedRow);
         assertEquals(trail, trailedRow.trail());
         assertEquals(trail.crum(), trailedRow.trail().crum());
-        assertEquals(1, trailedRow.rowNumber());
+        assertEquals(1, trailedRow.no());
         assertEquals(row.hash(), trailedRow.hash());
         
         trailedRow = hLedger.nearestTrail(1L);
         assertNotNull(trailedRow);
         assertEquals(trail, trailedRow.trail());
         assertEquals(trail.crum(), trailedRow.trail().crum());
-        assertEquals(1, trailedRow.rowNumber());
+        assertEquals(1, trailedRow.no());
         assertEquals(row.hash(), trailedRow.hash());
         
         assertEquals(1L, hLedger.lastWitnessedRowNumber());
@@ -151,7 +149,7 @@ public class CopiedBaseTests {
         
         for (int index = 0; index < trailedRns.length; ++index) {
           TrailedRow trailedRow = hLedger.getTrailByIndex(index);
-          assertEquals(trailedRns[index], trailedRow.rowNumber());
+          assertEquals(trailedRns[index], trailedRow.no());
           assertEquals(MOCK_START_UTC + utcDelta * trailedRns[index], trailedRow.utc());
           Row row = hLedger.getSkipLedger().getRow(trailedRns[index]);
           assertEquals(row.hash(), trailedRow.hash());
@@ -162,7 +160,7 @@ public class CopiedBaseTests {
         for (long trailedRn : trailedRns) {
           for (; rn <= trailedRn; ++rn) {
             TrailedRow trailedRow = hLedger.nearestTrail(rn);
-            assertEquals(trailedRn, trailedRow.rowNumber());
+            assertEquals(trailedRn, trailedRow.no());
           }
         }
         for (; rn <= count; ++rn) {

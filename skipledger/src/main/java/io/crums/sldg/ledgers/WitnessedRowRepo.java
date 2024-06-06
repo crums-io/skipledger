@@ -110,7 +110,7 @@ public interface WitnessedRowRepo extends AutoCloseable {
       final int size = getTrailCount();
       @Override
       public Long get(int index) {
-        return getTrailByIndex(index).rowNumber();
+        return getTrailByIndex(index).no();
       }
       @Override
       public int size() {

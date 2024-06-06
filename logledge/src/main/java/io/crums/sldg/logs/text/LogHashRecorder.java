@@ -965,7 +965,7 @@ private record LineNosInfo(int dex) {
     builder.initPath(path, log.getName());
 
     if (trail.isPresent()) {
-      long trn = trail.get().rowNumber();
+      long trn = trail.get().no();
       if (trn == hi)
         builder.addTrail(trail.get());
       
@@ -1261,7 +1261,7 @@ private record LineNosInfo(int dex) {
     var last = lastTrailedRow();
     if (last.isPresent()) {
       var lastTrailedRow = last.get();
-      long lastTrn = lastTrailedRow.rowNumber();
+      long lastTrn = lastTrailedRow.no();
       
       if (lastTrn == record.rowNum() &&
           !lastTrailedRow.hash().equals(record.row().hash())) {

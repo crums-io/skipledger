@@ -33,7 +33,7 @@ public class Finder {
       ByteBuffer aEntry = a.inputHash();
       ByteBuffer bEntry = b.inputHash();
       int comp = aEntry.compareTo(bEntry);
-      return comp == 0 ? Long.compare(a.rowNumber(), b.rowNumber()) : comp;
+      return comp == 0 ? Long.compare(a.no(), b.no()) : comp;
     }
   };
 

@@ -31,7 +31,7 @@ public final class WitnessRecord {
   }
   
   public long rowNum() {
-    return row.rowNumber();
+    return row.no();
   }
   
   public boolean isTrailed() {

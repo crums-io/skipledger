@@ -532,7 +532,7 @@ public class Jurno extends MainTemplate {
   private void printTrailDetail(int index, TablePrint table) {
     TrailedRow trailedRow = journal.getHashLedger().getTrailByIndex(index);
     long utc = trailedRow.utc();
-    table.printRow("row #: ", trailedRow.rowNumber());
+    table.printRow("row #: ", trailedRow.no());
     table.printRow("created before:", new Date(utc), "UTC: " + utc);
     table.printRow("trail root:", IntegralStrings.toHex(trailedRow.trail().rootHash()));
     table.printRow("ref URL:", trailedRow.trail().getRefUrl());

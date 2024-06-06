@@ -140,7 +140,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
       int trailIndex = pack.indexOfNearestTrail(rows.get(0));
       long nextTrailedRn =
           trailIndex == -1 ?
-              Long.MAX_VALUE : pack.getTrailedRows().get(trailIndex).rowNumber();
+              Long.MAX_VALUE : pack.getTrailedRows().get(trailIndex).no();
       long prevRn = 0;
       long lastTrailRn = 0;
       for (long rn : rows) {
@@ -159,8 +159,8 @@ public class MorselPackBuilder implements MorselBag, Serial {
           nextTrailedRn =
               ++trailIndex == trailedRows.size() ?
                   Long.MAX_VALUE :
-                    trailedRows.get(trailIndex).rowNumber();
-          lastTrailRn = trailedRow.rowNumber();
+                    trailedRows.get(trailIndex).no();
+          lastTrailRn = trailedRow.no();
         }
         prevRn = rn;
       }
@@ -626,7 +626,7 @@ public class MorselPackBuilder implements MorselBag, Serial {
    *          with the hash of the given row number
    */
   public boolean addTrail(TrailedRow trailedRow) throws  HashConflictException {
-    return addTrail(trailedRow.rowNumber(), trailedRow.trail());
+    return addTrail(trailedRow.no(), trailedRow.trail());
   }
   
   

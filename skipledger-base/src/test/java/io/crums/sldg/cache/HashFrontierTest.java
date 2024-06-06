@@ -103,7 +103,7 @@ public class HashFrontierTest extends SelfAwareTestCase {
     assertEquals(rows, frontier.rowNumber());
     var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
-    assertEquals(rows, hiRow.rowNumber());
+    assertEquals(rows, hiRow.no());
     
     if (label != null) {
       String method = method(label);
@@ -163,7 +163,7 @@ public class HashFrontierTest extends SelfAwareTestCase {
     assertEquals(rows, frontier.rowNumber());
     var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
-    assertEquals(rows, hiRow.rowNumber());
+    assertEquals(rows, hiRow.no());
   }
   
 

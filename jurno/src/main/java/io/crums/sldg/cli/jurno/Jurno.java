@@ -191,13 +191,13 @@ public class Jurno {
   
   static void printTrailRange(TrailedRow first, TrailedRow last, PrintSupport printer) {
     
-    boolean one = first.rowNumber() == last.rowNumber();
+    boolean one = first.no() == last.no();
     
     String pad;
     {
       int width =
-          Long.toString(last.rowNumber()).length() -
-          Long.toString(first.rowNumber()).length();
+          Long.toString(last.no()).length() -
+          Long.toString(first.no()).length();
       var space = new StringBuilder();
       while (space.length() < width)
         space.append(' ');
@@ -207,7 +207,7 @@ public class Jurno {
     printer.incrIndentation(2);
     printer.print("%s[%d] %s".formatted(
         pad,
-        first.rowNumber(),
+        first.no(),
         new Date(first.utc()).toString()));
     
     if (one) {
@@ -215,7 +215,7 @@ public class Jurno {
     } else {
       printer.println("  (first)");
       printer.println("[%d] %s  (last)".formatted(
-          last.rowNumber(),
+          last.no(),
           new Date(last.utc()).toString()));
     }
     printer.decrIndentation(2);
@@ -446,7 +446,7 @@ class Status implements Runnable {
       if (lastTrail.isEmpty()) {
         System.out.println(Ansi.AUTO.string("@|fg(yellow) pending|@"));
       } else {
-        long witRn = lastTrail.get().rowNumber();
+        long witRn = lastTrail.get().no();
         long rn = state.get().rowNumber();
         if (witRn == rn)
           System.out.println(new Date(lastTrail.get().utc()));
@@ -1876,7 +1876,7 @@ class History implements Runnable {
     
     do {
       var trail = recorder.getTrailByIndex(witIndex);
-      long rn = trail.rowNumber();
+      long rn = trail.no();
       System.out.println(Ansi.AUTO.string(
           "  %s[@|bold %d|@]   %s".formatted(
               pad(rn, maxDigits),
@@ -2150,7 +2150,7 @@ class Morsel implements Callable<Integer> {
           
           for (Long srcRn : srcRns) {
             
-            if (!trailSet.isEmpty() && trailSet.get(trailSet.size() - 1).rowNumber() >= srcRn)
+            if (!trailSet.isEmpty() && trailSet.get(trailSet.size() - 1).no() >= srcRn)
               continue;
             
             int index = Collections.binarySearch(trailedRns, srcRn);
@@ -2165,7 +2165,7 @@ class Morsel implements Callable<Integer> {
             
           } // for (
           
-          trailSet.stream().map(TrailedRow::rowNumber).forEach(anchorSet::add);
+          trailSet.stream().map(TrailedRow::no).forEach(anchorSet::add);
         }
         
         

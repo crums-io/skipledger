@@ -34,15 +34,15 @@ public class CompactSkipLedger extends SkipLedger {
     this.cache = cache;
   }
   
-  protected void primeCache() {
-    if (cache == null)
-      return;
+  // protected void primeCache() {
+  //   if (cache == null)
+  //     return;
     
-    cache.clearAll();
-    long lastRn = size();
-    if (lastRn != 0)
-      getRow(lastRn);
-  }
+  //   // cache.clearAll();  (since it never did anything)
+  //   long lastRn = size();
+  //   if (lastRn != 0)
+  //     getRow(lastRn);
+  // }
   
   @Override
   public final int hashWidth() {
@@ -91,31 +91,6 @@ public class CompactSkipLedger extends SkipLedger {
     ByteBuffer ehCopy = entryHash.slice();
     
     final long nextRowNum = table.size() + 1;
-    
-    // byte[] nextRowHash;
-    // {
-    //   int skipCount = skipCount(nextRowNum);
-      
-    //   ByteBuffer nextRowData = ByteBuffer.allocate((1 + skipCount) * HASH_WIDTH);
-      
-    //   nextRowData.put(entryHash);
-    //   for (int p = 0; p < skipCount; ++p) {
-    //     long referencedRowNum = nextRowNum - (1L << p);
-    //     ByteBuffer hashPtr = rowHash(referencedRowNum, table);
-    //     assert hashPtr.remaining() == HASH_WIDTH;
-    //     nextRowData.put(hashPtr);
-    //   }
-    //   nextRowData.flip();
-      
-    //   MessageDigest digest = newDigest();
-    //   digest.update(nextRowData);
-
-    //   nextRowHash = digest.digest();
-
-    // }
-
-
-
 
     final int levels = skipCount(nextRowNum);
     final List<Long> prevRns = Lists.functorList(
@@ -214,7 +189,7 @@ public class CompactSkipLedger extends SkipLedger {
     }
 
     @Override
-    public long rowNumber() {
+    public long no() {
       return rowNumber;
     }
 

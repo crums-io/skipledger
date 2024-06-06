@@ -501,12 +501,13 @@ public class HashFrontier extends Frontier implements Serial {
 
   @Override
   public long rowNumber() {
-    return levelFrontier[0].rowNumber();
+    return levelFrontier[0].no
+    ();
   }
 
   @Override
   public final long tail() {
-    return levelFrontier[levelFrontier.length - 1].rowNumber();
+    return levelFrontier[levelFrontier.length - 1].no();
   }
 
   
@@ -516,7 +517,7 @@ public class HashFrontier extends Frontier implements Serial {
 
       @Override
       public Long get(int index) {
-        return levelFrontier[index].rowNumber();
+        return levelFrontier[index].no();
       }
 
       @Override

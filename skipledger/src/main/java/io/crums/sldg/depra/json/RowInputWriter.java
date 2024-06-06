@@ -26,7 +26,7 @@ public class RowInputWriter implements JsonEntityWriter<Row> {
 
   @Override
   public JSONObject injectEntity(Row row, JSONObject jObj) {
-    return injectImpl(row.rowNumber(), row.inputHash(), jObj);
+    return injectImpl(row.no(), row.inputHash(), jObj);
   }
   
   

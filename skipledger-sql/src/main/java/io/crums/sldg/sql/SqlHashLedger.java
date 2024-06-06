@@ -226,7 +226,7 @@ public class SqlHashLedger implements HashLedger {
         var lastTrailedRow = getTrailByIndex(size - 1);
         // if the new trail is for a row number less than the last row witnessed,
         // discard it
-        if (rowNum <= lastTrailedRow.rowNumber())
+        if (rowNum <= lastTrailedRow.no())
           return false;
         
         // if this higher row number was witnessed before the last
@@ -239,7 +239,7 @@ public class SqlHashLedger implements HashLedger {
         if (trail.crum().utc() < lastTrailedRow.utc()) {
           var logger = Logger.getLogger(SqlHashLedger.class.getSimpleName());
           logger.warning(
-              "row [" + lastTrailedRow.rowNumber() +
+              "row [" + lastTrailedRow.no() +
               "] is already recorded as being witnessed after (!) row [" + rowNum +
               "]: " + new Date(lastTrailedRow.utc()) + " v. " + new Date(trail.crum().utc()) +
               ". Not adding crumtrail for row [" + rowNum + "] as this would violate model invariants.");

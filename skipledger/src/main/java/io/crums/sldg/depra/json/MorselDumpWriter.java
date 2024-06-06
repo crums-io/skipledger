@@ -108,7 +108,7 @@ public class MorselDumpWriter implements JsonEntityWriter<MorselPack> {
   
   
   private long rnOrMax(TrailedRow trailed) {
-    return trailed == null ? Long.MAX_VALUE : trailed.rowNumber();
+    return trailed == null ? Long.MAX_VALUE : trailed.no();
   }
 
 }

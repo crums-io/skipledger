@@ -128,7 +128,7 @@ public class Path {
    * Returns the lowest (first) row number in the list of {@linkplain #rows()}.
    */
   public final long loRowNumber() {
-    return first().rowNumber();
+    return first().no();
   }
   
   
@@ -151,7 +151,7 @@ public class Path {
    * Returns the highest (last) row number in the list of {@linkplain #rows()}.
    */
   public final long hiRowNumber() {
-    return last().rowNumber();
+    return last().no();
   }
   
   
@@ -299,7 +299,7 @@ public class Path {
    * @return non-empty, ascending list of row numbers &ge; 1
    */
   public final List<Long> rowNumbers() {
-    return Lists.map(rows, Row::rowNumber);
+    return Lists.map(rows, Row::no);
   }
   
   
@@ -402,7 +402,7 @@ public class Path {
    * is returned. Otherwise, the <em>first</em> row that references the row with given
    * row-number is returned.
    * 
-   * @return a row whose {@linkplain Row#rowNumber() row number} is &ge; <code>rowNo</code>
+   * @return a row whose {@linkplain Row#no() row no.} is &ge; <code>rowNo</code>
    * 
    * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
    * set returned by {@linkplain #rowNumbersCovered()}
@@ -424,7 +424,7 @@ public class Path {
     final long maxRefRn = rowNo + (1L << (SkipLedger.skipCount(rowNo) - 1));
     
     for (int index = insertIndex; index < rows.size(); ++index) {
-      long rn = rows.get(index).rowNumber();
+      long rn = rows.get(index).no();
       if (SkipLedger.rowsLinked(rowNo, rn))
         return rows.get(index);
       
