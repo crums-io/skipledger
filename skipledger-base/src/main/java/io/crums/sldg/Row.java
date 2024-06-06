@@ -37,25 +37,7 @@ public abstract class Row extends RowHash {
   public abstract ByteBuffer inputHash();
   
 
-  // /**
-  //  * Returns the byte string used to compute the {@linkplain #hash() hash} of this row. This
-  //  * contains 1 + {@linkplain SkipLedger#skipCount(long) skipCount(rowNumber())} many hash cells, each cell
-  //  * {@linkplain #hashWidth()} many bytes wide.
-  //  * <p>
-  //  * <em>Note this has nothing to do with how an instance is serialized for storage or
-  //  * over-the-wire; it's about what data contributes a row's hash.</em>
-  //  * </p>
-  //  * 
-  //  * @return may be read-only
-  //  */
-  // public ByteBuffer data() {
-  //   int levels = prevLevels();
-  //   ByteBuffer serial = ByteBuffer.allocate((1 + levels) * hashWidth());
-  //   serial.put(inputHash());
-  //   for (int i = 0; i < levels; ++i)
-  //     serial.put(prevHash(i));
-  //   return serial.flip();
-  // }
+  
   
   /**
    * {@inheritDoc}
@@ -65,83 +47,24 @@ public abstract class Row extends RowHash {
    */
   public ByteBuffer hash() {
 
-    // MessageDigest digest = SldgConstants.DIGEST.newDigest();
-    
-    // digest.update(inputHash());
-
-    // // final int levels = prevLevels();
-
-    // digest.update(hiPtrHash());
-
-    // var basePtrs = basePtrsHash();
-
-    // if (basePtrs != null)
-    //   digest.update(basePtrs);
-    
-    // // for (int level = 0; level < levels; ++level)
-    // //   digest.update(prevHash(level));
-
-    // return ByteBuffer.wrap(digest.digest());
-
     return SkipLedger.rowHash(
       no(),
       inputHash(),
-      hiPtrHash(),
-      basePtrsHash());
-  }
-
-
-  public final long hiPtrNo() {
-    return SkipLedger.hiPtrNo(no());
-  }
-
-  public ByteBuffer hiPtrHash() {
-    return SkipLedger.hiPtrHash(no(), prevHashes());
+      prevHashes());
   }
 
 
   final List<ByteBuffer> prevHashes() {
-    final long rn = no();
-    final boolean power2 = rn == Long.highestOneBit(rn);
     return Lists.functorList(
         prevLevels(),
-        power2 ? this::filterPrevHash : this::prevHash);
+        this::prevHash);
   }
 
-
-  private ByteBuffer filterPrevHash(int index) {
-    if (no() == (1L << index))
-      return DIGEST.sentinelHash();
-    return prevHash(index);
-  }
-
-
-  public ByteBuffer basePtrsHash() {
-    return SkipLedger.basePtrsHash(no(), prevHashes());
-  }
-
-  /**
-   * 
-   * @param levels  &ge; 2
-   * @return
-   */
-  protected final ByteBuffer basePtrHash(final int levels) {
-    if (levels == 2)
-      return prevHash(0);
-    var builder =
-        new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), false);
-    byte[] hptr = new byte[SldgConstants.HASH_WIDTH];
-    for (int level = levels - 1; level-- > 0; ) {
-      prevHash(level).get(hptr);
-      builder.add(hptr);
-    }
-    return ByteBuffer.wrap(builder.build().hash());
-  }
 
 
 
   public boolean hasAllLevels() {
-    return SkipLedger.alwaysAllLevels(no()) || hasLoPtrs();
+    return SkipLedger.alwaysAllLevels(no()) || hasAllPtrs();
   }
 
 
@@ -150,7 +73,8 @@ public abstract class Row extends RowHash {
   }
 
 
-  protected boolean hasLoPtrs() {
+
+  public boolean hasAllPtrs() {
     return true;
   }
   
@@ -182,7 +106,7 @@ public abstract class Row extends RowHash {
    * of these referenced rows is available thru the {@linkplain #hash(long)} method.
    */
   public final SortedSet<Long> coveredRowNumbers() {
-    return SkipLedger.coverage(Collections.singletonList(rowNumber()));
+    return SkipLedger.coverage(Collections.singletonList(no()));
   }
   
 
@@ -208,7 +132,7 @@ public abstract class Row extends RowHash {
       string = new StringBuilder(len);
     }
     
-    string.append('[').append(rowNumber()).append("] ");
+    string.append('[').append(no()).append("] ");
     while(string.length() < 8)
       string.append(' ');
     

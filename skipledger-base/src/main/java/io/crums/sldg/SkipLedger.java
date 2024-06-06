@@ -1,14 +1,12 @@
 /*
- * Copyright 2020-2021 Babak Farhang
+ * Copyright 2020-2024 Babak Farhang
  */
 package io.crums.sldg;
 
 
 import static io.crums.sldg.SldgConstants.DIGEST;
-import static java.util.Collections.emptyEnumeration;
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -25,6 +23,8 @@ import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.hash.Digest;
 import io.crums.util.mrkl.FixedLeafBuilder;
+import io.crums.util.mrkl.Proof;
+import io.crums.util.mrkl.Tree;
 
 /**
  * <p>
@@ -141,24 +141,153 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     
     final int pSize = prevHashes.size();
 
-    if (pSize != levels && (!power2 || pSize == levels - 1))
+    if (pSize != levels)
       throw new IllegalArgumentException(
           "expected " + Strings.nOf(levels, "hash") + " for row [" + rn +
           "]; actual was " + Strings.nOf(pSize, "hash"));
 
     if (power2 &&
-        pSize == levels &&
         !SldgConstants.DIGEST.sentinelHash().equals(
-            prevHashes.get(levels - 1).slice()))
+            prevHashes.get(levels - 1)))
       
       throw new IllegalArgumentException(
           "expected sentinel at last prevHashes for row [" + rn + "]");
     
-    var hiPtrHash = hiPtrHash(rn, prevHashes);
-    var basePtrsHash = basePtrsHash(rn, prevHashes);
-
-    return rowHash(rn, inputHash, hiPtrHash, basePtrsHash);
+    
+    return rowHash(inputHash, levelsMerkleHash(prevHashes));
   }
+
+
+
+  public static ByteBuffer rowHash(
+      ByteBuffer inputHash, ByteBuffer levelsMerkleHash) {
+    
+    var digest = DIGEST.newDigest();
+    digest.update(dupAndCheck(inputHash));
+    digest.update(levelsMerkleHash);
+    return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
+  }
+
+
+
+  /**
+   * 
+   * @param levelHash   hash of the row numbered {@code rn - (1L << level)}
+   * 
+   * @see #levelsMerkleFunnel(int, List)
+   */
+  public static ByteBuffer rowHash(
+      long rn, ByteBuffer inputHash,
+      int level, ByteBuffer levelHash, List<ByteBuffer> funnel) {
+
+    return
+      rowHash(
+        inputHash,
+        levelsMerkleHash(rn, level, levelHash, funnel));
+  }
+
+
+
+  public static ByteBuffer levelsMerkleHash(
+      long rn, int level, ByteBuffer levelHash, List<ByteBuffer> funnel) {
+    
+    int levelCount = skipCount(rn);
+    Objects.checkIndex(level, levelCount);
+
+    if (levelCount == 1) {
+      if (!funnel.isEmpty())
+        throw new IllegalArgumentException(
+            "expected empty funnel for rn [" + rn + "]; actual size: " +
+            funnel.size());
+      
+      return dupAndCheck(levelHash);
+    }
+
+    return ByteBuffer.wrap(
+        Proof.merkleRoot(
+          levelHash,
+          level,
+          levelCount,
+          funnel,
+          DIGEST.newDigest())).asReadOnlyBuffer();
+  }
+
+
+
+
+
+
+  /**
+   * Returns the merkle funnel for the given previous row-hashes.
+   * The returned list's size is on the order of log (base 2) of
+   * the original size.
+   * 
+   * @param level       level index
+   * @param prevHashes  not empty and fewer than 64
+   * 
+   * @return empty if {@code prevHashes} is a singleton; not-empty, o.w.
+   */
+  public static List<ByteBuffer> levelsMerkleFunnel(
+      int level, List<ByteBuffer> prevHashes) {
+    
+    final int levelCount = prevHashes.size();
+    Objects.checkIndex(level, levelCount);
+    if (levelCount == 1)
+      return List.of();
+    
+    return new Proof(levelsMerkleTree(prevHashes), level).funnel();
+  }
+
+
+
+
+  /**
+   * Returns the merkle root hash of the given previous-row-hashes.
+   * If the collection is a singleton, then the single hash is
+   * returned as is (but validated for length).
+   * 
+   * @param prevHashes not empty, and fewer than 64
+   */
+  public static ByteBuffer levelsMerkleHash(List<ByteBuffer> prevHashes) {
+
+    switch (prevHashes.size()) {
+    case 0:   throw new IllegalArgumentException("empty prevHashes");
+    case 1:   return dupAndCheck(prevHashes.get(0));
+    default:
+              return
+                ByteBuffer.wrap(levelsMerkleTree(prevHashes).hash())
+                .asReadOnlyBuffer();
+    }
+    
+  }
+
+
+
+
+  static Tree levelsMerkleTree(List<ByteBuffer> prevHashes) {
+    int len = prevHashes.size();
+    if (len < 2)
+      throw new IllegalArgumentException(
+          "too few level hashes: " + len + " (min 2)");
+    if (len > 63)
+      throw new IllegalArgumentException(
+          "too many level hashes: " + len + " (max 63)");
+
+          var builder =
+          new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), false);
+  
+    byte[] hash = new byte[SldgConstants.HASH_WIDTH];
+    for (var p : prevHashes) {
+      dupAndCheck(p).get(hash);
+      builder.add(hash);
+    }
+    return builder.build();
+  }
+
+
+
+
+
 
 
   /**
@@ -194,7 +323,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
 
 
   /**
-   * Returns highest level (deepest) index that does <em>does not reference
+   * Returns highest level (deepest) index that <em>does not reference
    * row zero</em>, the sentine hash. With one exception [1], every row no.
    * references a previous row.
    * 
@@ -225,104 +354,9 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
 
 
 
-  /**
-   * 
-   * @param rn
-   * @param inputHash
-   * @param hiPtr
-   * @param basePtrsHash
-   * @return
-   */
-  public static ByteBuffer rowHash(
-      long rn, ByteBuffer inputHash,
-      ByteBuffer hiPtr, ByteBuffer basePtrsHash) {
-    
-    final int levels = skipCount(rn);
-
-    final boolean power2 = rn == 1L << (levels - 1);
-
-    final int baseLevels = basePtrLevels(rn);
 
 
-
-    var digest = DIGEST.newDigest();
-    digest.update(dupAndCheck(inputHash));
-
-
-    if (power2)
-      digest.update(DIGEST.sentinelHash());
-    
-    if (rn != 1L)
-      digest.update(dupAndCheck(hiPtr));
-
-    if (baseLevels > 0)
-      digest.update(dupAndCheck(basePtrsHash));
-
-    return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
-
-  }
-
-
-
-  /**
-   * Returns the no. of level hash pointers in the "base-group".
-   * 
-   * 
-   * 
-   * @param rn
-   * @return &ge; 0
-   */
-  public static int basePtrLevels(final long rn) {
-
-    final int levels = skipCount(rn);
-    final boolean power2 = rn == 1L << (levels - 1);
-    final int baseLevels;
-    
-    if (power2) {
-      assert levels > 1 || rn == 1L;
-      baseLevels = rn == 1L ? 0 : levels - 2;
-
-    } else
-      baseLevels = levels - 1;
-    
-    return baseLevels;
-  }
-
-
-
-  public static ByteBuffer basePtrsHash(long rn, List<ByteBuffer> prevHashes) {
-    int baseLevels = basePtrLevels(rn);
-    if (prevHashes.size() < baseLevels)
-      throw new IllegalArgumentException(
-          "expected at least " + Strings.nOf(baseLevels, "hash") +
-          "; actual was " + Strings.nOf(prevHashes.size(), "hash"));
-    
-    return basePtrsHash(prevHashes, baseLevels);
-  }
-
-
-  private static ByteBuffer basePtrsHash(
-      List<ByteBuffer> prevHashes, int remainingLevels) {
-
-    if (remainingLevels == 0)
-      return BufferUtils.NULL_BUFFER;
-    
-    if (remainingLevels == 1)
-      return dupAndCheck(prevHashes.get(0));
-    
-    var builder =
-        new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), false);
-    byte[] hptr = new byte[SldgConstants.HASH_WIDTH];
-    for (int level = remainingLevels; level-- > 0; ) {
-      dupAndCheck(prevHashes.get(level)).get(hptr);
-      builder.add(hptr);
-    }
-    
-    return ByteBuffer.wrap(builder.build().hash());
-  }
-
-
-  private static ByteBuffer dupAndCheck(ByteBuffer buffer) {
+  public static ByteBuffer dupAndCheck(ByteBuffer buffer) {
     var out = buffer.slice();
     if (out.remaining() != SldgConstants.HASH_WIDTH)
       throw new IllegalArgumentException(

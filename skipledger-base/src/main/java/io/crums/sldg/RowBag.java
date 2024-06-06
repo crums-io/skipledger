@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -35,6 +36,18 @@ public interface RowBag {
    * @return 32-byte hash
    */
   ByteBuffer rowHash(long rowNumber);
+
+
+
+  /**
+   * 
+   * @param rn      row no. funnel outputs row's level-merkel hash 
+   * @param level
+   * @return
+   */
+  default Optional<List<ByteBuffer>> getFunnel(long rn, int level) {
+    return Optional.empty();
+  }
   
   
   /**

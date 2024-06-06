@@ -518,16 +518,16 @@ public class Path {
               row.prevHashes()).equals(row.hash());
     } else {
 
-      long hiPtrNo = row.hiPtrNo();
-      if (hiPtrNo != 0)
-        addRef(row.hiPtrNo(), row.hiPtrHash(), rowHashes);
+      // long hiPtrNo = row.hiPtrNo();
+      // if (hiPtrNo != 0)
+      //   addRef(row.hiPtrNo(), row.hiPtrHash(), rowHashes);
   
-      validImpl =
-          SkipLedger.rowHash(
-              rn,
-              row.inputHash(),
-              row.hiPtrHash(),
-              row.basePtrsHash()).equals(row.hash());
+      validImpl = false;
+          // SkipLedger.rowHash(
+          //     rn,
+          //     row.inputHash(),
+          //     row.hiPtrHash(),
+          //     row.basePtrsHash()).equals(row.hash());
     }
 
 
@@ -556,6 +556,8 @@ public class Path {
       throw new HashConflictException(
           "at row [" + no + "]; (assertUnknown=" + assertUnknown + ")");
 
+    // if we were expecting known == null, then the following assertion fails
+    // .. even tho the hashes agreed
     assert !assertUnknown;
     return false;
   }
