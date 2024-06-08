@@ -24,13 +24,18 @@ public abstract class Row extends RowHash {
   
 
   /**
-   * Returns the user-inputed hash. This is the hash of the abstract object (whatever it is, we
-   * don't know).
+   * Returns the user-inputed hash. This is the hash of the abstract object
+   * (whatever it is, we don't know).
    * 
    * @return non-null, 32-bytes remaining
    */
   public abstract ByteBuffer inputHash();
   
+
+
+  public LevelsPointer levelsPointer() {
+    return new LevelsPointer(no(), prevHashes());
+  }
 
   
   
@@ -41,11 +46,7 @@ public abstract class Row extends RowHash {
    * 
    */
   public ByteBuffer hash() {
-
-    return SkipLedger.rowHash(
-      no(),
-      inputHash(),
-      prevHashes());
+    return SkipLedger.rowHash(inputHash(), levelsPointer().hash());
   }
 
 
@@ -58,51 +59,60 @@ public abstract class Row extends RowHash {
 
 
 
-  public boolean hasAllLevels() {
-    return SkipLedger.alwaysAllLevels(no()) || hasAllPtrs();
-  }
+  // public boolean hasAllLevels() {
+  //   return SkipLedger.alwaysAllLevels(no()) || hasAllPtrs();
+  // }
 
 
   public final boolean isCondensed() {
-    return !hasAllLevels();
+    return
+        !SkipLedger.alwaysAllLevels(no()) &&
+        levelsPointer().isCondensed();
   }
 
 
 
-  public boolean hasAllPtrs() {
-    return true;
-  }
+  
   
   
   /**
-   * Returns the hash of the given row number. An instance knows the hash of not
-   * just itself, but also of the rows it references thru its skip pointers.
+   * Returns the hash of the given row number.
    * 
-   * @see #coveredRowNumbers()
    */
   public final ByteBuffer hash(long rowNumber) {
-    final long rn = no();
-    final long diff = rn - rowNumber;
-    if (diff == 0)
-      return hash();
+    return rowNumber == no() ? hash() : levelsPointer().rowHash(rowNumber);
+    // final long rn = no();
+    // final long diff = rn - rowNumber;
+    // if (diff == 0)
+    //   return hash();
+    // var levelsPtr = levelsPointer();
+    // if (levelsPtr.coversRow(rowNumber))
+    //   return levelsPtr.
     
-    int referencedRows = prevLevels();
-    if (diff < 0 || Long.highestOneBit(diff) != diff || diff > (1L << (referencedRows - 1)))
-      throw new IllegalArgumentException(
-          "rowNumber " + rowNumber + " is not covered by this row " + this);
-    int ptrLevel = 63 - Long.numberOfLeadingZeros(diff);
-    return prevHash(ptrLevel);
+    
+    // int referencedRows = prevLevels();
+    // if (diff < 0 || Long.highestOneBit(diff) != diff || diff > (1L << (referencedRows - 1)))
+    //   throw new IllegalArgumentException(
+    //       "rowNumber " + rowNumber + " is not covered by this row " + this);
+    // int ptrLevel = 63 - Long.numberOfLeadingZeros(diff);
+    // return prevHash(ptrLevel);
   }
   
   
-  /**
-   * Returns the set of row numbers covered by this row. This includes the row's
-   * own row number, as well as those referenced thru its hash pointers. The hashes
-   * of these referenced rows is available thru the {@linkplain #hash(long)} method.
-   */
-  public final SortedSet<Long> coveredRowNumbers() {
-    return SkipLedger.coverage(List.of(no()));
-  }
+
+  // TODO:  API-wise need some such advertisement. Not used at this moment
+  //        Same information can be inferred from introduced LevelsPointer,
+  //        but commenting out, cuz it's 1 less thing to think about while
+  //        refactoring
+
+  // /**
+  //  * Returns the set of row numbers covered by this row. This includes the row's
+  //  * own row number, as well as those referenced thru its hash pointers. The hashes
+  //  * of these referenced rows is available thru the {@linkplain #hash(long)} method.
+  //  */
+  // public final SortedSet<Long> coveredRowNumbers() {
+  //   return SkipLedger.coverage(List.of(no()));
+  // }
   
 
   /**

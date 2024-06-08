@@ -39,6 +39,15 @@ public interface RowBag {
 
 
 
+
+  default LevelsPointer levelsPointer(long rowNo) {
+    final int levels = SkipLedger.skipCount(rowNo);
+    List<ByteBuffer> levelHashes =
+        Lists.functorList(levels, li -> rowHash(rowNo - (1L << li)));
+    return new LevelsPointer(rowNo, levelHashes);
+  }
+
+
   /**
    * 
    * @param rn      row no. funnel outputs row's level-merkel hash 

@@ -14,12 +14,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.io.buffer.BufferUtils;
 import io.crums.util.EasyList;
 import io.crums.util.Lists;
+import io.crums.util.Sets;
 import io.crums.util.Strings;
 import io.crums.util.hash.Digest;
 import io.crums.util.mrkl.FixedLeafBuilder;
@@ -316,8 +318,96 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   }
 
 
+  /**
+   * Tests whether all level-row hashes are always present in a
+   * row's row-hash calculation. If row's link-pointer-hash is
+   * determined by 2 or fewer non-sentinel hashes, then we don't
+   * (can't) condense it. This test, then, is equivalent to testing
+   * whether the row [no.] has 2 or fewer levels, or is the corner case
+   * row [4] which has 3 levels (in order of level, to rows 3, 2, and 0),
+   * the last of which, is the sentinel row (whose hash is already known).
+   * 
+   * @param rn  row no.
+   * @return    {@code skipCount(rn) <= 2 || rn == 4L}
+   * @see #isCondensable(long)
+   */
   public static boolean alwaysAllLevels(long rn) {
+    // slightly faster evaluation possible, but not worth
+    // the obfuscation / cognitive load
     return skipCount(rn) <= 2 || rn == 4L;
+  }
+
+
+
+  /**
+   * Test whether a row at the row number is condensable. Only row no.s
+   * with a lot of levels are compressable.
+   * 
+   * @param rn  row no.
+   * @return    {@code !alwaysAllLevels(rn)}
+   * 
+   * @see #alwaysAllLevels(long)
+   */
+  public static boolean isCondensable(long rn) {
+    return !alwaysAllLevels(rn);
+  }
+
+
+  /**
+   * Returns the number of funnels in the given list of row numbers.
+   * The argurment is assumed to be the row no.s in a path, but this
+   * is not enforced.
+   * 
+   * @param rowNos  positive row no.s
+   * @return        count of how many of the given row no.s are
+   *                {@linkplain #isCondensable(long) condensable}
+   */
+  public static int countFunnels(List<Long> rowNos) {
+    return (int) rowNos.stream().filter(SkipLedger::isCondensable).count();
+  }
+
+
+
+  // public static List<Long> filterFunneled(List<Long> rowNos)
+
+
+
+  /**
+   * Returns the funnel length between the given row no.s.
+   * A funnel is a sequence of SHA-256 hashes which can be
+   * combined the hash of row [{@code loRn}] to generate a
+   * the link-pointers hash for row [{@code hiRn}] (which
+   * together with row [{@code hiRn}]'s input-hash can be
+   * used to derive the hi-row's final hash).
+   * 
+   * @param loRn    low row no. &ge; 0, tho seldom zero in pracice,
+   *                linked/referenced by {@code hiRn}
+   * @param hiRn    hi row no. &gt; {@code loRn}
+   * 
+   * @return  the no. of hash cells in the funnel
+   * @throws  IllegalArgumentException
+   *          if the row no.s are not linked, or if row
+   *          [{@code hiRn}], not 
+   *          {@linkplain #isCondensable(long) condensable}, or
+   *          o.w. invalid (wrong order, negative, etc.)
+   */
+  public static int funnelLength(long loRn, long hiRn) {
+    final int levels = skipCount(hiRn);
+    if (levels <= 2 || hiRn == 4L)
+      throw new IllegalArgumentException(
+          "hiRn [" + hiRn + "] cannot be funneled");
+
+    final long diff = hiRn - loRn;
+    if (diff != Long.highestOneBit(diff)) // not a power of 2
+      throw new IllegalArgumentException(
+          "row no.s not linked: " + loRn + ", " + hiRn);
+
+    final int level = Long.numberOfTrailingZeros(diff);
+    if (level >= levels)
+      throw new IllegalArgumentException(
+          "row no.s not linked (too far): " + loRn + ", " + hiRn);
+
+    return Proof.funnelLength(levels, level);
   }
 
 
@@ -471,31 +561,96 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     return Collections.unmodifiableSortedSet(covered);
   }
   
+
+
   
   /**
-   * Returns the row numbers the given bag of row numbers reference
-   * and which are <em>not</em> already in the bag.
+   * Returns the row numbers that the given bag of numbers implicitly reference
+   * and which are <em>not</em> already in the bag. Note, the argument is usually
+   * the row no.s in a {@linkplain Path}. (And the only reason it's a
+   * collection instead of an ordered list, is cuz I'm lazy and don't want to
+   * validate.)
    * 
-   * @param rowNumbers bag or row numbers, each &ge; 1. May contain duplicates.
+   * @param rowNos not-empty, bag of row numbers, each &ge; 1. May contain duplicates.
    * @return a set of referenced row numbers not already in the bag. May include
    *         zero (the sentinel row).
    */
-  public static SortedSet<Long> refOnlyCoverage(Collection<Long> rowNumbers) {
-    TreeSet<Long> fullSet = new TreeSet<>(rowNumbers);  // not changed hereafter
+  public static SortedSet<Long> refOnlyCoverage(Collection<Long> rowNos) {
+    TreeSet<Long> fullSet = new TreeSet<>(rowNos);  // not changed hereafter
     TreeSet<Long> refOnly = new TreeSet<>();
+    if (fullSet.isEmpty())
+      throw new IllegalArgumentException("empty rowNos");
     
-    for (Long rn : fullSet) {
-      
-      int pointers = skipCount(rn);
-      for (int e = 0; e < pointers; ++e) {
-        long delta = 1L << e;
-        Long refRn = rn - delta;
-        assert refRn >= 0;
-        if (!fullSet.contains(refRn))
-          refOnly.add(refRn);
-      }
-    }
+    for (long rn : fullSet)
+      collectRefs(rn, refOnly, fullSet);
     return Collections.unmodifiableSortedSet(refOnly);
+  }
+
+
+  /**
+   * Returns the row numbers that the given bag of to-be-stitched numbers
+   * implicitly reference in the condensed representation of a path. These
+   * are those row no.s which are (i) <em>not</em> in the [post-stitched]
+   * bag and (ii) are not funneled. When a path is condensed, almost all
+   * its rows' hashes are linked by "funnels";
+   * 
+   * 
+   * @param rowNos    positive, strictly increasing row no.s defining the [path]
+   *                  bag (unpacked after stitching)
+   * 
+   * @see #countFunnels(List)
+   */
+  public static SortedSet<Long> refOnlyCondensedCoverage(List<Long> rowNos) {
+    SortedSet<Long> fullSet = Sets.sortedSetView(stitch(rowNos));
+    TreeSet<Long> refOnly = new TreeSet<>();
+
+    // we must decide what the first row links to.
+    // (we could just use the link-pointer's merkle root,
+    // but for now, we exclude it in the implementation.)
+    // So we set, somewhat arbitrarily, references to the
+    // *nearest row no.s by the first row
+
+    final Long loRn = fullSet.first();
+    {
+      if (alwaysAllLevels(loRn))
+        collectRefs(loRn, refOnly, Set.of());
+      else 
+        // pick the *highest* referenced row no.
+        // (which is the row no. at rn's level zero)
+        refOnly.add(loRn - 1);
+    }
+    
+
+
+    for (long rn : fullSet.tailSet(loRn + 1L)) {
+      if (isCondensable(rn))
+        continue; // since the full-set is stitched, the
+                  // previous row no. in the full-set
+                  // is referenced by rn, so we won't
+                  // need any more references (row hashes)!
+                  // (the prev row no. will be linked via a merkle "funnel")
+      
+      // unless, it doesn't pay to merklize..
+      collectRefs(rn, refOnly, fullSet);
+    }
+    
+    return Collections.unmodifiableSortedSet(refOnly);
+  }
+
+
+  private static void collectRefs(
+      long rn, TreeSet<Long> refOnly, Set<Long> fullSet) {
+
+    final int levels = skipCount(rn);
+    // assert levels <= 2 || rn == 4L;
+
+    for (int e = 0; e < levels; ++e) {
+      long delta = 1L << e;
+      Long refRn = rn - delta;
+      assert refRn >= 0;
+      if (!fullSet.contains(refRn))
+        refOnly.add(refRn);
+    }
   }
   
   /**
@@ -549,7 +704,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     
     switch (count) {
     case 0:
-      throw new IllegalArgumentException("empty rowNumbers");
+      throw new IllegalArgumentException("empty row no.s");
     case 1:
       var rn = rowNumbers.iterator().next();
       checkRealRowNumber(rn);
@@ -570,6 +725,8 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * @param rowNumbers not empty, monotonically increasing, positive row numbers
    * 
    * @return a new, not empty, read-only list of unique, sorted numbers
+   * 
+   * @see #stitchCompress(List)
    */
   public static List<Long> stitch(List<Long> rowNumbers) {
     {

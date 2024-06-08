@@ -21,61 +21,10 @@ import io.crums.util.Lists;
 
 /**
  * Base {@linkplain RowBag} implementation. Note this uses no caching/memo-ization.
- * Consequently the cost every full-row lookup is linear in the row number. Not good.
- * See {code CachingRowPack}.
- * 
- * <h2>Serial Format</h2>
- * <p>
- * Below, the data types are first defined, then the row pack data structure itself.
- * </p>
- * <h3>Definitions</h3>
- * <p>The basic units:</p>
- * <pre>
- *    INT         := BYTE ^4    // (big endian)
- *    LONG        := BYTE ^8    // (big endian)
- *    HASH        := BYTE ^32   // assumed to be a SHA-256 digest
- *    
- * </pre>
- * 
- * <h3>Structure</h3>
- * <p>
- * The format takes advantage of the fact that the rows numbered in a
- * {@linkplain Path path} structure must satisfy certain properties.
- * In particular, a skip path between 2 row no.s (see
- * {@linkplain Path#isSkipPath()}) is the shortest path between those
- * 2 rows. Furthermore, any other path between the 2 rows must also
- * include the skip path. The skip ledger model itself, is not
- * formally defined here.
- * </p>
- * 
- * <pre>
- *    
- *    RS_COUNT    := INT            // stitch row number count
- *    STITCH_RNS  := LONG ^RS_COUNT // stitch row numbers in strictly ascending order
- *    
- *    
- *    I_COUNT     := INT            // number of rows with full info (have input hash)
- *                                  // inferred from {@linkplain SkipLedger#stitch(List)}
- *    
- *    
- *    R_COUNT     := INT  // number of rows with only ref-hashes inferred from
- *                        // {@linkplain SkipLedger#refOnlyCoverage(java.util.Collection)}
- *     
- *                              
- *    R_TBL       := HASH ^R_COUNT  // hash pointer table (ref-only hashes)
- *                                  // cells are laid out in ascending row no.
- *                                  // (row no.s are inferred from STITCH_RNS)
- *    I_TBL       := HASH ^I_COUNT  // input hash table
- *                                  // cells are laid out in ascending row no.
- *                                  // (row no.s are inferred from STITCH_RNS)
- *    
- *    PATH_PACK    := RS_COUNT STITCH_RNS R_TBL I_TBL
- * </pre>
- * <h2>Redesign Note</h2>
- * <p>
- * This format and code was lifted from {@code RowPack}. The list of full row numbers
- * was further compressed by borrowing ideas from {@code PathInfo}.
- * </p>
+ * Consequently the cost every full-row lookup is linear in the row numbers. Not good.
+ * When used to serialize a path (via {@link Path#pack()}), the poor perfomance doesn't
+ * matter. When actually reading the contents of the pack, use the
+ * {@linkplain MemoPathPack} subclass.
  * 
  */
 public class PathPack implements PathBag, Serial {
@@ -96,24 +45,17 @@ public class PathPack implements PathBag, Serial {
       throws ByteFormatException, BufferUnderflowException {
     
     final int bytes = in.remaining();
-//    if (bytes < STITCH_COUNT_SIZE)
-//      throw new ByteFormatException(
-//          "must have at least " + STITCH_COUNT_SIZE + " bytes: " + in);
+
     try {
       
       final int stitchRnCount = in.getInt();
       
-      if (stitchRnCount <= 0) {
-//        if (stitchRnCount == 0)
-//          return EMPTY;
+      if (stitchRnCount <= 0)
         throw new ByteFormatException("stitch row count " + stitchRnCount);
-      }
-      
-      
       
       List<Long> stitchRns = readAscendingLongs(in, stitchRnCount);
       
-      return load(stitchRns, in, false);
+      return load(stitchRns, in);
       
     } catch (BufferUnderflowException bux) {
       throw new ByteFormatException("eof after reading " + bytes + "bytes", bux);
@@ -145,10 +87,8 @@ public class PathPack implements PathBag, Serial {
    * 
    * @param stitchRns   abbreviate path row no.s
    * @param hashBlock   block of hashes
-   * @param strict      if {@code true} then {@code hashBlock} must be
-   *                    exactly the right size
    */
-  public static PathPack load(List<Long> stitchRns, ByteBuffer hashBlock, boolean strict) {
+  public static PathPack load(List<Long> stitchRns, ByteBuffer hashBlock) {
 
     List<Long> inputRns = SkipLedger.stitch(stitchRns);
     
@@ -158,16 +98,10 @@ public class PathPack implements PathBag, Serial {
         inputRns.size());
     {
       int reqSize = inputSize + hashSize;
-      if (hashBlock.remaining() != reqSize) {
-        if (hashBlock.remaining() < reqSize)
-          throw new ByteFormatException(
-              "underflow: required " + reqSize + " bytes; actual is " +
-              hashBlock.remaining());
-        else if (strict)
-          throw new ByteFormatException(
-              "overflow: required " + reqSize + " bytes; actual is " +
-              hashBlock.remaining());
-      }
+      if (hashBlock.remaining() < reqSize)
+        throw new ByteFormatException(
+            "underflow: required " + reqSize + " bytes; actual is " +
+            hashBlock.remaining());
     }
     
     

@@ -97,7 +97,14 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
       hashBlock.flip();
       hashBlock = hashBlock.asReadOnlyBuffer();
       
-      return PathPack.load(targetRns, hashBlock, true);
+      var pack = PathPack.load(targetRns, hashBlock);
+      
+      if (hashBlock.hasRemaining())
+        throw new JsonParsingException(
+            "too many hashes: " +
+            (hashBlock.remaining() / SldgConstants.HASH_WIDTH) + " unread");
+
+      return pack;
 
     } catch (JsonParsingException jpx) {
       throw jpx;

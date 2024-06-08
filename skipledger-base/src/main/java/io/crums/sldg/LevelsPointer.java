@@ -4,8 +4,11 @@
 package io.crums.sldg;
 
 
+import static java.util.Collections.binarySearch;
+
 import static io.crums.sldg.SkipLedger.dupAndCheck;
 import static io.crums.sldg.SkipLedger.skipCount;
+import static io.crums.sldg.SldgConstants.DIGEST;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -14,7 +17,25 @@ import io.crums.util.Lists;
 import io.crums.util.mrkl.Proof;
 
 /**
- * 
+ * Models the row's level hash-pointers. A row's hash value is derived
+ * from the row's input-hash and the merklized hash of the previous
+ * row-hashes (the so-called row's "levels"). This class offers 2 ways for
+ * calculating a row's merklized levels' {@linkplain #hash() hash} (which
+ * doesn't concern the input-hash):
+ * <ol>
+ * <li>Using <em>all</em> the levels' row-hashes.</li>
+ * <li>Using a merkle-proof consisting of a <em>single</em> level row-hash,
+ * and a "funnel" list of hashes.</li>
+ * </ol>
+ * <p>
+ * Tho on average a skip ledger row's hash encapsulates only 2 hash pointers
+ * to previous rows, a typical "skip path" has {@code log(n)^2} many
+ * (32-byte) hash pointers (log in base 2)
+ * (where {@code n} here is the difference of the highest and lowest row no. in
+ * the path). Using the second option this class offers (its so called
+ * {@linkplain #isCondensed() condensed} version), a skip path typically
+ * contains {@code log(log(n)) x log(n)} many hashes.
+ * </p>
  */
 public class LevelsPointer {
 
@@ -59,16 +80,32 @@ public class LevelsPointer {
 
 
 
+  /**
+   * Creates a full-info ("un-"{@linkplain #isCondensed() condensed}) instance.
+   * Note the {@code prevHashes} parameter is indexed by <em>level</em>, so the
+   * hashes are actually in <em>reverse</em> order of row number.
+   * 
+   * @param rn          row no.
+   * @param prevHashes  level row hashes of size
+   *                    {@link SkipLedger#skipCount(long)
+   *                    SkipLedger.skipCount(rn)}
+   */
   public LevelsPointer(long rn, List<ByteBuffer> prevHashes) {
     this.rn = rn;
     this.level = -1;
     this.levelHash = null;
     this.hashes = prevHashes;
 
-    if (prevHashes.size() != skipCount(rn))
+    final int levels = skipCount(rn);
+    if (prevHashes.size() != levels)
       throw new IllegalArgumentException(
         "expected prevHashes size " + skipCount(rn) +
         "; actual was " + prevHashes.size());
+
+    if (rn == Long.highestOneBit(rn) &&
+        !DIGEST.sentinelHash().equals(prevHashes.get(levels - 1)))
+      throw new IllegalArgumentException(
+        "hash for the sentinel row[0] not zeroed -- required by the protocol");
   }
   
 
@@ -77,6 +114,12 @@ public class LevelsPointer {
   }
 
 
+  /**
+   * Returns the row no. this instance generates the merklized pointer
+   * {@linkplain #hash() hash} for.
+   * 
+   * @return a positive no.
+   */
   public final long rowNo() {
     return rn;
   }
@@ -84,22 +127,81 @@ public class LevelsPointer {
 
 
   /**
-   * Returns the referenced row numbers in <em>descending</em> order.
+   * Returns the referenced row numbers in <em>ascending</em> order.
    * Referenced row no.s are those for which this instance has
    * (or claims to have) their hash. The returned list <em>does not include</em>
    * {@link #rowNo()}.
    * 
-   * @return  a singleton no. or strictly descending row no.s less than
+   * @return  a singleton no. or strictly ascending row no.s less than
    *          {@link #rowNo()}
    */
   public final List<Long> coverage() {
+    final int skipCount = skipCount(rn);
+    final int lastIndex = skipCount - 1;
     return
         isCondensed() ?
             List.of(rn - (1L << level)) :
-            Lists.functorList(skipCount(rn), li -> rn - (1L << li));
+            Lists.functorList(skipCount, li -> rn - (1L << (lastIndex - li)));
   }
 
 
+
+  /**
+   * Determines whether the hash of the given row no. is one of the
+   * instance's level [hash] pointers.
+   */
+  public final boolean coversRow(long rn) {
+    return indexOfCoverage(rn) >= 0;
+  }
+
+
+  private int indexOfCoverage(long rn) {
+    return indexOf(coverage(), rn);
+  }
+
+
+  /** Negative values mean non-found, nothing more (ambiguous when -1). */
+  private int indexOf(List<Long> coverage, long rn) {
+    return
+        coverage.size() < 12 ?
+            coverage.indexOf(rn) :
+            binarySearch(coverage, rn);
+  }
+
+
+  /**
+   * 
+   * @param level
+   * @return
+   */
+  public ByteBuffer levelHash(int level) {
+    if (isCondensed()) {
+      if (this.level != level)
+        throw new IndexOutOfBoundsException(
+            "level arg: " + level + 
+            "; available level: " + this.level + " (condensed info)");
+      return levelHash();
+    }
+    return hashes.get(level).asReadOnlyBuffer();
+  }
+  
+
+  /**
+   * Returns the row hash of the given <em>covered row</em> no.
+   * 
+   * @throws IllegalArgumentException
+   *         if {@code rn} is not a covered row no.
+   * @see #coversRow(long)
+   */
+  public final ByteBuffer rowHash(long rn) {
+    var coverage = coverage();
+    int index = indexOf(coverage, rn);
+    if (index < 0)
+      throw new IllegalArgumentException(
+          "row [" + rn + "not referenced by this: " + this);
+    index = coverage.size() - index - 1;
+    return isCondensed() ? levelHash() : hashes.get(index).asReadOnlyBuffer();
+  }
 
 
 
@@ -133,6 +235,18 @@ public class LevelsPointer {
   }
 
 
+  /**
+   * Returns the funnel. Invoke only if instance
+   * {@linkplain #isCondensed() is condensed}.
+   * The {@linkplain #hash()} (at row no. {@link #rowNo()}) is derived
+   * from by the returned funnel hashes,
+   * together with the {@link #level()}, and the {@link #levelHash()}.
+   * 
+   * @return a new read-only view
+   * 
+   * @throws UnsupportedOperationException
+   *         if {@link #isCondensed()} returns {@code false}
+   */
   public final List<ByteBuffer> funnel() throws UnsupportedOperationException {
     assertCondensed();
     return hashes();
@@ -147,8 +261,8 @@ public class LevelsPointer {
   }
 
 
-
-  public ByteBuffer hash() {
+  /** Calculates and returns the levels-hash at the {@linkplain #rowNo() row no.} */
+  public final ByteBuffer hash() {
     return
         isCondensed() ?
           SkipLedger.levelsMerkleHash(rn, level, levelHash.slice(), hashes()) :

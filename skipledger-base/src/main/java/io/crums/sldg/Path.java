@@ -506,7 +506,7 @@ public class Path {
       return;
 
     final boolean validImpl;
-    if (row.hasAllLevels()) {
+    if (!row.isCondensed()) {
       final int levels = row.hiPtrLevel() + 1;
       for (int lv = levels; lv-- > 0; )
         addRef(rn - (1L << lv), row.prevHash(lv), rowHashes);

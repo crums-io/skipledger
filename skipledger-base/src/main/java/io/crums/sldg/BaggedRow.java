@@ -28,6 +28,12 @@ public class BaggedRow extends Row {
     SkipLedger.checkRealRowNumber(rowNumber);
   }
 
+
+  @Override
+  public LevelsPointer levelsPointer() {
+    return bag.levelsPointer(rowNumber);
+  }
+
   @Override
   public final long no() {
     return rowNumber;
@@ -40,9 +46,8 @@ public class BaggedRow extends Row {
 
   @Override
   public ByteBuffer prevHash(int level) {
-    Objects.checkIndex(level, prevLevels());
-    long referencedRowNum = rowNumber - (1L << level);
-    return bag.rowHash(referencedRowNum);
+    
+    return levelsPointer().levelHash(level);
   }
 
 }
