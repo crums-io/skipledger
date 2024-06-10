@@ -506,28 +506,37 @@ public class Path {
       return;
 
     final boolean validImpl;
+    
     if (!row.isCondensed()) {
-      final int levels = row.hiPtrLevel() + 1;
+      final int levels = row.prevLevels();
       for (int lv = levels; lv-- > 0; )
         addRef(rn - (1L << lv), row.prevHash(lv), rowHashes);
+
+      
 
       validImpl =
           SkipLedger.rowHash(
               rn,
               row.inputHash(),
-              row.prevHashes()).equals(row.hash());
+              row.levelHashes()).equals(row.hash());
     } else {
-
-      // long hiPtrNo = row.hiPtrNo();
-      // if (hiPtrNo != 0)
-      //   addRef(row.hiPtrNo(), row.hiPtrHash(), rowHashes);
   
-      validImpl = false;
-          // SkipLedger.rowHash(
-          //     rn,
-          //     row.inputHash(),
-          //     row.hiPtrHash(),
-          //     row.basePtrsHash()).equals(row.hash());
+      var levelsPtr = row.levelsPointer();
+
+      // check for hash conflicts (we expect *not to add anything)
+      boolean added =
+          addRef(
+              rn - (1L << levelsPtr.level()),
+              levelsPtr.levelHash(),
+              rowHashes);
+
+      assert !added;  // this shoulda been filtered earlier, where we could
+                      // report the prev row no.
+
+      validImpl = 
+          SkipLedger.rowHash(
+              row.inputHash(),
+              levelsPtr.hash()).equals(row.hash());
     }
 
 
@@ -538,12 +547,23 @@ public class Path {
   }
   
 
-  
+
+
+  /** @see #addRef(long, ByteBuffer, HashMap, boolean) */
   private boolean addRef(
       long no, ByteBuffer hash, HashMap<Long,ByteBuffer> rowHashes) {
     return addRef(no, hash, rowHashes, false);
   }
   
+  /**
+   * Puts the given {@code (no, hash)} to the {@code rowHashes} map.
+   * 
+   * @param assertUnknown if {@code true}, then assert that there
+   *                      is no entry for that row {@code no}
+   * @return {@code true} if a new entry was added
+   * @throw HashConflictException if {@code hash} conflicts with an
+   *                      entry in the {@code rowHashes} map
+   */
   private boolean addRef(
       long no, ByteBuffer hash, HashMap<Long,ByteBuffer> rowHashes,
       boolean assertUnknown) {
@@ -588,6 +608,13 @@ public class Path {
             "unlinked rows after index (" + (index - 1) +
             "): " + prevNo + ", " + rn);
       
+      if (row.isCondensed()) {
+        var levelsPtr = row.levelsPointer();
+        if (prevNo + (1L << levelsPtr.level()) != rn)
+          throw new IllegalArgumentException(
+            "condensed row [" + rn + "] with level index <" + levelsPtr.level() +
+            "> does not link with row [" + prevNo + "]");
+      }
 
       addRefs(row, rowHashes);
       

@@ -11,8 +11,15 @@ import java.util.SortedSet;
 import io.crums.util.Lists;
 
 /**
- * A row in a ledger.
- * Concrete instances must have immutable state.
+ * A row in a ledger. Concrete instances must have immutable state.
+ * The fields of an instance must satisfy the following hash-relation:
+ * <p>
+ *  {@code hash().equals(SkipLedger.rowHash(inputHash(), levelsPointer().hash()))}
+ * </p><p>
+ * Tho all subclasses defined in this module enforce this rule, the types
+ * defined in this module are not sealed, so it's conceivable a subclass may
+ * violate the constraint.
+ * </p>
  * 
  * @see RowHash#prevLevels()
  * @see RowHash#prevNo(int)
@@ -21,6 +28,9 @@ public abstract class Row extends RowHash {
   
   
   
+  public final long no() {
+    return levelsPointer().rowNo();
+  }
   
 
   /**
@@ -33,24 +43,25 @@ public abstract class Row extends RowHash {
   
 
 
-  public LevelsPointer levelsPointer() {
-    return new LevelsPointer(no(), prevHashes());
-  }
+  
+  public abstract LevelsPointer levelsPointer();
 
   
   
   /**
    * {@inheritDoc}
    * 
-   * @return may be read-only, 32-bytes remaining
    * 
+   * 
+   * @return {@code SkipLedger.rowHash(inputHash(), levelsPointer().hash())}
    */
   public ByteBuffer hash() {
     return SkipLedger.rowHash(inputHash(), levelsPointer().hash());
   }
 
 
-  final List<ByteBuffer> prevHashes() {
+  /** Valid only if <em>not</em> condensed. */
+  final List<ByteBuffer> levelHashes() {
     return Lists.functorList(
         prevLevels(),
         this::prevHash);
@@ -66,7 +77,7 @@ public abstract class Row extends RowHash {
 
   public final boolean isCondensed() {
     return
-        !SkipLedger.alwaysAllLevels(no()) &&
+        // !SkipLedger.alwaysAllLevels(no()) &&
         levelsPointer().isCondensed();
   }
 
@@ -122,7 +133,9 @@ public abstract class Row extends RowHash {
    * 
    * @return non-null, 32-bytes wide
    */
-  public abstract ByteBuffer prevHash(int level);
+  public final ByteBuffer prevHash(int level) {
+    return levelsPointer().levelHash(level);
+  }
   
   
 }

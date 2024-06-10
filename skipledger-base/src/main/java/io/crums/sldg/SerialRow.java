@@ -1,11 +1,13 @@
 /*
- * Copyright 2020 Babak Farhang
+ * Copyright 2020-2024 Babak Farhang
  */
 package io.crums.sldg;
 
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+
+import io.crums.util.Lists;
 
 /**
  * A self-contained row laid out in serial form.
@@ -86,7 +88,11 @@ public class SerialRow extends Row {
   }
   
   
-  
+  public final LevelsPointer levelsPointer() {
+    return new LevelsPointer(
+        rowNumber,
+        Lists.functorList(SkipLedger.skipCount(rowNumber), this::prevHashImpl));
+  }
   
   
   
@@ -95,10 +101,10 @@ public class SerialRow extends Row {
   }
 
 
-  @Override
-  public final long no() {
-    return rowNumber;
-  }
+  // @Override
+  // public final long no() {
+  //   return rowNumber;
+  // }
 
   @Override
   public final ByteBuffer inputHash() {
@@ -106,9 +112,7 @@ public class SerialRow extends Row {
   }
   
 
-  @Override
-  public final ByteBuffer prevHash(int level) {
-    Objects.checkIndex(level, prevLevels());
+  private ByteBuffer prevHashImpl(int level) {
     int cellWidth = SldgConstants.HASH_WIDTH;
     int pos = (1 + level) * cellWidth;
     int limit = pos + cellWidth;

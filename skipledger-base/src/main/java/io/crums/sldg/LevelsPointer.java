@@ -51,11 +51,12 @@ public class LevelsPointer {
   /**
    * Creates a {@linkplain #isCondensed() condensed} instance.
    * 
-   * @param rn          row no.
-   * @param level       {@code 0 <= level < SkipLedger.skipCount(rn)}
+   * @param rn          a {@linkplain SkipLedger#isCondensable(long) condensable} row no. 
+   * @param level       level index {@code 0 <=level < SkipLedger.skipCount(rn)}
    * @param levelHash   hash of row numbered {@code rn - (1L << level)}
    *                    (not copied; do not modify contents)
    * @param funnel      not copied; do not modify
+   * 
    */
   public LevelsPointer(
     long rn, int level, ByteBuffer levelHash, List<ByteBuffer> funnel) {
@@ -69,6 +70,9 @@ public class LevelsPointer {
     final int levels = skipCount(rn);
     if (level < 0 || level >= levels)
       throw new IndexOutOfBoundsException(level + ":" + skipCount(rn));
+
+    if (SkipLedger.alwaysAllLevels(rn))
+      throw new IllegalArgumentException("row [" + rn + "] is never condensed");
     
     if (Proof.funnelLength(levels, level) != funnel.size())
       throw new IllegalArgumentException(

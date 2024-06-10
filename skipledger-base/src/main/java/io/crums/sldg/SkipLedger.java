@@ -368,7 +368,13 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
 
 
 
-  // public static List<Long> filterFunneled(List<Long> rowNos)
+  /**
+   * Returns the row no.s that are condensable. In a condensed path,
+   * these are the row no.s that link to previous rows via funnels.
+   */
+  public static List<Long> filterFunneled(List<Long> rowNos) {
+    return rowNos.stream().filter(SkipLedger::isCondensable).toList();
+  }
 
 
 
@@ -464,7 +470,23 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * @param rowNumB &ge; 0
    */
   public static boolean rowsLinked(long rowNumA, long rowNumB) {
-    long lo, hi;
+    return levelLinked(rowNumA, rowNumB) >= -1;
+  }
+
+
+
+  /**
+   * Returns the zero-based level-index linking the two given row numbers.
+   * 
+   * @param rowNumA &ge; 0 (zero OK!)
+   * @param rowNumB &ge; 0
+   * 
+   * @return        -2, if not linked; -1, if the same row no.s;
+   *                non-negative (linked), o.w.
+   */
+  public static int levelLinked(long rowNumA, long rowNumB) {
+    final long lo, hi;
+    
     if (rowNumA <= rowNumB) {
       lo = rowNumA;
       hi = rowNumB;
@@ -474,11 +496,25 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     }
     if (lo < 0)
       throw new IllegalArgumentException(
-          "row numbers must be non-negative. Actual given: " + rowNumA + ", " + rowNumB);
+          "negative row no.: " + rowNumA + ", " + rowNumB);
+
+    final long diff = hi - lo;
     
-    long diff = hi - lo;
+    if (diff == 0L)
+      return -1;  // self
+
+    // must be a power of 2
+    if (diff != Long.highestOneBit(diff))
+      return -2;
+
     
-    return diff == Long.highestOneBit(diff) && diff <= (1L << (skipCount(hi) - 1));
+    int level = Long.numberOfTrailingZeros(diff);
+    
+    // the hi row no. must have enuf levels
+    if (level >= skipCount(hi))
+      return -2;
+    
+    return level;
   }
   
 

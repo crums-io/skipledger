@@ -150,13 +150,16 @@ public class PathPack implements PathBag, Serial {
   
   
   
-
   
   private final List<Long> inputRns;
   private final List<Long> hashRns;
   
   private final ByteBuffer hashes;
   private final ByteBuffer inputs;
+
+  private final boolean condensed;  // redundant, but good for clarity
+  private final ByteBuffer funnels;
+  private final List<Integer> funnelOffsets;
   
   
   
@@ -171,7 +174,7 @@ public class PathPack implements PathBag, Serial {
   
   
   /**
-   * Creates a new instance. Caller agrees not to change the contents
+   * Creates a new "un-condensed" instance. Caller agrees not to change the contents
    * of the inputs.
    * 
    * @param inputRns  ascending row no.s with input hashes (full rows)
@@ -187,6 +190,11 @@ public class PathPack implements PathBag, Serial {
     this.hashRns = Lists.readOnlyCopy(refs);
     this.hashes = BufferUtils.readOnlySlice(hashes);
     this.inputs = BufferUtils.readOnlySlice(inputs);
+
+    
+    this.condensed = false;
+    this.funnels = null;
+    this.funnelOffsets = null;
     
     // if the following throw, there's a bug..
     
@@ -204,6 +212,9 @@ public class PathPack implements PathBag, Serial {
           inputRns + "\n  " + this.inputs);
     
   }
+
+
+
   
   
   /**
@@ -215,19 +226,29 @@ public class PathPack implements PathBag, Serial {
     
     this.hashes = copy.hashes;
     this.inputs = copy.inputs;
+
+    this.condensed = copy.condensed;
+    this.funnels = copy.funnels;
+    this.funnelOffsets = copy.funnelOffsets;
   }
   
   
   
-  public ByteBuffer inputsBlock() {
+  public final ByteBuffer inputsBlock() {
     return inputs.asReadOnlyBuffer();
   }
   
 
   
-  public ByteBuffer refsBlock() {
+  public final ByteBuffer refsBlock() {
     return hashes.asReadOnlyBuffer();
   }
+
+
+  public final ByteBuffer funnelsBlock() {
+    return funnels == null ? BufferUtils.NULL_BUFFER : funnels.asReadOnlyBuffer();
+  }
+
   
   
   public boolean isEmpty() {
@@ -240,6 +261,7 @@ public class PathPack implements PathBag, Serial {
     int index = Collections.binarySearch(hashRns, rowNumber);
     return index < 0 ? null : emit(hashes, index);
   }
+  
 
   @Override
   public ByteBuffer inputHash(long rowNumber) {

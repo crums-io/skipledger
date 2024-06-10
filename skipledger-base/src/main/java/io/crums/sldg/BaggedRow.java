@@ -34,20 +34,14 @@ public class BaggedRow extends Row {
     return bag.levelsPointer(rowNumber);
   }
 
-  @Override
-  public final long no() {
-    return rowNumber;
-  }
+  // @Override
+  // public final long no() {
+  //   return rowNumber;
+  // }
 
   @Override
   public ByteBuffer inputHash() {
     return bag.inputHash(rowNumber);
-  }
-
-  @Override
-  public ByteBuffer prevHash(int level) {
-    
-    return levelsPointer().levelHash(level);
   }
 
 }

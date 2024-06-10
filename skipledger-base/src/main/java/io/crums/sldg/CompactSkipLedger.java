@@ -188,10 +188,10 @@ public class CompactSkipLedger extends SkipLedger {
       assert rowNumber > 0 && row.remaining() == SkipTable.ROW_WIDTH;
     }
 
-    @Override
-    public long no() {
-      return rowNumber;
-    }
+    // @Override
+    // public long no() {
+    //   return rowNumber;
+    // }
 
     @Override
     public ByteBuffer inputHash() {
@@ -203,12 +203,22 @@ public class CompactSkipLedger extends SkipLedger {
       return row.asReadOnlyBuffer().position(hashWidth()).slice();
     }
 
+
     @Override
-    public ByteBuffer prevHash(int level) {
-      Objects.checkIndex(level, prevLevels());
-      long referencedRowNum = rowNumber - (1L << level);
-      return rowHash(referencedRowNum);
+    public LevelsPointer levelsPointer() {
+      List<ByteBuffer> levelHashes =
+          Lists.functorList(
+              skipCount(rowNumber),
+              lvl -> rowHash(rowNumber - (1L << lvl)));
+      return new LevelsPointer(rowNumber, levelHashes);
     }
+
+    // @Override
+    // public ByteBuffer prevHash(int level) {
+    //   Objects.checkIndex(level, prevLevels());
+    //   long referencedRowNum = rowNumber - (1L << level);
+    //   return rowHash(referencedRowNum);
+    // }
     
   }
 

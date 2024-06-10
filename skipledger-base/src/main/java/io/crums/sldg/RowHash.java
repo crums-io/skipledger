@@ -48,6 +48,8 @@ public abstract class RowHash {
    * These are called levels, because each successive {@linkplain #prevNo(int)}
    * is twice as far away.
    * 
+   * TODO: rename to plainly to "levels()"
+   * 
    * @return &ge; 1
    */
   public final int prevLevels() {
