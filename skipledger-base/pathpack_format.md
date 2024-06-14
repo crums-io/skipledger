@@ -32,15 +32,15 @@ The components of the structure are first defined, and the final object `PATH_PA
 
 
     TYPE        := BYTE           // 0 means full; 1 means condensed
-    RS_COUNT    := INT            // stitch row number count
-    STITCH_RNS  := LONG ^RS_COUNT // stitch row numbers in strictly ascending order  
+    SR_COUNT    := INT            // stitch row no. count
+    STITCH_RNS  := LONG ^SR_COUNT // stitch row no.s in strictly ascending order  
 
-    I_COUNT     := INT            // number of rows with full info (have input hash)
-                                  // inferred from SkipLedger#stitch(..)
-                                  // The full row no.s themselves (I_COUNT -many of them)
-                                  // are also known at this point.
+    I_COUNT     := INT            // no. of rows in the path (have input hashes)
+                                  // The path's row no.s are inferred from
+                                  // SkipLedger#stitch(STITCH_RNS)
+                                  // I_COUNT is the size of that list
 
-    R_COUNT     := INT            // number of rows with only ref-hashes inferred from
+    R_COUNT     := INT            // no. of rows with only ref-hashes inferred from
                                   // depending on type, the size of:
                                   //
                                   //  TYPE [0] (full)
@@ -71,6 +71,6 @@ The components of the structure are first defined, and the final object `PATH_PA
                                   // In this way, fs the byte-size of the funnel
                                   // block is determined from the STITCH_RNS.
     
-    PATH_PACK    := TYPE RS_COUNT STITCH_RNS R_TBL I_TBL [FUNNELS]
+    PATH_PACK    := SR_COUNT STITCH_RNS TYPE R_TBL I_TBL [FUNNELS]
  
  

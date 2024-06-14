@@ -1,18 +1,15 @@
 /*
- * Copyright 2020-2021 Babak Farhang
+ * Copyright 2020-2024 Babak Farhang
  */
 package io.crums.sldg;
 
 
-import static io.crums.sldg.SkipLedger.hiPtrHash;
 import static io.crums.sldg.SldgConstants.DIGEST;
 import static java.util.Collections.binarySearch;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-// import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -70,9 +67,7 @@ public class Path {
     else if (path.size() > MAX_ROWS)
       throw new IllegalArgumentException("too many rows: " + path.size());
 
-    Row[] rows = new Row[path.size()];
-    rows = path.toArray(rows);
-    this.rows = Lists.asReadOnlyList(rows);
+    this.rows = List.copyOf(path);
     
     verify();
   }
@@ -90,7 +85,7 @@ public class Path {
    * Copy constructor.
    */
   protected Path(Path copy) {
-    this.rows = Objects.requireNonNull(copy, "null copy").rows;
+    this.rows = copy.rows;
   }
 
   
@@ -174,6 +169,41 @@ public class Path {
     return vRowNumbers.size() == rows.size();
   }
   
+  
+  public final boolean isCondensed() {
+    int index = rows.size();
+    while (index-- > 0 && !rows.get(index).isCondensed());
+    return index != -1;
+  }
+
+
+
+  public final boolean isCompressed() {
+    int index = rows.size();
+    while (index-- > 0 && !rows.get(index).isCompressed());
+    return index != -1;
+  }
+
+
+
+
+  public final Path compress() {
+    if (isCompressed())
+      return this;
+    
+    Row[] crows = new Row[rows.size()];
+    crows[0] = CondensedRow.compressToLevelRowNo(first(), first().no() - 1);
+    for (int index = 1; index < crows.length; ++index)
+      crows[index] =
+          CondensedRow.compressToLevelRowNo(
+              rows.get(index),
+              rows.get(index - 1).no());
+    
+    // FIXME: uncomment after adequately tested..
+    // return new Path(Lists.asReadOnlyList(crows), null);
+    return new Path(Lists.asReadOnlyList(crows));
+  }
+
   
 
 

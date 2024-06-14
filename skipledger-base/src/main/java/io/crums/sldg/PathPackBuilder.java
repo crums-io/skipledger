@@ -227,6 +227,10 @@ public class PathPackBuilder implements PathBag {
   }
   
   
+  @Override
+  public final boolean isCondensed() {
+    return false;   // FIXME
+  }
   
   public int addPack(PathPack pack) {
     if (pack.isEmpty())
@@ -269,7 +273,7 @@ public class PathPackBuilder implements PathBag {
         if (memoHash.equals(rowHash))
           return 0;
         // then there's a bug
-        throw new AssertionError(
+        throw new IllegalArgumentException(
             "memo-ed hash at [" + rn + "] conflicts with argument: " + safeRow);
       }
     }
@@ -298,7 +302,7 @@ public class PathPackBuilder implements PathBag {
         if (level < levels - 1)
           this.corrupted = true;
         
-        throw new AssertionError("[" + rn + ":" + level + "]");
+        throw new IllegalArgumentException("[" + rn + ":" + level + "]");
       }
     }
 

@@ -371,6 +371,8 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   /**
    * Returns the row no.s that are condensable. In a condensed path,
    * these are the row no.s that link to previous rows via funnels.
+   * 
+   * @return immutable list
    */
   public static List<Long> filterFunneled(List<Long> rowNos) {
     return rowNos.stream().filter(SkipLedger::isCondensable).toList();
@@ -452,12 +454,21 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
 
 
 
-  public static ByteBuffer dupAndCheck(ByteBuffer buffer) {
-    var out = buffer.slice();
+  public static ByteBuffer dupAndCheck(ByteBuffer hash) {
+    var out = hash.slice();
     if (out.remaining() != SldgConstants.HASH_WIDTH)
       throw new IllegalArgumentException(
-        "expected " + SldgConstants.HASH_WIDTH + " remaining bytes: " + buffer);
+        "expected " + SldgConstants.HASH_WIDTH + " remaining bytes: " + hash);
     return out;
+  }
+
+
+  public static List<ByteBuffer> dupAndCheck(List<ByteBuffer> hashes) {
+    ByteBuffer[] array = new ByteBuffer[hashes.size()];
+    for (int index = 0; index < array.length; ++index)
+      array[index] = dupAndCheck(hashes.get(index));
+      
+    return Lists.asReadOnlyList(array);
   }
   
   
@@ -812,7 +823,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * list. It can then be uncompressed via the {@linkplain #stitch(List)}
    * method.
    * 
-   * @param pathRns path row no.s
+   * @param pathRns path row no.s (positive and stictly ascending order)
    * @return a subset of the {@code pathRns}
    * 
    */
@@ -822,12 +833,14 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       return pathRns;
     
     var candidate = List.of(pathRns.get(0), pathRns.get(pSize - 1));
+    
     List<Long> skipRns = SkipLedger.stitch(candidate);
     if (skipRns.equals(pathRns))
       return candidate;
     
     var stitchList = new ArrayList<Long>(candidate);
     // invariants: stitchList.get(0) == lo(); stitchList.last() == hi()
+
     for (int index = 1; index < pSize - 1; ++index) {
       Long rn = pathRns.get(index);
       if (Collections.binarySearch(skipRns, rn) >= 0)

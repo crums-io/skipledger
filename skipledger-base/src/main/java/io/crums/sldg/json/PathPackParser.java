@@ -49,7 +49,7 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
 
   @Override
   public JSONObject injectEntity(PathPack pack, JSONObject jObj) {
-    var targetRns = pack.compressedRowNos();
+    var targetRns = pack.preStitchRowNos();
     var jTargetNos = new JSONArray(targetRns.size());
     jTargetNos.addAll(targetRns);
     jObj.put(targetNosTag, jTargetNos);

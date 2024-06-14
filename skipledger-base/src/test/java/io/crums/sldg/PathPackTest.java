@@ -4,7 +4,12 @@
 package io.crums.sldg;
 
 
+import static io.crums.sldg.PathTest.newRandomLedger;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * 
@@ -25,5 +30,23 @@ public class PathPackTest extends RowBagTest {
     return PathPack.forPath(path);
     
   }
+
+
+
+  @Test
+  public void testSerialSmallest() {
+    final int size = 1;
+    SkipLedger ledger = newRandomLedger(size);
+    Path state = ledger.statePath();
+    PathPack pack = PathPack.forPath(state);
+    var bytes = pack.serialize();
+    PathPack rt = PathPack.load(bytes);
+    assertEquals(state, rt.path());
+  }
+
+
+
+  
+
 
 }

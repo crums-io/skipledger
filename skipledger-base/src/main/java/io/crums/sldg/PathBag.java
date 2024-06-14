@@ -3,7 +3,13 @@
  */
 package io.crums.sldg;
 
+import static io.crums.sldg.SkipLedger.rowHash;
+
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+
+import io.crums.util.Lists;
 
 /**
  * Implementation interface of {@linkplain RowBag#rowHash(long)}. This models
@@ -30,13 +36,9 @@ import java.nio.ByteBuffer;
  * don't need to be validated against each other: they collectively represent <em>some</em>
  * ledger.
  * </p><p>
- * In retrospect, this observation is a bit obvious: aside from its trailed (witnessed) rows a skip
+ * In retrospect, this observation is a bit obvious: a skip
  * ledger's rows can always be regenerated from scratch. A {@linkplain RowBag} implemented this
  * way, is much like regenerating a subset of a skip ledger from scratch.
- * </p>
- * <h2>Refactoring Note</h2>
- * <p>
- * This code was lifted from the {@code RecurseHashRowPack}.
  * </p>
  */
 public interface PathBag extends RowBag {
@@ -44,6 +46,12 @@ public interface PathBag extends RowBag {
   Path path();
   
   
+  /**
+   * {@inheritDoc } By default a {@code PathBag} first looks up a
+   * row's hash using {@link #refOnlyHash(long)}, and if not found
+   * invokes {@link RowBag#getRow(long) getRow(rowNo)}.{@link BaggedRow#hash() hash()}.
+   * 
+   */
   @Override
   default ByteBuffer rowHash(long rowNumber) {
 
@@ -68,13 +76,62 @@ public interface PathBag extends RowBag {
           " - cascaded internal error msg: " + internal.getMessage(), internal);
     }
   }
-  
+
+
+
+  @Override
+  default LevelsPointer levelsPointer(long rowNo) {
+    
+    final var pathRns = getFullRowNumbers();
+    int index = Collections.binarySearch(pathRns, rowNo);
+    if (index < 0)
+        throw new IllegalArgumentException(
+          "rowNo " + rowNo + " not contained in bag; " + this);
+
+    if (isCondensed() && SkipLedger.isCondensable(rowNo)) {
+      int level;
+      long refedRowNo;
+      if (index == 0) {
+        level = 0;
+        refedRowNo = rowNo - 1;
+      } else {
+        refedRowNo = pathRns.get(index - 1);
+        long diff = rowNo - refedRowNo;
+        level = Long.numberOfTrailingZeros(diff);
+        if (diff <= 0 || diff != Long.highestOneBit(diff) ||
+            level >= SkipLedger.skipCount(rowNo))
+          throw new IllegalArgumentException(
+              "assertion failure: row [" + rowNo + "]; not linked: " + pathRns +
+               "; implemenation class: " + getClass());
+      }
+
+      var funnel = getFunnel(rowNo, level).orElseThrow(
+        () -> new IllegalArgumentException(
+            "expected funnel [" + rowNo + ":" + level + "] not found"));
+
+      return
+          new LevelsPointer(rowNo, level, rowHash(refedRowNo), funnel);
+    }
+
+
+    final int levels = SkipLedger.skipCount(rowNo);
+    List<ByteBuffer> levelHashes =
+        Lists.functorList(levels, li -> rowHash(rowNo - (1L << li)));
+    return new LevelsPointer(rowNo, levelHashes);
+    
+  }
   
 
   /**
    * Returns the ref-only row-hash from the minimal bag, if found;
    * {@code null}, otherwise.
    */
-  ByteBuffer refOnlyHash(long rowNumber);
+  ByteBuffer refOnlyHash(long rowNo);
+
+
+  /**
+   * Tests whether this instance contains condensed rows.
+   */
+  boolean isCondensed();
 
 }

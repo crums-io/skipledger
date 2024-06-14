@@ -4,7 +4,6 @@
 package io.crums.sldg;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 /**
  * Row backed by data in a {@linkplain RowBag}.
@@ -14,7 +13,9 @@ import java.util.Objects;
  */
 public class BaggedRow extends Row {
   
-  private final long rowNumber;
+  private final long rowNo;
+  private final LevelsPointer levelsPtr;
+
   private final RowBag bag;
 
   /**
@@ -22,27 +23,25 @@ public class BaggedRow extends Row {
    * In order to create a subclass that does validate, invoke {@linkplain #hash()}
    * in the constructor.
    */
-  public BaggedRow(long rowNumber, RowBag bag) {
-    this.rowNumber = rowNumber;
-    this.bag = Objects.requireNonNull(bag, "null bag");
-    SkipLedger.checkRealRowNumber(rowNumber);
+  public BaggedRow(long rowNo, RowBag bag) {
+    this.rowNo = rowNo;
+    this.levelsPtr = bag.levelsPointer(rowNo);
+    this.bag = bag;
   }
 
 
   @Override
   public LevelsPointer levelsPointer() {
-    return bag.levelsPointer(rowNumber);
+    return levelsPtr;
   }
-
-  // @Override
-  // public final long no() {
-  //   return rowNumber;
-  // }
 
   @Override
   public ByteBuffer inputHash() {
-    return bag.inputHash(rowNumber);
+    return bag.inputHash(rowNo);
   }
+
+
+  
 
 }
 

@@ -9,11 +9,10 @@ import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.SortedSet;
-import java.util.TreeSet;
 
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
@@ -33,6 +32,7 @@ public class PathPack implements PathBag, Serial {
   
   /** int size */
   private final static int STITCH_COUNT_SIZE = 4;
+  private final static int TYPE_SIZE = 1;
   
   /**
    * Loads and returns a new instance by reading the given buffer.
@@ -119,10 +119,15 @@ public class PathPack implements PathBag, Serial {
     // so the returned pack object doesn't internally
     // reference the given path argument
     
-    List<Long> inputRns = Lists.readOnlyCopy(path.rowNumbers());
-    
-    var refOnlyRns = SkipLedger.refOnlyCoverage(inputRns).tailSet(1L);
-    
+    List<Long> inputRns = List.copyOf(path.rowNumbers());
+
+    final boolean condensed = path.isCondensed();
+
+    var refOnlyRns = ( condensed ?
+            SkipLedger.refOnlyCondensedCoverage(inputRns) :
+            SkipLedger.refOnlyCoverage(inputRns) )
+            .tailSet(1L);
+      
     var refHashes = ByteBuffer.allocate(
         refOnlyRns.size() * SldgConstants.HASH_WIDTH);
     
@@ -141,8 +146,49 @@ public class PathPack implements PathBag, Serial {
     assert !inputHashes.hasRemaining();
     
     inputHashes.flip();
+
+    if (!condensed)
+      return new PathPack(inputRns, refHashes, inputHashes);
+
+
+
     
-    return new PathPack(inputRns, refHashes, inputHashes);
+    var funnelList = new ArrayList<List<ByteBuffer>>();
+
+
+    long lastRn = path.loRowNumber() - 1L;
+    int hashCount = 0;
+
+    try {
+      for (Row row : path.rows().subList(1, path.length())) {
+        var levelsPtr = row.levelsPointer().compressToLevelRowNo(lastRn);
+        lastRn = levelsPtr.rowNo();
+        if (!levelsPtr.isCondensed())
+          continue;
+        var funnel = levelsPtr.funnel();
+        hashCount += funnel.size();
+        funnelList.add(funnel);
+      }
+    } catch (IllegalArgumentException iax) {
+      if (lastRn == path.loRowNumber() - 1L)
+        throw new IllegalArgumentException(
+            "not enuf info to pack first row [" + lastRn +
+            "]: " + iax.getMessage());
+
+      throw iax;
+    }
+
+    assert hashCount > 0;
+
+    var funnels = ByteBuffer.allocate(hashCount * HASH_WIDTH);
+    for (var funnel : funnelList)
+      for (var hash : funnel)
+        funnels.put(hash);
+
+    assert !funnels.hasRemaining();
+    funnels.flip();
+
+    return new PathPack(inputRns, refHashes, inputHashes, funnels);
   }
   
   
@@ -157,25 +203,17 @@ public class PathPack implements PathBag, Serial {
   private final ByteBuffer hashes;
   private final ByteBuffer inputs;
 
-  private final boolean condensed;  // redundant, but good for clarity
   private final ByteBuffer funnels;
+  private final List<Long> funnelRns;
   private final List<Integer> funnelOffsets;
   
   
   
-
-//  /**
-//   * 
-//   */
-//  private PathPack() {
-//    hashRns = inputRns = List.of();
-//    hashes = inputs = BufferUtils.NULL_BUFFER;
-//  }
   
   
   /**
    * Creates a new "un-condensed" instance. Caller agrees not to change the contents
-   * of the inputs.
+   * of the input arguments.
    * 
    * @param inputRns  ascending row no.s with input hashes (full rows)
    * @param hashes    ref-only hashes (row no.s inferred from {@code inputRns}
@@ -184,33 +222,85 @@ public class PathPack implements PathBag, Serial {
   PathPack(List<Long> inputRns, ByteBuffer hashes, ByteBuffer inputs) {
     
     this.inputRns = Objects.requireNonNull(inputRns, "null inputRns");
-    SortedSet<Long> refs = SkipLedger.refOnlyCoverage(inputRns).tailSet(1L);
-    Objects.requireNonNull(hashes, "null hashes");
-    Objects.requireNonNull(inputs, "null inputs");
-    this.hashRns = Lists.readOnlyCopy(refs);
+    this.hashRns = List.copyOf(
+        SkipLedger.refOnlyCoverage(inputRns).tailSet(1L));  // sans 0L
+    
     this.hashes = BufferUtils.readOnlySlice(hashes);
     this.inputs = BufferUtils.readOnlySlice(inputs);
 
+
+    this.funnels = BufferUtils.NULL_BUFFER;
+    this.funnelRns = List.of();
+    this.funnelOffsets = List.of();
     
-    this.condensed = false;
-    this.funnels = null;
-    this.funnelOffsets = null;
     
-    // if the following throw, there's a bug..
+    checkCommonArgs(hashes, inputs);
     
+  }
+
+
+  private void checkCommonArgs(ByteBuffer hashes, ByteBuffer inputs) {
+
     if (inputRns.isEmpty())
       throw new IllegalArgumentException("inputRns is empty");
     
-    if (hashRns.size() * HASH_WIDTH != this.hashes.remaining())
-      throw new IllegalArgumentException(
-          "hash row numbers / buffer size mismatch:\n" +
-           hashRns + "\n  " + this.hashes);
+    checkRnsBuffer(
+        inputRns, inputs, "input row no.s / buffer size mismatch");
+    checkRnsBuffer(
+        hashRns, hashes, "hash row no.s / buffer size mismatch");
+  }
 
-    if (inputRns.size() * HASH_WIDTH != this.inputs.remaining())
-      throw new IllegalArgumentException(
-          "input row numbers / buffer size mismatch:\n" +
-          inputRns + "\n  " + this.inputs);
+
+  private void checkRnsBuffer(
+    List<Long> rns, ByteBuffer buffer, String preamble) {
+    if (rns.size() * HASH_WIDTH != buffer.remaining())
+        throw new IllegalArgumentException(
+            preamble + ":\n " + rns + "\n " + buffer);
+  }
+
+
+
+  PathPack(
+      List<Long> inputRns, ByteBuffer hashes, ByteBuffer inputs,
+      ByteBuffer funnels) {
     
+    this.inputRns = inputRns;
+    this.hashRns = List.copyOf(
+        SkipLedger.refOnlyCondensedCoverage(inputRns).tailSet(1L)); // sans 0L
+
+    this.hashes = BufferUtils.readOnlySlice(hashes);
+    this.inputs = BufferUtils.readOnlySlice(inputs);
+    this.funnels = BufferUtils.readOnlySlice(funnels);
+
+    checkCommonArgs(hashes, inputs);
+
+    var condensedRns = new ArrayList<Long>(inputRns.size());
+    var funOffs = new ArrayList<Integer>(inputRns.size());
+    
+    long prevRn = inputs.get(0) - 1L; 
+    assert prevRn >= 0;
+    int offset = 0;
+    
+    for (Long rn : inputRns) {
+      assert prevRn < rn;
+      if (SkipLedger.isCondensable(rn)) {
+        condensedRns.add(rn);
+        funOffs.add(offset);
+        offset += SkipLedger.funnelLength(prevRn, rn);
+      }
+      prevRn = rn;
+    }
+
+    if (condensedRns.isEmpty())
+      throw new IllegalArgumentException("no condensable rows: " + inputRns);
+    
+    if (offset != this.funnels.remaining())
+      throw new IllegalArgumentException(
+          "expected " + offset + " funnel bytes; actual was " +
+          this.funnels.remaining() + "; funnels " + funnels + ": " + inputRns);
+
+    this.funnelRns = Lists.asReadOnlyList(condensedRns);
+    this.funnelOffsets = Lists.asReadOnlyList(funOffs);
   }
 
 
@@ -227,12 +317,17 @@ public class PathPack implements PathBag, Serial {
     this.hashes = copy.hashes;
     this.inputs = copy.inputs;
 
-    this.condensed = copy.condensed;
     this.funnels = copy.funnels;
+    this.funnelRns = copy.funnelRns;
     this.funnelOffsets = copy.funnelOffsets;
   }
   
   
+  @Override
+  public final boolean isCondensed() {
+    return !funnelRns.isEmpty();
+  }
+
   
   public final ByteBuffer inputsBlock() {
     return inputs.asReadOnlyBuffer();
@@ -324,54 +419,25 @@ public class PathPack implements PathBag, Serial {
 
   @Override
   public int serialSize() {
-    final int inputsCount = inputRns.size();
-    final int dataBytes = inputs.capacity() + hashes.capacity();
+    return
+        STITCH_COUNT_SIZE +
+        preStitchRowNos().size() * 8 +
+        hashes.remaining() +
+        inputs.remaining() + 
+        funnels.remaining();
     
-    if (inputsCount <= 2)
-      return STITCH_COUNT_SIZE + inputsCount*8 + dataBytes;
-    
-    final int stitchRns;
-    {
-      var candidate = List.of(lo(), hi());
-      
-      List<Long> skipRns = SkipLedger.stitch(candidate);
-      
-      if (skipRns.equals(inputRns))
-        stitchRns = 2;
-      
-      else {
-        var stitchSet = new TreeSet<Long>(candidate);
-        for (int index = inputsCount - 1; index-- > 1; ) {
-          Long rn = inputRns.get(index);
-          if (Collections.binarySearch(skipRns, rn) >= 0)
-            continue;
-          stitchSet.add(rn);
-          skipRns = SkipLedger.stitchSet(stitchSet);
-        }
-        stitchRns = stitchSet.size();
-      }
-    }
-    
-    return STITCH_COUNT_SIZE + stitchRns*8 + dataBytes;
   }
 
   
   @Override
   public ByteBuffer writeTo(ByteBuffer out) throws BufferOverflowException {
-    final int inputsCount = inputRns.size();
     
-    // handle the corner cases first..
-    if (inputsCount <= 2) {
-      out.putInt(inputsCount);
-      return inputsCount == 0 ? out :
-          writeLongs(inputRns, out)
-            .put(hashes.slice())
-            .put(inputs.slice());
-    }
     
+    // write the type
+    // out.put((byte) (isCondensed() ? 1 : 0));
+
     // calculate the stitch row no.s..
-    
-    List<Long> stitchRns = compressedRowNos();
+    List<Long> stitchRns = preStitchRowNos();
 
     // haven't written anything yet.. write it all out
     out.putInt(stitchRns.size());
@@ -385,7 +451,7 @@ public class PathPack implements PathBag, Serial {
   /**
    * Returns the full row numbers in pre-stitched form.
    */
-  public List<Long> compressedRowNos() {
+  public List<Long> preStitchRowNos() {
     
     return SkipLedger.stitchCompress(inputRns);
   }

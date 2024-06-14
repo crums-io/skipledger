@@ -6,7 +6,6 @@ package io.crums.sldg;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.SortedSet;
 
 import io.crums.util.Lists;
 
@@ -20,6 +19,19 @@ import io.crums.util.Lists;
  * defined in this module are not sealed, so it's conceivable a subclass may
  * violate the constraint.
  * </p>
+ * <h2>Overridable / Abstract Methods</h2>
+ * <p>
+ * All but 3 methods in this class are marked <b>final</b>. 2 of those 3
+ * {@link #inputHash()} and {@link #levelsPointer()} are abstract, and
+ * together they drive the return values for the other methods. The only
+ * non-final method is {@link #hash()} which generates the RHS of the
+ * hash-relation mentioned above. The reason why it's not made final is
+ * that an implementation might have memo-ized the result of the hashing.
+ * </p>
+ * 
+ * @see #inputHash()
+ * @see #levelsPointer()
+ * @see #hash()
  * 
  * @see RowHash#prevLevels()
  * @see RowHash#prevNo(int)
@@ -27,7 +39,12 @@ import io.crums.util.Lists;
 public abstract class Row extends RowHash {
   
   
-  
+  /**
+   * {@inheritDoc}
+   * 
+   * @return {@code levelsPointer().rowNo()}
+   */
+  @Override
   public final long no() {
     return levelsPointer().rowNo();
   }
@@ -35,7 +52,7 @@ public abstract class Row extends RowHash {
 
   /**
    * Returns the user-inputed hash. This is the hash of the abstract object
-   * (whatever it is, we don't know).
+   * the entered the ledger (whatever it is, we don't know).
    * 
    * @return non-null, 32-bytes remaining
    */
@@ -43,18 +60,21 @@ public abstract class Row extends RowHash {
   
 
 
-  
+  /**
+   * Returns the levels pointer.
+   */
   public abstract LevelsPointer levelsPointer();
 
   
   
   /**
    * {@inheritDoc}
-   * 
-   * 
+   * The default implementation derives (calculates) the hash value using
+   * the {@link #inputHash()} and the {@link #levelsPointer()}.
    * 
    * @return {@code SkipLedger.rowHash(inputHash(), levelsPointer().hash())}
    */
+  @Override
   public ByteBuffer hash() {
     return SkipLedger.rowHash(inputHash(), levelsPointer().hash());
   }
@@ -70,20 +90,42 @@ public abstract class Row extends RowHash {
 
 
 
-  // public boolean hasAllLevels() {
-  //   return SkipLedger.alwaysAllLevels(no()) || hasAllPtrs();
-  // }
-
-
+  /**
+   * Tests whether the instance's hash is computed using
+   * condensed level row hashes.
+   * 
+   * @return {@code  levelsPointer().isCondensed()}
+   */
   public final boolean isCondensed() {
     return
-        // !SkipLedger.alwaysAllLevels(no()) &&
         levelsPointer().isCondensed();
   }
 
 
+  /**
+   * Determines whether all level row hashes are present.
+   * If an in an instance is <em>not</em> condensed, then
+   * all level row hashes are known by the instance.
+   * 
+   * @return {@code !isCondensed()}
+   */
+  public final boolean hasAllLevels() {
+    return !isCondensed();
+  }
 
-  
+
+
+  /**
+   * Tests whether the instance's hash is computed using
+   * the minimum number of previous row hashes. Note, an instance
+   * can both have {@linkplain #hasAllLevels() all levels} and
+   * still be compressed.
+   * 
+   * @return {@code  levelsPointer().isCompressed()}
+   */
+  public final boolean isCompressed() {
+    return levelsPointer().isCompressed();
+  }
   
   
   /**
@@ -92,21 +134,6 @@ public abstract class Row extends RowHash {
    */
   public final ByteBuffer hash(long rowNumber) {
     return rowNumber == no() ? hash() : levelsPointer().rowHash(rowNumber);
-    // final long rn = no();
-    // final long diff = rn - rowNumber;
-    // if (diff == 0)
-    //   return hash();
-    // var levelsPtr = levelsPointer();
-    // if (levelsPtr.coversRow(rowNumber))
-    //   return levelsPtr.
-    
-    
-    // int referencedRows = prevLevels();
-    // if (diff < 0 || Long.highestOneBit(diff) != diff || diff > (1L << (referencedRows - 1)))
-    //   throw new IllegalArgumentException(
-    //       "rowNumber " + rowNumber + " is not covered by this row " + this);
-    // int ptrLevel = 63 - Long.numberOfLeadingZeros(diff);
-    // return prevHash(ptrLevel);
   }
   
   

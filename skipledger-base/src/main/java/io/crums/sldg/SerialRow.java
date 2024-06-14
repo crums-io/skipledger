@@ -4,8 +4,8 @@
 package io.crums.sldg;
 
 
+import static io.crums.sldg.SkipLedger.skipCount;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 import io.crums.util.Lists;
 
@@ -47,14 +47,15 @@ public class SerialRow extends Row {
   
   private final long rowNumber;
   private final ByteBuffer data;
+  private final LevelsPointer levelsPtr;
   
 
   /**
    * Constructs a new instance. This does a defensive copy (since we want a runtime
-   * reference to be guarantee immutability).
+   * reference to guarantee immutability).
    * 
-   * @param rowNumber the data number
-   * @param data       the data's backing data (a sequence of cells representing hashes)
+   * @param rowNumber   the row number
+   * @param data        the data's backing data (a sequence of cells representing hashes)
    */
   public SerialRow(long rowNumber, ByteBuffer data) {
     this(rowNumber, ByteBuffer.allocate(data.remaining()).put(data).flip(), false);
@@ -66,6 +67,7 @@ public class SerialRow extends Row {
   public SerialRow(SerialRow copy) {
     this.rowNumber = copy.rowNumber;
     this.data = copy.data;
+    this.levelsPtr = copy.levelsPtr;
   }
   
   /**
@@ -85,13 +87,15 @@ public class SerialRow extends Row {
       throw new IllegalArgumentException(
           "expected " + expectedBytes + " bytes for rowNumber " + rowNumber +
           "; actual given is " + data);
+
+    this.levelsPtr = new LevelsPointer(
+        rowNumber,
+        Lists.functorList(skipCount(rowNumber), this::prevHashImpl));
   }
   
   
   public final LevelsPointer levelsPointer() {
-    return new LevelsPointer(
-        rowNumber,
-        Lists.functorList(SkipLedger.skipCount(rowNumber), this::prevHashImpl));
+    return levelsPtr;
   }
   
   
@@ -101,10 +105,6 @@ public class SerialRow extends Row {
   }
 
 
-  // @Override
-  // public final long no() {
-  //   return rowNumber;
-  // }
 
   @Override
   public final ByteBuffer inputHash() {
