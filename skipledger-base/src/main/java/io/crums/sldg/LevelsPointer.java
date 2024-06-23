@@ -212,7 +212,8 @@ public class LevelsPointer {
     if (index < 0)
       throw new IllegalArgumentException(levelRn + " not covered; " + this);
     
-    int level = skipCount(rn) - 1 - index;
+    // int level = skipCount(rn) - 1 - index;
+    int level = SkipLedger.levelLinked(levelRn, rn);
     return compressToLevel(level);
   }
 
@@ -248,7 +249,8 @@ public class LevelsPointer {
     var fun = SkipLedger.levelsMerkleFunnel(level, hashes());
     var levelHash = hashes.get(level).asReadOnlyBuffer();
 
-    return new LevelsPointer(rn, level, levelHash, fun, true);
+    // return new LevelsPointer(rn, level, levelHash, fun, true);
+    return new LevelsPointer(rn, level, levelHash, fun);
   }
 
 

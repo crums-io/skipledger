@@ -5,6 +5,7 @@ package io.crums.sldg;
 
 
 import static io.crums.sldg.SldgConstants.DIGEST;
+import static io.crums.sldg.SldgConstants.HASH_WIDTH;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -275,8 +276,8 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       throw new IllegalArgumentException(
           "too many level hashes: " + len + " (max 63)");
 
-          var builder =
-          new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), false);
+    var builder =
+        new FixedLeafBuilder(SldgConstants.DIGEST.hashAlgo(), true);
   
     byte[] hash = new byte[SldgConstants.HASH_WIDTH];
     for (var p : prevHashes) {
@@ -353,18 +354,18 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   }
 
 
-  /**
-   * Returns the number of funnels in the given list of row numbers.
-   * The argurment is assumed to be the row no.s in a path, but this
-   * is not enforced.
-   * 
-   * @param rowNos  positive row no.s
-   * @return        count of how many of the given row no.s are
-   *                {@linkplain #isCondensable(long) condensable}
-   */
-  public static int countFunnels(List<Long> rowNos) {
-    return (int) rowNos.stream().filter(SkipLedger::isCondensable).count();
-  }
+  // /**
+  //  * Returns the number of funnels in the given list of row numbers.
+  //  * The argurment is assumed to be the row no.s in a path, but this
+  //  * is not enforced.
+  //  * 
+  //  * @param rowNos  positive row no.s
+  //  * @return        count of how many of the given row no.s are
+  //  *                {@linkplain #isCondensable(long) condensable}
+  //  */
+  // public static int countFunnels(List<Long> rowNos) {
+  //   return (int) rowNos.stream().filter(SkipLedger::isCondensable).count();
+  // }
 
 
 
@@ -376,6 +377,33 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    */
   public static List<Long> filterFunneled(List<Long> rowNos) {
     return rowNos.stream().filter(SkipLedger::isCondensable).toList();
+  }
+
+
+
+  /**
+   * Returns the total byte size of the funnels in the condensed representation
+   * of a condensed path.
+   * 
+   * @param rowNos  ascending (positive) linked row no.s in a path
+   * @return        &ge; 0
+   * 
+   * @see #isCondensable(long)
+   * @see #funnelLength(long, long)
+   */
+  public static int countFunnelBytes(List<Long>rowNos) {
+
+    long prevNo = rowNos.get(0) - 1L;
+    if (prevNo < 0L)
+      throw new IllegalArgumentException("rowNos must be positive: " + rowNos);
+    
+      int cells = 0;
+    for (long rn : rowNos) {
+      if (isCondensable(rn))
+        cells += funnelLength(prevNo, rn);
+      prevNo = rn;
+    }
+    return cells * HASH_WIDTH;
   }
 
 
@@ -645,7 +673,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * @param rowNos    positive, strictly increasing row no.s defining the [path]
    *                  bag (unpacked after stitching)
    * 
-   * @see #countFunnels(List)
+   * @see #countFunnelBytes(List)
    */
   public static SortedSet<Long> refOnlyCondensedCoverage(List<Long> rowNos) {
     SortedSet<Long> fullSet = Sets.sortedSetView(stitch(rowNos));

@@ -40,6 +40,7 @@ public class CondensedRow extends Row {
   private CondensedRow(Row row, int level, boolean trustMe) {
     this.row = row;
     this.refLevel = level;
+    System.out.println("CondensedRow[" + row.no() + ":" + level);
   }
 
   public CondensedRow(Row row, int level) {

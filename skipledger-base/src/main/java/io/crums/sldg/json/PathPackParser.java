@@ -20,19 +20,23 @@ import io.crums.util.json.simple.JSONArray;
 import io.crums.util.json.simple.JSONObject;
 
 /**
- * 
+ * {@code PathPack} JSON parser.
  */
 public class PathPackParser implements JsonEntityParser<PathPack> {
   
   private final HashEncoding hashCodec;
   private final String targetNosTag;
+  private final String typeTag;
   private final String hashesTag;
   
   
   
-  public PathPackParser(HashEncoding hashCodec, String targetNosTag, String hashesTag) {
+  public PathPackParser(
+      HashEncoding hashCodec, String targetNosTag,
+      String typeTag, String hashesTag) {
     this.hashCodec = Objects.requireNonNull(hashCodec);
     this.targetNosTag = targetNosTag.trim();
+    this.typeTag = typeTag.trim();
     this.hashesTag = hashesTag.trim();
     
     boolean fail =
@@ -54,14 +58,17 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
     jTargetNos.addAll(targetRns);
     jObj.put(targetNosTag, jTargetNos);
     
+    jObj.put(typeTag, pack.isCondensed() ? PathPack.CNDN_TYPE : PathPack.FULL_TYPE);
     var refsBlock = pack.refsBlock();
     var inputsBlock = pack.inputsBlock();
+    var funnelsBlock = pack.funnelsBlock();
     int initCapacity =
-        (refsBlock.remaining() + inputsBlock.remaining())
+        (refsBlock.remaining() + inputsBlock.remaining() + funnelsBlock.remaining())
         / SldgConstants.HASH_WIDTH;
     var jHashes = new JSONArray(initCapacity);
     appendHashes(jHashes, refsBlock);
     appendHashes(jHashes, inputsBlock);
+    appendHashes(jHashes, funnelsBlock);
     jObj.put(hashesTag, jHashes);
     
     return jObj;
@@ -79,6 +86,17 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
   @Override
   public PathPack toEntity(JSONObject jObj) throws JsonParsingException {
     var jTargets = JsonUtils.getJsonArray(jObj, targetNosTag, true);
+    boolean condensed;
+    {
+      int type = JsonUtils.getInt(jObj, typeTag);
+      condensed = switch (type) {
+        case PathPack.FULL_TYPE   -> false;
+        case PathPack.CNDN_TYPE   -> true;
+        default                   ->
+            throw new JsonParsingException(
+                "unkown '" + typeTag + "' value " + type);
+      };
+    }
     var jHashes =  JsonUtils.getJsonArray(jObj, hashesTag, true);
     try {
       
@@ -88,8 +106,9 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
       
       
       ByteBuffer hashBlock = ByteBuffer.allocate(
-          jHashes.size() * SldgConstants.HASH_WIDTH);
+          jHashes.size() * SldgConstants.HASH_WIDTH + 1);
       
+      hashBlock.put((byte) (condensed ? 1 : 0));
       for (var s : jHashes)
         hashBlock.put(hashCodec.decode(s.toString()));
       
@@ -114,3 +133,10 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
   }
 
 }
+
+
+
+
+
+
+

@@ -30,9 +30,15 @@ public class PathPack implements PathBag, Serial {
   
   
   
-  /** int size */
-  private final static int STITCH_COUNT_SIZE = 4;
-  private final static int TYPE_SIZE = 1;
+  /** Size of int. */
+  public final static int STITCH_COUNT_SIZE = 4;
+
+  /** Size of byte. */
+  public final static int TYPE_SIZE = 1;
+  
+  public final static byte FULL_TYPE = 0;
+  
+  public final static byte CNDN_TYPE = 1;
   
   /**
    * Loads and returns a new instance by reading the given buffer.
@@ -92,12 +98,29 @@ public class PathPack implements PathBag, Serial {
 
     List<Long> inputRns = SkipLedger.stitch(stitchRns);
     
-    int inputSize = HASH_WIDTH * inputRns.size();
-    int hashSize = HASH_WIDTH * (
-        SkipLedger.coverage(inputRns).tailSet(1L).size() -
-        inputRns.size());
+    final boolean condensed;
     {
-      int reqSize = inputSize + hashSize;
+      byte type = hashBlock.get();
+      condensed = switch (type) {
+        case FULL_TYPE  -> false;
+        case CNDN_TYPE  -> true;
+        default -> throw new ByteFormatException("illegal type byte: " + type);
+      };
+    }
+    int inputSize = HASH_WIDTH * inputRns.size();
+    int hashSize;
+    {
+      int refCount = (condensed ?
+          SkipLedger.refOnlyCondensedCoverage(inputRns) :
+          SkipLedger.refOnlyCoverage(inputRns))
+          .tailSet(1L).size();
+
+      hashSize = refCount * HASH_WIDTH;
+    }
+    int funnelSize = condensed ?  SkipLedger.countFunnelBytes(inputRns) : 0;
+    
+    {
+      int reqSize = inputSize + hashSize + funnelSize;
       if (hashBlock.remaining() < reqSize)
         throw new ByteFormatException(
             "underflow: required " + reqSize + " bytes; actual is " +
@@ -105,8 +128,13 @@ public class PathPack implements PathBag, Serial {
     }
     
     
-    ByteBuffer hashes = BufferUtils.slice(hashBlock, hashSize);
-    ByteBuffer inputs = BufferUtils.slice(hashBlock, inputSize);
+    var hashes = BufferUtils.slice(hashBlock, hashSize);
+    var inputs = BufferUtils.slice(hashBlock, inputSize);
+    
+    if (condensed) {
+      var funnels = BufferUtils.slice(hashBlock, funnelSize);
+      return new PathPack(inputRns, hashes, inputs, funnels);
+    }
 
     return new PathPack(inputRns, hashes, inputs);
   }
@@ -277,7 +305,7 @@ public class PathPack implements PathBag, Serial {
     var condensedRns = new ArrayList<Long>(inputRns.size());
     var funOffs = new ArrayList<Integer>(inputRns.size());
     
-    long prevRn = inputs.get(0) - 1L; 
+    long prevRn = inputRns.get(0) - 1L;
     assert prevRn >= 0;
     int offset = 0;
     
@@ -420,7 +448,7 @@ public class PathPack implements PathBag, Serial {
   @Override
   public int serialSize() {
     return
-        STITCH_COUNT_SIZE +
+        STITCH_COUNT_SIZE + TYPE_SIZE +
         preStitchRowNos().size() * 8 +
         hashes.remaining() +
         inputs.remaining() + 
@@ -432,18 +460,17 @@ public class PathPack implements PathBag, Serial {
   @Override
   public ByteBuffer writeTo(ByteBuffer out) throws BufferOverflowException {
     
-    
-    // write the type
-    // out.put((byte) (isCondensed() ? 1 : 0));
-
     // calculate the stitch row no.s..
     List<Long> stitchRns = preStitchRowNos();
+    byte type = isCondensed() ? CNDN_TYPE : FULL_TYPE;
 
     // haven't written anything yet.. write it all out
     out.putInt(stitchRns.size());
-    writeLongs(stitchRns, out).put(hashes.slice()).put(inputs.slice());
-    
-    return out;
+    return writeLongs(stitchRns, out)
+        .put(type)
+        .put(hashes.slice())
+        .put(inputs.slice())
+        .put(funnels.slice());
   }
   
   

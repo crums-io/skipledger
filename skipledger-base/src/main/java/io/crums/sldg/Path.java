@@ -167,9 +167,16 @@ public class Path {
     //       ..and not in code (which is how I know this)
     
     return vRowNumbers.size() == rows.size();
+  
   }
   
   
+  /**
+   * Tests whether the path is condensed. A path is considered condensed
+   * if <em>any</em> of its rows are condensed. Usually, to be
+   * {@linkplain #isCompressed() compressed}, a path must also be be
+   * condensed.
+   */
   public final boolean isCondensed() {
     int index = rows.size();
     while (index-- > 0 && !rows.get(index).isCondensed());
@@ -178,15 +185,27 @@ public class Path {
 
 
 
+  /**
+   * Tests whether the path is compressed. A path is compressed
+   * <b>iff</b> <em>all</em> its rows are compressed.
+   * 
+   * @see Row#isCompressed()
+   * @see #isCondensed()
+   * @see #compress()
+   */
   public final boolean isCompressed() {
     int index = rows.size();
-    while (index-- > 0 && !rows.get(index).isCompressed());
-    return index != -1;
+    while (index-- > 0 && rows.get(index).isCompressed());
+    return index == -1;
   }
 
 
 
 
+  /**
+   * Returns a {@linkplain #isCompressed() compressed} version of this
+   * instance; or {@code this} instance, if already compressed.
+   */
   public final Path compress() {
     if (isCompressed())
       return this;
@@ -211,12 +230,24 @@ public class Path {
    * Returns a subsequence of this path. This is equivalent to
    * returning {@code new Path(rows().subList(fromIndex, toIndex))}
    * --sans the overhead for checking row hashes.
+   * <p>
+   * Note the first row in the returned subpath must reference the
+   * previous row (thru its hash). If that first row is <em>not</em>
+   * condensed (or if this entire path is not {@linkplain #isCondensed()
+   * condensed}), then this method always succeeds; otherwise, if
+   * condensed, the first row in the returned subpath must be condensed
+   * at the zero-th level (i.e. it must explicitly reference the hash of its
+   * immediate predecessor row.)
+   * </p>
    * 
    * @param fromIndex   the starting index (inclusive)
    * @param toIndex     the ending index (exclusive)
    * 
    * @throws IndexOutOfBoundsException
    *         beyond the usual requirements, the subpath cannot be empty
+   * @throws IllegalArgumentException
+   *         if the first row in the to-be-returned subpath, does not
+   *         reference the row immediately before it
    */
   public final Path subPath(int fromIndex, int toIndex) {
     final int rc = rows.size();
@@ -224,6 +255,16 @@ public class Path {
       throw new IndexOutOfBoundsException(
           "fromIndex (" + fromIndex + "), toIndex (" + toIndex + "); size = " +
           rc);
+
+    // verify the first row in the subpath references the previous
+    // row no.
+    Row subFirst = rows.get(fromIndex);
+    long sfRn = subFirst.no();
+    if (!subFirst.levelsPointer().coversRow(sfRn - 1))
+      throw new IllegalArgumentException(
+          "first subpath row [" + sfRn+ "] is condensed: " +
+          subFirst.levelsPointer() + "; previous row [" + (sfRn - 1) +
+          " must be covered");
 
     return new Path(rows.subList(fromIndex, toIndex), null);
   }
@@ -604,7 +645,8 @@ public class Path {
     
     if (!known.equals(hash))
       throw new HashConflictException(
-          "at row [" + no + "]; (assertUnknown=" + assertUnknown + ")");
+          "at row [" + no + "]: expected hash <" + known +
+          ">; actual <" + hash + ">; (assertUnknown=" + assertUnknown + ")");
 
     // if we were expecting known == null, then the following assertion fails
     // .. even tho the hashes agreed

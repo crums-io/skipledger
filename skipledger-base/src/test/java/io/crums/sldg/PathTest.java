@@ -258,6 +258,20 @@ public class PathTest {
 
   }
 
+
+
+  @Test
+  public void testCompress() {
+    var ledger = newRandomLedger(52);
+    final Path path = ledger.statePath().pack().path();
+    assertFalse(path.isCompressed());
+    assertFalse(path.isCondensed());
+
+    Path cndPath = path.compress();
+    assertEquals(path, cndPath);
+  }
+
+
 }
 
 

@@ -23,8 +23,9 @@ import org.junit.jupiter.api.Test;
  */
 public class PathPackParserTest extends SelfAwareTestCase {
   
-  final String TARGETS = "bnos";
-  final String HASHES = "hashes";
+  final static String TARGETS = "bnos";
+  final static String HASHES = "hashes";
+  final static String TYPE = "type";
   
   @Test
   public void testOneB64() {
@@ -116,7 +117,7 @@ public class PathPackParserTest extends SelfAwareTestCase {
     
     var expected = PathPack.forPath(state);
     var parser = new PathPackParser(
-        codec, TARGETS, HASHES);
+        codec, TARGETS, TYPE, HASHES);
     var jObj = parser.toJsonObject(expected);
     System.out.println();
     System.out.println(method(label) + ":");
