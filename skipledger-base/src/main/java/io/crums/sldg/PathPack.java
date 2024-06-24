@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import io.crums.io.Serial;
 import io.crums.io.buffer.BufferUtils;
@@ -314,7 +315,7 @@ public class PathPack implements PathBag, Serial {
       if (SkipLedger.isCondensable(rn)) {
         condensedRns.add(rn);
         funOffs.add(offset);
-        offset += SkipLedger.funnelLength(prevRn, rn);
+        offset += SkipLedger.funnelLength(prevRn, rn) * HASH_WIDTH;
       }
       prevRn = rn;
     }
@@ -404,6 +405,38 @@ public class PathPack implements PathBag, Serial {
   @Override
   public List<Long> getFullRowNumbers() {
     return inputRns;
+  }
+
+
+
+  @Override
+  public Optional<List<ByteBuffer>> getFunnel(long rn, int level) {
+    Objects.checkIndex(level, SkipLedger.skipCount(rn));
+    int findex = Collections.binarySearch(funnelRns, rn);
+    if (findex < 0)
+      return Optional.empty();
+    int offset = funnelOffsets.get(findex);
+    int end =
+        findex + 1 == funnelRns.size() ?
+            funnels.capacity() :
+            funnelOffsets.get(findex + 1);
+
+    var sub =
+        funnels.asReadOnlyBuffer().position(offset).limit(end).slice();
+
+    long refRn = rn - (1L << level);
+    
+
+    if (end - offset != SkipLedger.funnelLength(refRn, rn) * HASH_WIDTH)
+      return Optional.empty();
+
+    List<ByteBuffer> fList = 
+        Lists.functorList(
+            sub.remaining() / HASH_WIDTH,
+            i -> sub.slice()
+                .position(i * HASH_WIDTH).limit((i+1) * HASH_WIDTH));
+
+    return Optional.of(fList);
   }
   
   

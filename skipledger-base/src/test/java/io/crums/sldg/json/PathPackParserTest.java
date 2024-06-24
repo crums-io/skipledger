@@ -15,6 +15,7 @@ import io.crums.sldg.SldgConstants;
 import io.crums.testing.SelfAwareTestCase;
 import io.crums.util.Strings;
 import io.crums.util.json.JsonPrinter;
+import io.crums.util.json.simple.JSONArray;
 
 import org.junit.jupiter.api.Test;
 
@@ -137,6 +138,57 @@ public class PathPackParserTest extends SelfAwareTestCase {
     
     System.out.println(
         Strings.nOf(hashCount, "hash") + " for " + Strings.nOf(size, "row"));
+  }
+
+
+  @Test
+  public void testCompressed() {
+    final Object label = new Object() { };
+    final int size = 1_573_718;
+    final var codec = HashEncoding.BASE64_32;
+    var ledger = newRandomLedger(size);
+    Path path = ledger.statePath().compress();
+    var pack = PathPack.forPath(path);
+    var parser = new PathPackParser(
+        codec, TARGETS, TYPE, HASHES);
+
+    var jPack = parser.toJsonObject(pack);
+    System.out.println();
+    System.out.println(method(label) + ":");
+
+    JsonPrinter.println(jPack);
+    var rt = parser.toEntity(jPack);
+
+    assertEquals(path, rt.path());
+
+    int hashCount = ((JSONArray) jPack.get(HASHES)).size();
+    System.out.println(hashCount + " hashes for " + size + " rows (compressed)");
+  }
+
+  @Test
+  public void testCompressedWithTarget() {
+    final Object label = new Object() { };
+    final int size = 10_573_718;
+    final var codec = HashEncoding.BASE64_32;
+    final long targetRn = size - 2097;
+    var ledger = newRandomLedger(size);
+    Path path = ledger.getPath(1L, targetRn, (long) size).compress();
+    var pack = PathPack.forPath(path);
+    var parser = new PathPackParser(
+        codec, TARGETS, TYPE, HASHES);
+
+    var jPack = parser.toJsonObject(pack);
+    System.out.println();
+    System.out.println(method(label) + ":");
+
+    JsonPrinter.println(jPack);
+    var rt = parser.toEntity(jPack);
+
+    assertEquals(path, rt.path());
+
+    int hashCount = ((JSONArray) jPack.get(HASHES)).size();
+    System.out.println(hashCount + " hashes for " + size + " rows (compressed)");
+
   }
 
 }

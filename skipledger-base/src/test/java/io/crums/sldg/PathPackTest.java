@@ -6,6 +6,8 @@ package io.crums.sldg;
 
 import static io.crums.sldg.PathTest.newRandomLedger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -44,6 +46,23 @@ public class PathPackTest extends RowBagTest {
     assertEquals(state, rt.path());
   }
 
+
+
+
+  @Test
+  public void testCompressed() {
+
+    var ledger = newRandomLedger(1020);
+    Path path = ledger.statePath();
+    assertFalse(path.isCompressed());
+    assertFalse(path.isCondensed());
+    Path cpath = path.compress();
+    assertEquals(path, cpath);
+    assertTrue(cpath.isCompressed());
+    assertTrue(cpath.isCondensed());
+    PathPack pack = cpath.pack();
+    assertEquals(path, pack.path());
+  }
 
 
   
