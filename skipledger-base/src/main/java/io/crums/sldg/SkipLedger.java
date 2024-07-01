@@ -322,20 +322,26 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   /**
    * Tests whether all level-row hashes are always present in a
    * row's row-hash calculation. If row's link-pointer-hash is
-   * determined by 2 or fewer non-sentinel hashes, then we don't
-   * (can't) condense it. This test, then, is equivalent to testing
-   * whether the row [no.] has 2 or fewer levels, or is the corner case
-   * row [4] which has 3 levels (in order of level, to rows 3, 2, and 0),
+   * determined by 3 or fewer non-sentinel hashes, then we don't
+   * condense it. This test, then, is equivalent to testing
+   * whether the row [no.] has 3 or fewer levels, or is the corner case
+   * row [8] which has 4 levels (in order of level, to rows 7, 6, 4, 2, and 0),
    * the last of which, is the sentinel row (whose hash is already known).
+   * <h4>Rationale Why 3</h4>
+   * <p>
+   * The merkle proof representation of a row's levels hash pointers is
+   * more compact <b>iff</b> there are 4 or more non-sentinel level hashes
+   * for that row number; at 3 levels it's break-even.
+   * </p>
    * 
    * @param rn  row no.
-   * @return    {@code skipCount(rn) <= 2 || rn == 4L}
+   * @return    {@code skipCount(rn) <= 3 || rn == 8L}
    * @see #isCondensable(long)
    */
   public static boolean alwaysAllLevels(long rn) {
     // slightly faster evaluation possible, but not worth
     // the obfuscation / cognitive load
-    return skipCount(rn) <= 2 || rn == 4L;
+    return skipCount(rn) <= 3 || rn == 8L;
   }
 
 
@@ -692,7 +698,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       else 
         // pick the *highest* referenced row no.
         // (which is the row no. at rn's level zero)
-        refOnly.add(loRn - 1);
+        refOnly.add(loRn - 1L);
     }
     
 

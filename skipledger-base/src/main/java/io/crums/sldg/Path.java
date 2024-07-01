@@ -8,6 +8,7 @@ import static io.crums.sldg.SldgConstants.DIGEST;
 import static java.util.Collections.binarySearch;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
@@ -15,7 +16,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.util.Lists;
-import io.crums.util.hash.Digest;
 
 /**
  * A list of connected rows in a {@linkplain SkipLedger} with strictly ascending row numbers.
@@ -27,9 +27,6 @@ import io.crums.util.hash.Digest;
  * Every instance's hash pointers are checked for validity at construction. Furthermore,
  * every public constructor makes a defensive copy of its row inputs. The upshot of this
  * guarantee is that a reference to an instance at runtime, is a reference to an immutable proof.
- * </p><p>
- * An instance's hashing algorithm ({@linkplain Digest} implementation) is delegated to
- * its {@linkplain Row}s.
  * </p>
  * <h2>Skip Paths</h2>
  * <p>
@@ -434,7 +431,15 @@ public class Path {
    * @see #getRowHash(long)
    */
   public final SortedSet<Long> rowNumbersCovered() {
-    return SkipLedger.coverage(rowNumbers());
+    if (!isCondensed())
+      return SkipLedger.coverage(rowNumbers());
+
+    var coveredRns = new TreeSet<Long>();
+    for (var row : rows) {
+      coveredRns.addAll(row.levelsPointer().coverage());
+      coveredRns.add(row.no());
+    }
+    return Collections.unmodifiableSortedSet(coveredRns);
   }
   
   
