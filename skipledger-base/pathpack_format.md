@@ -71,6 +71,6 @@ The components of the structure are first defined, and the final object `PATH_PA
                                   // In this way, fs the byte-size of the funnel
                                   // block is determined from the STITCH_RNS.
     
-    PATH_PACK    := SR_COUNT STITCH_RNS TYPE R_TBL I_TBL [FUNNELS]
+    PATH_PACK    := SR_COUNT STITCH_RNS TYPE I_TBL [FUNNELS] R_TBL
  
  

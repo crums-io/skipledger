@@ -66,9 +66,9 @@ public class PathPackParser implements JsonEntityParser<PathPack> {
         (refsBlock.remaining() + inputsBlock.remaining() + funnelsBlock.remaining())
         / SldgConstants.HASH_WIDTH;
     var jHashes = new JSONArray(initCapacity);
-    appendHashes(jHashes, refsBlock);
     appendHashes(jHashes, inputsBlock);
     appendHashes(jHashes, funnelsBlock);
+    appendHashes(jHashes, refsBlock);
     jObj.put(hashesTag, jHashes);
     
     return jObj;

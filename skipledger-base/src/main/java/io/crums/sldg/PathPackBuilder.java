@@ -19,6 +19,10 @@ import io.crums.util.Sets;
 
 /**
  * Builder for a {@linkplain PathPack}.
+ * <h2>TODO</h2>
+ * <p>
+ * Either fix for cases where the path is condensed, or remove / deprecate.
+ * </p>
  */
 public class PathPackBuilder implements PathBag {
 

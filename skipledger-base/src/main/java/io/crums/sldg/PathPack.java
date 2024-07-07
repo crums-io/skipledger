@@ -129,14 +129,15 @@ public class PathPack implements PathBag, Serial {
     }
     
     
-    var hashes = BufferUtils.slice(hashBlock, hashSize);
     var inputs = BufferUtils.slice(hashBlock, inputSize);
     
     if (condensed) {
       var funnels = BufferUtils.slice(hashBlock, funnelSize);
+      var hashes = BufferUtils.slice(hashBlock, hashSize);
       return new PathPack(inputRns, hashes, inputs, funnels);
     }
 
+    var hashes = BufferUtils.slice(hashBlock, hashSize);
     return new PathPack(inputRns, hashes, inputs);
   }
   
@@ -501,9 +502,9 @@ public class PathPack implements PathBag, Serial {
     out.putInt(stitchRns.size());
     return writeLongs(stitchRns, out)
         .put(type)
-        .put(hashes.slice())
         .put(inputs.slice())
-        .put(funnels.slice());
+        .put(funnels.slice())
+        .put(hashes.slice());
   }
   
   
