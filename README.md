@@ -9,7 +9,7 @@ I am redesigning the Crums timechain to use the skip ledger data model. Since a 
 of this code already uses the legacy timechain model, the code has been refactored so that
 the base library does not know about timechains. Once the new timechain is deployed, the
 submodules will be retrofitted (refactored). For more info on the new timechain, see this
-rough [design doc](https://github.com/crums-io/crums-pub/blob/main/tc2.md).
+[overview](https://crums-io.github.io/crums-pub/).
 
 ### Row Hash
 
