@@ -31,8 +31,12 @@ Thus, unmerklized, the byte-size of each proof, spanning *n* rows is actually of
 That might seem like no big deal, but it starts adding up on a timechain with millions plus blocks. Merklizing the row's hash pointers, otoh, allows the byte-size of the proof to
 be of order *log*(*log n*) x *log*(*n*).
 
+### Building the SNAPSHOT
 
-
+Except for the base module `skipledger-base` all other modules know of (and therefore depend on)
+the legacy timechain. A great deal, thus, remains to be refactored. It's a well organized
+transition, but still, a bit messy. I document (and test) how to build crums libary SNAPSHOTS
+(including this project) [here](https://github.com/crums-io/crums-pub#building-the-snapshot).
 
 ## Contents
 
@@ -261,23 +265,16 @@ considerations.)
 
 To build this project, clone this repos and invoke
 
-    $ mvn clean install -DskipTests
+    $ mvn clean install 
 
-from the project's root directory. However to run the tests also, you'll need to build and install a
-*test dependency* locally. Clone the [junit-io](https://github.com/gnahraf/junit-io) project and invoke
-
-    $ mvn clean install
-
-in *that* project's root directory: you can then invoke the same build command in this project's
-directory in order to run the unit tests.
+from the project's root directory.
 
 To build the *sldg* and *mrsl* tools:
 
-
     $ cd sldg
-    $ mvn package appassembler:assemble -DskipTests
+    $ mvn package appassembler:assemble
     $ cd ../mrsl
-    $ mvn package appassembler:assemble -DskipTests
+    $ mvn package appassembler:assemble
 
 
 ## Maven Artifacts
