@@ -190,7 +190,7 @@ public class PathPack implements PathBag, Serial {
     int hashCount = 0;
 
     try {
-      for (Row row : path.rows().subList(1, path.length())) {
+      for (Row row : path.rows()) {
         var levelsPtr = row.levelsPointer().compressToLevelRowNo(lastRn);
         lastRn = levelsPtr.rowNo();
         if (!levelsPtr.isCondensed())
@@ -203,7 +203,7 @@ public class PathPack implements PathBag, Serial {
       if (lastRn == path.loRowNumber() - 1L)
         throw new IllegalArgumentException(
             "not enuf info to pack first row [" + lastRn +
-            "]: " + iax.getMessage());
+            "]: " + iax.getMessage(), iax);
 
       throw iax;
     }
