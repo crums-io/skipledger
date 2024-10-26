@@ -272,6 +272,50 @@ public class PathTest {
   }
 
 
+
+  @Test
+  public void testAppendTail() {
+    var ledger = newRandomLedger(52);
+    final Path head = ledger.getPath(3L, 11L);
+    Path tail = ledger.getPath(10L, 27L);
+    Path appHead = head.appendTail(tail);
+    assertEquals(head.loRowNumber(), appHead.loRowNumber());
+    assertEquals(tail.hiRowNumber(), appHead.hiRowNumber());
+
+    tail = ledger.getPath(12L, 29L);
+    appHead = head.appendTail(tail);
+
+    assertEquals(head.loRowNumber(), appHead.loRowNumber());
+    assertEquals(tail.hiRowNumber(), appHead.hiRowNumber());
+  }
+
+
+
+  @Test
+  public void testAppendTailFail() {
+    var ledger = newRandomLedger(52);
+    final Path head = ledger.getPath(3L, 11L);
+    Path tail = ledger.getPath(13L, 27L);
+    try {
+      head.appendTail(tail);
+      fail();
+    } catch (IllegalArgumentException expected) {  }
+  }
+
+
+  @Test
+  public void testAppendTailFail2() {
+    var ledger = newRandomLedger(52);
+    var ledgerB = newRandomLedger(53);
+    final Path head = ledger.getPath(3L, 11L);
+    Path tail = ledgerB.getPath(10L, 27L);
+    try {
+      head.appendTail(tail);
+      fail();
+    } catch (HashConflictException expected) {  }
+  }
+
+
 }
 
 

@@ -8,14 +8,17 @@ import static io.crums.sldg.SldgConstants.DIGEST;
 import static java.util.Collections.binarySearch;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.util.Lists;
+import io.crums.util.Sets;
 
 /**
  * A list of connected rows in a {@linkplain SkipLedger} with strictly ascending row numbers.
@@ -39,17 +42,32 @@ import io.crums.util.Lists;
  * forward: at each step (row) you link to the lowest numbered row your row links to, while minding
  * not to skip beyond the target low-numbered row.)
  * </p>
- * <h2>Performance Note</h2>
- * <p>
- * Instances are <em>small</em> objects. Self reminder: there's little point in optimization.
- * Serialization footprint, maybe; clock-cycles NO(!).
- * </p>
+ * <h2>FIXME</h2>
+ * 
+ * The protocol for what hash pointer information is requried for the <em>first</em>
+ * row in a <em>condensed</em> path must change: presently this requires a hash pointer to
+ * the adjacent (previous) row, and a funnel (from which the levels pointer is
+ * calculated). Instead, we should allow modeling a condensed row using its
+ * levels-pointer and input hashes alone. Presently, methods like
+ * <ul>
+ * <li>{@linkplain #subPath(int, int)}</li>
+ * <li>{@linkplain #headPath(long)}</li>
+ * <li>{@linkplain #tailPath(long)}</li>
+ * </ul>
+ * are broken for condensed instances.
+ * 
  */
 public class Path {
   
   
   /**
    * The maximum number of rows in a path.
+   * <p>
+   * TODO: remove this is a silly and arbitrary restriction.
+   * (Yes, instances are typically small, but I'm already finding application
+   * for large instances: {@linkplain #skipPath(boolean, Long...)} was created
+   * cuz a Path can serve as a client-side repo for ledger state.)
+   * </p>
    */
   public final static int MAX_ROWS = 256 * 256;
   
@@ -149,11 +167,11 @@ public class Path {
   
   /**
    * Determines whether this is a skip path. A skip path describes
-   * the shortest possible list of rows connecting the {@linkplain #hiRowNumber()} to
-   * the {@linkplain #loRowNumber()}.
+   * the shortest possible list of rows connecting the {@linkplain #hi()} to
+   * the {@linkplain #lo()} numbered rows.
    */
   public final boolean isSkipPath() {
-    List<Long> vRowNumbers = SkipLedger.skipPathNumbers(loRowNumber(), hiRowNumber());
+    List<Long> vRowNumbers = SkipLedger.skipPathNumbers(lo(), hi());
     
     // skip paths are *minimum length paths that are unique
     // therefore there is no need to check the row numbers individually
@@ -514,8 +532,117 @@ public class Path {
   
   
   /** Returns the number of rows. */
-  public int length() {
+  public final int length() {
     return rows.size();
+  }
+
+
+  /**
+   * Returns the row numbers in ascending order.
+   * 
+   * @return immutable, <em>value</em>-based list
+   */
+  public final List<Long> nos() {
+    return Lists.map(rows, Row::no);
+  }
+
+
+
+  /**
+   * Returns a <em>skip path</em> version of this instance, or this
+   * instance if already a {@linkplain #isSkipPath() skip path}.
+   */
+  public final Path skipPath() {
+    final int len = length();
+    if (len <= 2)
+      return this;
+    var rowNos = SkipLedger.skipPathNumbers(lo(), hi());
+    return
+        rowNos.size() == length() ? this :
+            new Path(Lists.map(rowNos, this::getRowByNumber), null);
+    
+  }
+
+
+  /**
+   * Returns a minumum {@linkplain #length() length} instance connecting the
+   * first row, the given target rows, and the last row.
+   * 
+   * @param targets   target row no.s
+   * 
+   * @return  empty, if this instance does not have sufficient info about the
+   *          given target row no.s
+   */
+  public final Optional<Path> skipPath(Long... targets) {
+    return skipPath(false, targets);
+  }
+
+
+  /**
+   * Returns a minumum {@linkplain #length() length} connecting the
+   * the given target rows.
+   * 
+   * @param trim      if {@code false}, then the {@linkplain #lo() lo} and
+   *                  {@linkplain #hi() hi} row no.s are automatically
+   *                  included as targets
+   * 
+   * @param targets   target row no.s
+   * 
+   * @return  empty, if this instance does not have sufficient info about the
+   *          given target row no.s
+   */
+  public final Optional<Path> skipPath(boolean trim, Long... targets) {
+    var sorted = new TreeSet<>(Arrays.asList(targets));
+    if (!Sets.sortedSetView(nos()).containsAll(sorted))
+      return Optional.empty();
+
+    if (!trim) {
+      sorted.add(lo());
+      sorted.add(hi());
+    }
+    List<Long> rowNos = SkipLedger.stitchSet(sorted);
+    if (rowNos.size() == length())
+      return Optional.of(this);
+    
+    List<Row> rows = Lists.map(rowNos, this::getRowByNumber);
+    return Optional.of(new Path(rows, null));
+  }
+
+
+
+  /** Returns the lowest (first / minimum) full row no. */
+  public final long lo() {
+    return first().no();
+  }
+
+
+  /** Returns the highest (last / maximum) full row no. */
+  public final long hi() {
+    return last().no();
+  }
+
+
+
+  public Path appendTail(Path tail) {
+    final long hiRn = hiRowNumber();
+    if (!tail.hasRowCovered(hiRn))
+      throw new IllegalArgumentException(
+        "hi row [" + hiRn + "] not covered: " + tail);
+
+    if (!tail.getRowHash(hiRn).equals(getRowHash(hiRn)))
+      throw new HashConflictException("at hi row [" + hiRn + "]");
+
+    if (tail.hiRowNumber() == hiRn)
+      return this;
+
+    return new Path(
+        List.copyOf(Lists.concat(rows, tail.tailPath(hiRn + 1).rows)),
+        null);
+
+    // we've already verified the hash at hiRn, so the following
+    // validating constructor is unnecessary..
+    //
+    // return new Path(Lists.concat(rows, tail.tailPath(hiRn + 1).rows));
   }
   
   
@@ -553,7 +680,7 @@ public class Path {
   
   
   
-  
+  @Override
   public String toString() {
     var rns = rowNumbers();
     final int size = rns.size();
@@ -663,7 +790,6 @@ public class Path {
   
   private void verify() {
 
-
     if (rows.get(0).no() <= 0L)
       throw new IllegalArgumentException(
           "illegal row no. at index [0]: " + rows.get(0).no());
@@ -698,44 +824,6 @@ public class Path {
       prevNo = rn;
 
     }
-
-
-//     var digest = SldgConstants.DIGEST.newDigest();
-
-//     // artifact of deciding to reverse the order of the displayed rows
-//     List<Row> rpath = Lists.reverse(this.rows);
-    
-//     for (int index = 0, nextToLast = rpath.size() - 2; index < nextToLast; ++index) {
-//       Row row = rpath.get(index);
-//       Row prev = rpath.get(index + 1);
-      
-// //      if (!Digest.equal(row, prev))
-// //        throw new IllegalArgumentException(
-// //            "digest conflict at index " + index + ": " +
-// //                rpath.subList(index, index + 2));
-      
-//       long rowNumber = row.rowNumber();
-//       long prevNumber = prev.rowNumber();
-//       long deltaNum = rowNumber - prevNumber;
-      
-//       if (deltaNum < 1 || rowNumber % deltaNum != 0)
-//         throw new IllegalArgumentException(
-//             "row numbers at index " + index + ": " + rpath.subList(index, index + 2));
-//       if (Long.highestOneBit(deltaNum) != deltaNum)
-//         throw new IllegalArgumentException(
-//             "non-power-of-2 delta " + deltaNum + " at index " + index + ": " +
-//                 rpath.subList(index, index + 2));
-      
-//       digest.reset();
-//       digest.update(prev.data());
-//       ByteBuffer prevRowHash = ByteBuffer.wrap(digest.digest());
-      
-//       int pointerIndex = Long.numberOfTrailingZeros(deltaNum);
-//       ByteBuffer hashPointer = row.prevHash(pointerIndex);
-//       if (!prevRowHash.equals(hashPointer))
-//         throw new HashConflictException(
-//             "hash conflict at index " + index + ": " + rpath.subList(index, index + 2));
-//     }
   }
   
 }

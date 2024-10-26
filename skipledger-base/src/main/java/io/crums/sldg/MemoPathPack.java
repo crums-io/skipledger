@@ -28,7 +28,8 @@ public class MemoPathPack extends PathPack {
       this.memoedHashes = BufferUtils.NULL_BUFFER;
       return;
     }
-    this.memoedHashes = ByteBuffer.allocate(inputRns.size());
+    this.memoedHashes = ByteBuffer.allocate(
+        SldgConstants.HASH_WIDTH * inputRns.size());
     
     var view = memoedHashes.slice();
     final int count = inputRns.size();
