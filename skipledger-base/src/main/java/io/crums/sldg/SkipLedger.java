@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -850,6 +851,15 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     return Collections.unmodifiableList(stitch);
   }
   
+
+
+  /** Comparator based on how many hash pointers a now number has. */
+  private static Comparator<Long> LINK_COUNT_COMP =
+      new Comparator<Long>() {
+        @Override public int compare(Long a, Long b) {
+          return skipCount(a) - skipCount(b);
+        }
+      };
   
   /**
    * Returns the given path row numbers in pre-stitched form.
@@ -857,54 +867,46 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * list. It can then be uncompressed via the {@linkplain #stitch(List)}
    * method.
    * 
-   * @param pathRns path row no.s (positive and stictly ascending order)
-   * @return a subset of the {@code pathRns}
+   * @param pathRns positive row no.s that must be included in the stitched path
+   * @return an immutable subset of the {@code pathRns}
    * 
+   * @see #stitch(List)
    */
   public static List<Long> stitchCompress(List<Long> pathRns) {
-    final int pSize = pathRns.size();
-    if (pSize < 2)
-      return pathRns;
-    
-    var candidate = List.of(pathRns.get(0), pathRns.get(pSize - 1));
-    
-    List<Long> skipRns = SkipLedger.stitch(candidate);
-    if (skipRns.equals(pathRns))
-      return candidate;
-    
-    var stitchList = new ArrayList<Long>(candidate);
-    // invariants: stitchList.get(0) == lo(); stitchList.last() == hi()
-
-    for (int index = 1; index < pSize - 1; ++index) {
-      Long rn = pathRns.get(index);
-      if (Collections.binarySearch(skipRns, rn) >= 0)
-        continue;
-      
-      final int ssize = stitchList.size();
-      if (ssize > 2) {
-        // remove the previous target
-        // add the new target and see if on expanding
-        // whether it includes the prev stitch no.
-        
-        Long prev = stitchList.remove(ssize - 2);
-        // assert stitchList.size() == ssize - 1;
-        stitchList.add(ssize - 2, rn);
-        skipRns = SkipLedger.stitch(stitchList);
-        
-        if (Collections.binarySearch(skipRns, prev) < 0) {
-          // ..if it doesn't, put it back
-          assert stitchList.size() == ssize;
-          stitchList.add(ssize - 3, prev);
-          skipRns = SkipLedger.stitch(stitchList);
-        }
-      } else {
-        assert stitchList.size() == 2;
-        stitchList.add(1, rn);
-        skipRns = SkipLedger.stitch(stitchList);
-      }
+    switch (pathRns.size()) {
+    case 0: return List.of();
+    case 1:
+      if (pathRns.getFirst() <= 0L)
+        throw new IllegalArgumentException(
+          "row no.s must be postitve: " + pathRns);
+      return List.of(pathRns.getFirst());
+    default:
     }
-    
-    return Collections.unmodifiableList(stitchList);
+
+    // keep track of the path row no.s remaining to be spanned
+    var remaining = new TreeSet<Long>(pathRns);
+    if (remaining.first() <= 0L)
+      throw new IllegalArgumentException(
+          "non-positive row no. " + remaining.first() + ": " + pathRns);
+
+    // create candidate stitch nos. using the first and last row no.s
+    var candidate = new TreeSet<Long>();
+    candidate.add(remaining.first());
+    candidate.add(remaining.last());
+
+    remaining.removeAll(skipPathNumbers(remaining.first(), remaining.last()));
+
+    // add the remaining row no.s, starting with the least linked ones
+    // This is based on a theorem that holds the skip pointer path thru
+    // any pair of row no.s must include the the skip path thru those rows.
+    while (!remaining.isEmpty()) {
+      Long minPtrNo = remaining.stream().min(LINK_COUNT_COMP).get();
+      candidate.add(minPtrNo);
+      remaining.remove(minPtrNo);
+      remaining.removeAll(stitchSet(candidate));  
+    }
+
+    return List.copyOf(candidate);
   }
   
 
