@@ -9,13 +9,17 @@ import static java.util.Collections.binarySearch;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.function.Function;
 
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -349,20 +353,62 @@ public class Path {
   /**
    * Returns the highest row number whose hash is known by both this and the
    * {@code other} instance (from the same ledger). If the 2 paths do not
-   * intersect, zero is returned.
+   * intersect, zero is returned. The given path must be from the same ledger.
+   * <p>
+   * The relationship is <em>symmetric</em>: i.e.
+   * {@code this.highestCommonFullNo(other) == other.highestCommonFullNo(this)}
+   * </p>
    * 
-   * @throws HashConflictException if the row hashes conflict at that row number
+   * @throws HashConflictException
+   *         if the row hashes conflict at this highest common row no.
    */
   public final long highestCommonNo(Path other) throws HashConflictException {
-    
+    return highestCommonImpl(other, p -> p.rowNumbersCovered());
+  }
+
+
+  /**
+   * Returns the highest common <em>full</em> row number in this and the
+   * other instance, or zero if there is no such row. The 2 paths are
+   * assumed to be from the same ledger, and if their row hashes conflict at
+   * this highest common row no., then a {@code HashConflictException} is
+   * thrown.
+   * <p>
+   * The relationship is <em>symmetric</em>: i.e.
+   * {@code this.highestCommonFullNo(other) == other.highestCommonFullNo(this)}
+   * </p>
+   * 
+   * @throws HashConflictException
+   *         if the row hashes conflict at this highest common full row no.
+   */
+  public final long highestCommonFullNo(Path other) throws HashConflictException {
+    return highestCommonImpl(other, p-> p.nos());
+  }
+
+
+  /** Returns the highest row no. in the intersection of the no.s generated. */
+  private long highestCommonImpl(
+    Path other, Function<Path, Collection<Long>> rowNoFunc) {
+
     final long hiNo;
+
+    // there are way faster (but more complicated) ways to compute hiNo
+    // (since the collection is always sorted). Punting for now..
     {
-      var intersect = new TreeSet<Long>();
-      intersect.addAll(rowNumbersCovered());
-      intersect.retainAll(other.rowNumbers());
-      if (intersect.isEmpty())
-        return 0L;
-      hiNo = intersect.last();
+      var nosA = rowNoFunc.apply(this);
+      var nosB = rowNoFunc.apply(other);
+
+      // pick the smallest collection, first
+      if (nosA.size() > nosB.size()) {
+        var temp = nosA;
+        nosA = nosB;
+        nosB = temp;
+      }
+
+      Set<Long> intersect = HashSet.newHashSet(nosA.size());
+      intersect.addAll(nosA);
+      intersect.retainAll(nosB);
+      hiNo = intersect.stream().max(Long::compare).orElse(0L);
     }
 
     if (hiNo != 0L && !getRowHash(hiNo).equals(other.getRowHash(hiNo)))
@@ -448,7 +494,7 @@ public class Path {
    * 
    * @see #getRowHash(long)
    */
-  public final SortedSet<Long> rowNumbersCovered() {
+  public final SortedSet<Long> nosCovered() {
     if (!isCondensed())
       return SkipLedger.coverage(rowNumbers());
 
@@ -459,6 +505,15 @@ public class Path {
     }
     return Collections.unmodifiableSortedSet(coveredRns);
   }
+
+  /**
+   * @deprecated too wordy..
+   * @see #nosCovered()
+   */
+  public final SortedSet<Long> rowNumbersCovered() {
+    return nosCovered();
+  }
+
   
   
   /**
@@ -547,6 +602,18 @@ public class Path {
   }
 
 
+  /** Returns the lowest (first / minimum) full row no. */
+  public final long lo() {
+    return first().no();
+  }
+
+
+  /** Returns the highest (last / maximum) full row no. */
+  public final long hi() {
+    return last().no();
+  }
+
+
 
   /**
    * Returns a <em>skip path</em> version of this instance, or this
@@ -610,29 +677,32 @@ public class Path {
 
 
 
-  /** Returns the lowest (first / minimum) full row no. */
-  public final long lo() {
-    return first().no();
-  }
-
-
-  /** Returns the highest (last / maximum) full row no. */
-  public final long hi() {
-    return last().no();
-  }
-
-
-
+  /**
+   * Appends the given path to the tail end of this path and returns it.
+   * The given {@code tail} path, must <em>cover</em> (know the hash of)
+   * the highest numbered row in this path.
+   * 
+   * @param tail  from same ledger, and covers the highest row in <em>this</em>
+   *              path
+   * @return  an appended version of this instance , or {@code this} if
+   *          {@code tail.hi() == hi()})
+   * 
+   * @throws HashConflictException
+   *          if the hash of the last row in this instance conflicts with
+   *          the hash of the same numbered row in {@code tail}
+   * 
+   * @see #hasRowCovered(long)
+   */
   public Path appendTail(Path tail) {
-    final long hiRn = hiRowNumber();
+    final long hiRn = hi();
     if (!tail.hasRowCovered(hiRn))
       throw new IllegalArgumentException(
-        "hi row [" + hiRn + "] not covered: " + tail);
+        "hi row [" + hiRn + "] is not covered: " + tail);
 
     if (!tail.getRowHash(hiRn).equals(getRowHash(hiRn)))
       throw new HashConflictException("at hi row [" + hiRn + "]");
 
-    if (tail.hiRowNumber() == hiRn)
+    if (tail.hi() == hiRn)
       return this;
 
     return new Path(
