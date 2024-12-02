@@ -31,12 +31,12 @@ Thus, unmerklized, the byte-size of each proof, spanning *n* rows is actually of
 That might seem like no big deal, but it starts adding up on a timechain with millions plus blocks. Merklizing the row's hash pointers, otoh, allows the byte-size of the proof to
 be of order *log*(*log n*) x *log*(*n*).
 
-### Building the SNAPSHOT
+### Building from Source
 
 Except for the base module `skipledger-base` all other modules know of (and therefore depend on)
 the legacy timechain. A great deal, thus, remains to be refactored. It's a well organized
 transition, but still, a bit messy. I document (and test) how to build crums libary SNAPSHOTS
-(including this project) [here](https://github.com/crums-io/crums-pub#building-the-snapshot).
+(including this project) [here](https://github.com/crums-io/timechain#building-from-source).
 
 ## Contents
 
