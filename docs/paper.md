@@ -1,4 +1,5 @@
-## <p align="center"> Skip Ledger: a cryptographic commitment scheme for ledgers </p>
+
+## Skip Ledger: a cryptographic commitment scheme for ledgers
 ##### DRAFT
 <p align="center"> Babak Farhang <br/> crums.io  <br/> January 2025</p>
 
@@ -482,7 +483,7 @@ with other techniques and approaches.
 | Balanced hash tree | slightly less balanced | ✓ | Merkle trees are perfectly balanced, leading to slightly smaller proofs. |
 | Commit provenance | ✓ (inherent in structure)| difficult to link historical roots efficiently | skip ledger's structure naturally links all historical states through the row hashes. Linking different Merkle roots requires additional structures like hash chains or skip ledgers themselves. |
 | Incremental build / commit | ✓  (build-as-you-go) | requires rebuilding the tree, if more leaves are added | skip ledgers efficiently integrate new entries without the need for an explicit "build" or commitment stage.  |
-| <p align="center">**Use Synopsis**</p> |  |  |  |
+| **Use Synopsis** |  |  |  |
 | Suitability for fixed-size collections | less suitable | ✓ | Merkle trees are a better choice when modeling a collection that does not grow, because Merkle proofs are slightly more compact. |
 | Suitability for append-only collections | ✓ (designed for this) |  |  |
 
