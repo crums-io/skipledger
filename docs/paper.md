@@ -32,7 +32,7 @@ difficult (dry clay is not editable, for example), so that tampered records are 
 another modern take on those markings on a stick.
 
 Traditional methods like hash chains[^1] provide strong security guarantees about order (which record
-precedes another, for example), but suffer from ineffeciencies when it comes to *verifying* that
+precedes another, for example), but suffer from inefficiencies when it comes to *verifying* that
 order. In particular, with most hash chains, verifying order requires reading the chain from the beginning.
 Since hash chains are typically large, it's difficut to package succint off-chain proofs of order.
 
