@@ -119,7 +119,7 @@ Every computed row hash encodes the hash of the preceding row,
 but also, depending on the row number *n*, *k* many more hashes of predecessor rows, where
 *k* is the number of times 2 divides *n*:
 
-*k* = max { *i* ∈ ℕ<sub>0</sub> s.t. 2<sup>*i*</sup> | *n* }
+*k* = max { *i* ∈ ℕ<sub>0</sub> s.t. 2<sup>*i*</sup> ∣ *n* }
 
 Each row's hash "directly" encodes *k + 1* predecessor row hashes. The hashes referenced
 are from rows numbered
