@@ -18,7 +18,7 @@ Besides enabling succint proofs of ledger row contents, the scheme's perhaps mos
 is that it also enables succint proofs of the order of the commitments, themselves. The scheme's efficiency
 in areas requiring audit, integrity, and non-repudiation are discussed and contrasted with other approaches.
 The scheme's applicability to blockchain protocols (more efficient off-chain proofs) is noted. Finally,
-the paper posits if blockchains can create tokens of value in their ledger entries, then so may private
+the paper posits if blockchains can create tokens of value in their ledger entries, then so too may private
 ledgers.
 
 <br/>
@@ -82,8 +82,8 @@ They have been used for various purposes, including generating one-time keys in 
 Hash proof structures often mirror analogous, conventional data structures. Merkle trees, for example,
 are structurally similar to binary trees; hash chains, are similar to linked lists. The word *mirror* here also conveys
 the idea that the references in these hash proof structures point in the *opposite direction* of their conventional
-counterparts. For example, the hash references (commonly call *hash pointers*) in a Merkle proof are constructed from the
-bottom up , from leaf to root, rather than vice versa (as in conventional binary trees). Skip ledgers too
+counterparts. For example, the hash references (commonly called *hash pointers*) in a Merkle proof are constructed from the
+bottom up , from leaf to root, rather than vice versa (as in a conventional binary tree). Skip ledgers too
 mirror a conventional type of data structure: the skip list (Pugh, 1990)[^8].
 
 The use of skip list-like hash structures for cryptographic linking (and commitment) is not a new concept.
@@ -109,7 +109,7 @@ is a commitment for the state of the entire chain when it had *n* blocks. There,
 linked to its predecessor using a special hash cell that simply records the hash of the predecessor
 block. Under the skip ledger commitment scheme, each row's (block's) hash is computed as the
 root of a binary hash tree over that and all previous rows in the ledger. This property, in turn, allows
-one to efficiently reveal and prove (partial reveal) the contents of any row against *any* commitment
+one to efficiently reveal and prove (partially reveal) the contents of any row against *any* commitment
 hash of the ledger after it had that row (block).
 
 ## Row Hash
@@ -138,86 +138,86 @@ The following pseudo code fleshes out a recursive definition for the row hash:
 
 >
         
-      // Strong cryptographic hash function. The hash of the empty [byte] sequence
-      // H("") is _defined_ as a string of zero bits with the same length as H's
-      // usual output. This sentinel value is denoted H_o below.
-      //
-      function H(m) :
+    // Strong cryptographic hash function. The hash of the empty [byte] sequence
+    // H("") is _defined_ as a string of zero bits with the same length as H's
+    // usual output. This sentinel value is denoted H_o below.
+    //
+    function H(m) :
 
 
-      // Computes and returns the Merkle root hash over the given ordered list of hashes
-      // using a strong cryptographic hash function. The algorithm here does not prepend
-      // internal and leaf hash nodes (with 0 and 1): since the no. of hashes is predetermined
-      // in this application, the so called "2nd-preimage attack" does not apply.
-      // 
-      function merkle_root(hashes) :
-        if (length(hashes) == 0) return H_o             // (never reached in this pseudo code)
-        if (length(hashes) == 1) return hashes[0]       // hash of singleton is self
+    // Computes and returns the Merkle root hash over the given ordered list of hashes
+    // using a strong cryptographic hash function. The algorithm here does not prepend
+    // internal and leaf hash nodes (with 0 and 1): since the no. of hashes is predetermined
+    // in this application, the so called "2nd-preimage attack" does not apply.
+    // 
+    function merkle_root(hashes) :
+      if (length(hashes) == 0) return H_o             // (never reached in this pseudo code)
+      if (length(hashes) == 1) return hashes[0]       // hash of singleton is self
 
-        while (length(hashes) > 1) {
-          new_hashes ← []
-          for i ← 0 to length(hashes) - 1 step 2 {
-            if (i + 1 < length(hashes))
-              new_hashes.push( H(hashes[i] + hashes[i+1]) )
-            else
-              new_hashes.push( H(hashes[i]) )
-          }
-          hashes ← new_hashes
+      while (length(hashes) > 1) {
+        new_hashes ← []
+        for i ← 0 to length(hashes) - 1 step 2 {
+          if (i + 1 < length(hashes))
+            new_hashes.push( H(hashes[i] + hashes[i+1]) )
+          else
+            new_hashes.push( H(hashes[i]) )
         }
-        return hashes[0]
+        hashes ← new_hashes
+      }
+      return hashes[0]
 
-        
-      // Computes and returns the hash of the *source* row in the ledger
-      // numbered n (> 0). This may the "straight" hash of a byte sequence, or
-      // a "composition" of the hashes of cell values in row [n].
+      
+    // Computes and returns the hash of the *source* row in the ledger
+    // numbered n (> 0). This may the "straight" hash of a byte sequence, or
+    // a "composition" of the hashes of cell values in row [n].
+    //
+    function input_hash(n) :
+      // .. compute hash of ledger source row (or read memo-ized result)
+      return h
+      
+
+
+
+    // Recursive definition of a row's commitment hash (simply called row hash)
+    //
+    function row_hash(n) :
+      // check for the sentinel row [0]
+      if (n == 0)
+        return H_o                      // (zeroed hash)
+      
+      pn ← pointer_nos(n)
+      ptr_count = length(pn)
+      prev_row_hashes ← [ptr_count]   // an array of hashes (or other container) with ptr_count-many slots
+      for i ← 0 to ptr_count - 1 do
+        prev_row_hashes[i] ← row_hash(pn[i])
+
+      // below, '+' means concatenate
+      return H( input_hash(n) + merke_root(prev_row_hashes) ) 
+
+
+
+
+
+
+
+
+      // Returns the row no.s row n's hash is derived from. These are deterministically
+      // set by row no. (unlike the randomization in the skip list search structure).
       //
-      function input_hash(n) :
-        // .. compute hash of ledger source row (or read memo-ized result)
-        return h
-        
+      function pointer_nos(n) :
+        count ← skip_count(n)
+        PN ← [count]    // an array (or other container) with count-many slots
+        for i ← 0 to count - 1 do
+          PN[i] ← n - 2^i
+        return PN
 
 
-
-      // Recursive definition of a row's commitment hash (simply called row hash)
+      // Returns the no. of skip [hash] pointers to previous rows for a given row no.
+      // (determined by row no. alone).
       //
-      function row_hash(n) :
-        // check for the sentinel row [0]
-        if (n == 0)
-          return H_o                      // (zeroed hash)
-        
-        pn ← pointer_nos(n)
-        ptr_count = length(pn)
-        prev_row_hashes ← [ptr_count]   // an array of hashes (or other container) with ptr_count-many slots
-        for i ← 0 to ptr_count - 1 do
-          prev_row_hashes[i] ← row_hash(pn[i])
-
-        // below, '+' means concatenate
-        return H( input_hash(n) + merke_root(prev_row_hashes) ) 
-
-
-
-
-
-
-
-
-        // Returns the row no.s row n's hash is derived from. These are deterministically
-        // set by row no. (unlike the randomization in the skip list search structure).
-        //
-        function pointer_nos(n) :
-          count ← skip_count(n)
-          PN ← [count]    // an array (or other container) with count-many slots
-          for i ← 0 to count - 1 do
-            PN[i] ← n - 2^i
-          return PN
-
-
-        // Returns the no. of skip [hash] pointers to previous rows for a given row no.
-        // (determined by row no. alone).
-        //
-        function skip_count(n) :
-          e ← trailing_zero_bits(n)    // no. of trailing zero bits in the base-2 representation of n
-          return e + 1
+      function skip_count(n) :
+        e ← trailing_zero_bits(n)    // no. of trailing zero bits in the base-2 representation of n
+        return e + 1
 
 
 Note, in practice a `row_hash` implementation will involve some form of
@@ -487,7 +487,7 @@ with other techniques and approaches.
 | Suitability for fixed-size collections | less suitable | ✓ | Merkle trees are a better choice when modeling a collection that does not grow, because Merkle proofs are slightly more compact. |
 | Suitability for append-only collections | ✓ (designed for this) |  |  |
 
-
+<br/>
 
 ### Application to Blockchain
 
@@ -519,7 +519,7 @@ redundantly recorded in the block itself. The proof-of-work puzzle
 #### Potential Advantages
 
 Under skip ledger, any random existing block can quickly be verified to belong in the chain
-(as represented by any of its recent blocks) in sublinear time. This, in turn, may aid in tracking,
+(as represented by any of its recent blocks) in sublinear time and space. This, in turn, may aid in tracking,
 verifying, or packaging off-chain proofs-of-provenance for a chain's tokens.
 
 
@@ -577,6 +577,7 @@ Earlier versions of the timechain did not use this commitment scheme. It develop
 way around. The design of skip ledger was first motivated by considering how best to construct
 the hash of an evolving ledger to be witnessed by the (old) timechain.
 
+<br/>
 
 ### Proposition: *Every* Receipt is Recorded In Some Ledger
 
@@ -586,9 +587,9 @@ recorded anywhere else. If you can find exceptions to this rule, then consider i
 
 If the *existing* ledger[s] that receipt came from is annotated with skip ledger
 commitment data (proving at what row no.[s] the legered receipt is recorded in), then the
-receipt reveals a commitment hash for its contents that can be efficiently linked to future
-commitment hashes of the ledger[s] the receipt was recorded in.
+receipt can be efficiently linked to all future commitment hashes of the ledger[s] it is recorded in.
 
+<br/>
 
 ### Comparison: Blockchain
 
@@ -618,8 +619,9 @@ The table below contrasts the 2 approaches.
 | Easy to Evolve |  ✓ |  | Conventional ledgers are easier to evolve than blockchains. In fact, skip ledger can *aid* in the *evolution* of a ledger: for example, back-end database schema changes can be verified not to break old commitments. |
 | Tokenizable parts | hypothesized | ✓ |  |
 
+<br/>
 
-If blockchains can create tokens of value, can conventional ledgers too design and package tokens of value in their entries?
+If blockchains can create tokens of value, can conventional ledgers also design and package tokens of value in their entries?
 Let us explore this issue using a perhaps contrived, over-simplified example.
 
 #### Warehouse Ledger: a Hypothetical Use Case
@@ -647,17 +649,19 @@ warehouse receipts as collateral for loans. They decide this is a good thing, bu
 ownership, the warehouse ledger will also allow legitimate parties to also record contractual encumberances on ownership.
 Accordingly, the warehouse introduces a new record type (call it type 3a) for recording that ownership in an already stocked item has become encumbered.
 
+<br/>
 
 ### Closing Remarks
 
-Skip ledger is a powerful addition to the toolbox. A number of implementation-specific engineering details not
+Skip ledger is a powerful addition to the toolbox. A number of implementation-specific, engineering details not
 covered in this paper are further explored in the reference implementations[^10][^11][^12]. For the most part, these concern realizing
 efficiencies by developing a uniform set of tools and formats that both ledger owners and users (receipt recipients) know how to
 use in very general and broad settings. In particular, a binary "archive" format for bundling ledger proofs is
 prototyped. Because ledger entries often reference entries in *other* ledgers each archive (called a *morsel*)
-packages proofs from *multiple* ledgers. For example, morsels package timechains (along with their witness proofs) just
-like any other ledger.
+packages proofs from *multiple* ledgers. For example, morsels package related timechain proofs (witness proofs of ledger hashes)
+much the same way as any other ledger.
 
+<br/><br/>
 
 ### References
 
