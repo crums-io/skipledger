@@ -326,8 +326,11 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * determined by 3 or fewer non-sentinel hashes, then we don't
    * condense it. This test, then, is equivalent to testing
    * whether the row [no.] has 3 or fewer levels, or is the corner case
-   * row [8] which has 4 levels (in order of level, to rows 7, 6, 4, 2, and 0),
-   * the last of which, is the sentinel row (whose hash is already known).
+   * row [8] which has 5 levels pointing to rows 7, 6, 4, 2, and 0.
+   * Since rows [4] and [2] are already likely present in the construction
+   * of a path that goes thru row [8], the only missing info (in uncondensed form)
+   * are the hashes for rows [6] and [7].
+   * 
    * <h4>Rationale Why 3</h4>
    * <p>
    * The merkle proof representation of a row's levels hash pointers is
@@ -361,18 +364,6 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
   }
 
 
-  // /**
-  //  * Returns the number of funnels in the given list of row numbers.
-  //  * The argurment is assumed to be the row no.s in a path, but this
-  //  * is not enforced.
-  //  * 
-  //  * @param rowNos  positive row no.s
-  //  * @return        count of how many of the given row no.s are
-  //  *                {@linkplain #isCondensable(long) condensable}
-  //  */
-  // public static int countFunnels(List<Long> rowNos) {
-  //   return (int) rowNos.stream().filter(SkipLedger::isCondensable).count();
-  // }
 
 
 
