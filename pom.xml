@@ -10,7 +10,7 @@
   <packaging>pom</packaging>
 
   <name>${project.groupId}:${project.artifactId}</name>
-  <url>https://crums.io/project/ledgers</url>
+  <url>https://github.com/crums-io/skipledger</url>
   
   <description>
     Collection of modules and tools for maintaining tamper proof, evolving, historical private ledgers
@@ -19,13 +19,13 @@
   
   
   <properties>
-    <revision>0.6.0-ALPHA</revision>
+    <revision>0.6.0</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>22</maven.compiler.release>
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
     <flatten.version>1.2.2</flatten.version>
     <crums.util>1.0.4</crums.util>
-    <crums.core>1.0.1-DEPRECATED</crums.core>
+    <!-- crums.core>1.0.1-DEPRECATED</crums.core -->
     <native.maven.plugin.version>0.9.13</native.maven.plugin.version>
     
   </properties>
@@ -109,6 +109,7 @@
   
   <modules>
     <module>skipledger-base</module>
+    <!--
     <module>skipledger</module>
     <module>skipledger-sql</module>
     <module>reports</module>
@@ -118,6 +119,7 @@
     <module>report-template</module>
     <module>logledge</module>
     <module>jurno</module>
+    -->
   </modules>
   
 
@@ -209,7 +211,7 @@
             &nbsp;GNU Affero General Public License v3
             (<a href="https://www.gnu.org/licenses/agpl-3.0.txt">AGPL</a>)
             </td>
-            <td style="text-align: right;"><br/>&copy; 2020-2024 <a href="https://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
+            <td style="text-align: right;"><br/>&copy; 2020-2025 <a href="https://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
             </tr>
             </table>
             ]]>
