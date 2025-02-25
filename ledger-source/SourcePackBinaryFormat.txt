@@ -81,11 +81,12 @@ CELL_CODE       := BYTE           // encodes cell type and whether it is redacte
                                   // 0 -- redacted (only its hash is made available)
                                   //      otherwise, this records the type
                                   // 1 -- UTF-8 encoded string (var size)
-                                  // 2 -- Big-endian long value
-                                  // 3 -- Big-endian long representing UTC date
-                                  // 4 -- Blob of bytes  (var size)
-                                  // 5 -- 32-byte value representing a SHA-256 hash
-                                  // 6 -- A special marker for the "NULL" type
+                                  // 2 -- Big-endian 8-byte long value
+                                  // 3 -- Big-endian 8-byte long representing UTC date
+                                  // 4 -- Boolean, 1 byte
+                                  // 5 -- Blob of bytes  (var size)
+                                  // 6 -- 32-byte value representing a SHA-256 hash
+                                  // 7 -- A special marker for the "NULL" type
                                   
 // present iff CELL_CODE indicates var-size;
 // otherwise (for fixed-size types), the following value is inferred
