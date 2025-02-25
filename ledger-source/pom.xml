@@ -1,0 +1,33 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.crums</groupId>
+    <artifactId>ledgers</artifactId>
+    <version>${revision}</version>
+  </parent>
+  
+  <artifactId>ledger-source</artifactId>
+  <name>${project.groupId}:${project.artifactId}</name>
+  <description>
+    Models how the hash of a ledger-row is computed from its values. This per-row
+    hash calculation is performed in isolation of other ledger state. In skip ledger
+    terms, this is the input-hash of the ledger row.
+  </description>
+  
+  <dependencies>
+  
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>io-util</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>tablesalt</artifactId>
+      <version>${revision}</version>
+    </dependency>
+   
+  </dependencies>
+  
+</project>

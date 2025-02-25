@@ -1,0 +1,138 @@
+Source-pack Binary Format
+=========================
+
+Rows are modeled as a list of cells. Each cell incurs at least one byte of
+overhead, which is needed to distinguish redacted cells from revealed ones.
+This CELL_CODE is also used to encode the cell's data type. (Note the corner-case
+type NULL is meant to represent SQL NULLs, but does not distinguish which type
+was set to null. Its value is a zero byte.)
+
+
+
+
+   
+SCHEMA_FLAG     := LONG           // Bit field
+                                  //  0    -- mixed cell count, not salted (unknown)
+                                  //
+                                  //  1    -- iso-count (all rows have same no. of cells)
+                                  //  2    -- salted cell indices,           iff SCHEMA_FLAG & 6 == 2
+                                  //  4    -- salted exceptions indices,     iff SCHEMA_FLAG & 6 == 4
+                                  // (6)   -- all salted, no exceptions      iff SCHEMA_FLAG & 6 == 6
+                                  //          not salted, no exceptions      iff SCHEMA_FLAG & 6 == 0
+                                           
+// notation definition
+array(T)        := T T ^ T        // count, followed by count-many T's
+
+
+
+// present iff SCHEMA_FLAG & 1 == 1
+ISO_COUNT       := USHORT         // cell-count      (unsigned; max 0xff_ff)
+
+// present iff SCHEMA_FLAG & 1 == 0
+CELL_COUNT_SIZE := BYTE           // no. of bytes used to encode cell count
+                                  // valid values: 1, 2, 3.
+                                  
+                                  
+
+
+// present iff SCHEMA_FLAG & (8 + 16 + 32) == 8 + 16
+SALTED_CELLS              := array(SHORT)
+
+// present iff SCHEMA_FLAG & (8 + 16 + 32) == 8 + 32
+UNSALTED SALT_CELLS       := array(SHORT)
+
+
+VAR_SIZE_LEN    := BYTE   no. of bytes used to encode variable the length of var-size types (1-4)
+
+HEADER          := SCHEMA_FLAG  VAR_SIZE_LEN  [ISO_COUNT] [SALTED_CELLS | UNSALTED_CELLS]
+
+
+
+ROW_COUNT       := INT             // big endian 4-byte value; max 0x7f_ff_ff_ff
+
+
+
+// per row, in ascending order of row number
+
+NO              := LONG           // row no.
+
+ROW_STATUS      := BYTE           // Values..
+                                  // 0 -- (not the others)
+                                  // 1 -- one or more cells redacted 
+                                  // 2 -- whitespace tokenized text (TODO)
+                                  //
+                                  
+
+ROW_SALT        := BYTE ^ 32      // present iff ROW_STATUS & 1 == 0 AND SCHEMA_FLAG & 6 != 0
+
+// cell-count
+// present iff SCHEMA_FLAG & 1 == 0 (ISO_COUNT not defined)
+CC              := BYTE ^ CELL_COUNT_SIZE
+                                  // this is an unsigned big-endian integer
+                                  // 1, 2, or 3 bytes wide
+                                    
+
+
+
+
+// pre cell
+
+CELL_CODE       := BYTE           // encodes cell type and whether it is redacted
+                                  // 0 -- redacted (only its hash is made available)
+                                  //      otherwise, this records the type
+                                  // 1 -- UTF-8 encoded string (var size)
+                                  // 2 -- Big-endian long value
+                                  // 3 -- Big-endian long representing UTC date
+                                  // 4 -- Blob of bytes  (var size)
+                                  // 5 -- 32-byte value representing a SHA-256 hash
+                                  // 6 -- A special marker for the "NULL" type
+                                  
+// present iff CELL_CODE indicates var-size;
+// otherwise (for fixed-size types), the following value is inferred
+
+CELL_DATA_SIZE  :=                // big-endian integer, 1-4 bytes wide (per VAR_SIZE_LEN)
+
+// present iff ROW_STATUS & 1 == 1 and CELL_CODE != 0 and the cell is salted.
+// (whether a cell at an index is salted or not is determined in the HEADER preamble)
+
+CELL_SALT       := BYTE ^ 32
+                                    
+// present iff CELL_CODE != 0; i.e. not redacted
+CELL_DATA       := BYTE ^ CELL_DATA_SIZE
+
+       
+// present iff CELL_CODE == 0; i.e. redacted
+CELL_HASH       := BYTE ^ 32
+
+
+CELL            := CELL_CODE [CELL_DATA_SIZE] [CELL_SALT] <CELL_DATA | CELL_HASH>
+
+
+
+ROW             := NO ROW_STATUS [CC] CELL ^ <CC | ISO_COUNT>
+
+SRC_PACK  := HEADER ROW_COUNT ROW ^ [ROW_COUNT]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
