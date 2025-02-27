@@ -1,0 +1,21 @@
+
+Humpy Dumpy sat on a wall
+
+Humpity dumpity, well he shouldn't have
+
+#depending on the configuration, some lines can count as comments only.
+
+but he did and here we are
+Sat on a wall and took a great fall
+
+And all the king's horsemen and all them ramen
+
+# Changing the number of lines in this test file is brittle.
+# Note, to keep the test simple, our test log ends with the new line char ('\n')..
+
+Couldn't stick him together again
+
+# following lines are new..
+
+Excepting, of course
+At the end of chop sticks
