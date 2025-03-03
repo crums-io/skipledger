@@ -1,0 +1,11 @@
+/*
+ * Copyright 2022 crums.io
+ */
+module io.crums.sldg.logledger {
+  
+  requires transitive io.crums.sldg.base;
+  
+  requires io.crums.util.xp;
+  
+  exports io.crums.sldg.logledger;
+}
