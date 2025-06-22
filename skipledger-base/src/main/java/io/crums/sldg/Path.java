@@ -47,18 +47,25 @@ import io.crums.util.Sets;
  * not to skip beyond the target low-numbered row.)
  * </p>
  * <h2>FIXME</h2>
- * 
+ * <p>
  * The protocol for what hash pointer information is requried for the <em>first</em>
  * row in a <em>condensed</em> path must change: presently this requires a hash pointer to
  * the adjacent (previous) row, and a funnel (from which the levels pointer is
  * calculated). Instead, we should allow modeling a condensed row using its
  * levels-pointer and input hashes alone. Presently, methods like
+ * </p>
  * <ul>
  * <li>{@linkplain #subPath(int, int)}</li>
  * <li>{@linkplain #headPath(long)}</li>
  * <li>{@linkplain #tailPath(long)}</li>
+ * <li>{@linkplain #nosCovered()}</li>
  * </ul>
- * are broken for condensed instances.
+ * <p>are broken for condensed instances. The following methods are
+ * also broken with condensed instances:</p>
+ * <ul>
+ * <li>{@linkplain #getRowOrReferringRow(long)}</li>
+ * <li>{@linkplain #getRowHash(long)}</li>
+ * </ul>
  * 
  */
 public class Path {
@@ -355,15 +362,15 @@ public class Path {
    * {@code other} instance (from the same ledger). If the 2 paths do not
    * intersect, zero is returned. The given path must be from the same ledger.
    * <p>
-   * The relationship is <em>symmetric</em>: i.e.
-   * {@code this.highestCommonFullNo(other) == other.highestCommonFullNo(this)}
+   * The relationship is <em>symmetric</em>: i.e. <br/>
+   * {@code this.highestCommonNo(other) == other.highestCommonNo(this)}
    * </p>
    * 
    * @throws HashConflictException
    *         if the row hashes conflict at this highest common row no.
    */
   public final long highestCommonNo(Path other) throws HashConflictException {
-    return highestCommonImpl(other, p -> p.rowNumbersCovered());
+    return highestCommonImpl(other, Path::nosCovered);
   }
 
 
@@ -374,7 +381,7 @@ public class Path {
    * this highest common row no., then a {@code HashConflictException} is
    * thrown.
    * <p>
-   * The relationship is <em>symmetric</em>: i.e.
+   * The relationship is <em>symmetric</em>: i.e. <br/>
    * {@code this.highestCommonFullNo(other) == other.highestCommonFullNo(this)}
    * </p>
    * 
@@ -382,7 +389,7 @@ public class Path {
    *         if the row hashes conflict at this highest common full row no.
    */
   public final long highestCommonFullNo(Path other) throws HashConflictException {
-    return highestCommonImpl(other, p-> p.nos());
+    return highestCommonImpl(other, Path::nos);
   }
 
 
@@ -392,6 +399,7 @@ public class Path {
 
     final long hiNo;
 
+    // FIXME
     // there are way faster (but more complicated) ways to compute hiNo
     // (since the collection is always sorted). Punting for now..
     {
@@ -448,36 +456,27 @@ public class Path {
   /**
    * Determines whether this path references (knows the hash of) the given row no.
    */
-  public final boolean hasRowCovered(long rowNumber) {
-    if (rowNumber == 0L)
+  public final boolean hasRowCovered(long rowNo) {
+    if (rowNo == 0L)
       return true;
-    {
-      int index = indexOf(rowNumber);
-      if (index >= 0)
-        return true;
-      if (-1 - index == rows.size())
-        return false;
-    }
-
-    return linkedAbove(rowNumber);
-  }
-
-
-  private boolean linkedAbove(long rowNumber) {
-
-    final var rns = rowNumbers();
-    final int rnCount = rns.size();
-    final int rnLevels = SkipLedger.skipCount(rowNumber);
     
-    for (int level = 0; level < rnLevels; ++level) {
-      long rn = rowNumber + (1L << level);
-      int index = binarySearch(rns, rn);
-      if (index >= 0)
+    int index = indexOf(rowNo);
+    if (index >= 0)
+      return true;
+    index = -1 - index;
+    if (index == rows.size())
+      return false;
+
+    final long maxRefRn = rowNo + (1L << (SkipLedger.skipCount(rowNo) - 1));
+    for (; index < rows.size(); ++index) {
+      Row row = rows.get(index);
+      if (row.no() > maxRefRn)
+        break;
+      if (row.levelsPointer().coversRow(rowNo))
         return true;
-      if (-1 - index == rnCount)
-        return false;
     }
     return false;
+    
   }
 
 
@@ -517,20 +516,21 @@ public class Path {
   
   
   /**
-   * Returns the hash of the row with the given <code>rowNumber</code>. This is not
+   * Returns the hash of the row with the given {@code rowNo}. This is not
    * just a convenience for getting the {@linkplain Row#hash() hash} of one of the
    * instance's {@linkplain #rows() rows}; it also provides a more sophisticated
    * algorithm so that it can return the hash of <em>any</em> row returned by
-   * {@linkplain #rowNumbersCovered()}.
+   * {@linkplain #nosCovered()}.
    * 
-   * @throws IllegalArgumentException if <code>rowNumber</code> is not a member of the
-   * set returned by {@linkplain #rowNumbersCovered()}
+   * @throws IllegalArgumentException if {@code rowNo} is not a member of the
+   * set returned by {@linkplain #nosCovered()}
    */
-  public ByteBuffer getRowHash(long rowNumber) throws IllegalArgumentException {
+  public ByteBuffer getRowHash(long rowNo) throws IllegalArgumentException {
+    
     return
-        rowNumber == 0 ?
+        rowNo == 0L ?
             SldgConstants.DIGEST.sentinelHash() :
-              getRowOrReferringRow(rowNumber).hash(rowNumber);
+              getRowOrReferringRow(rowNo).hash(rowNo);
   }
   
   
@@ -573,12 +573,12 @@ public class Path {
     final long maxRefRn = rowNo + (1L << (SkipLedger.skipCount(rowNo) - 1));
     
     for (int index = insertIndex; index < rows.size(); ++index) {
-      long rn = rows.get(index).no();
-      if (SkipLedger.rowsLinked(rowNo, rn))
-        return rows.get(index);
-      
-      if (rn > maxRefRn)
+      Row row = rows.get(index);
+      if (row.no() > maxRefRn)
         break;
+      
+      if (row.levelsPointer().coversRow(rowNo))
+        return row;
     }
     
     throw new IllegalArgumentException(

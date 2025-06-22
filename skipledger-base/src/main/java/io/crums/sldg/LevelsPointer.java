@@ -114,7 +114,8 @@ public class LevelsPointer {
     if (rn == Long.highestOneBit(rn) &&
         !DIGEST.sentinelHash().equals(prevHashes.get(levels - 1)))
       throw new IllegalArgumentException(
-        "hash for the sentinel row[0] not zeroed -- required by the protocol");
+          "hash for sentinel row[0] not zeroed -- required by the protocol;" +
+          " rn = " + rn);
   }
 
 
@@ -345,7 +346,7 @@ public class LevelsPointer {
     int index = indexOf(coverage, rn);
     if (index < 0)
       throw new IllegalArgumentException(
-          "row [" + rn + "not referenced by this: " + this);
+          "row [" + rn + "] not referenced by this: " + this);
     index = coverage.size() - index - 1;
     return isCondensed() ? levelHash() : hashes.get(index).asReadOnlyBuffer();
   }

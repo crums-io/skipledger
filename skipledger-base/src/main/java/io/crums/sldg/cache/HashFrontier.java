@@ -7,7 +7,6 @@ package io.crums.sldg.cache;
 import static io.crums.sldg.SldgConstants.DIGEST;
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Objects;
 
@@ -55,17 +54,31 @@ import io.crums.util.Lists;
  * </li>
  * </ol>
  * 
- * <h2>Model &amp; state transitons</h2>
+ * <h2>Model &amp; state transitions</h2>
  * <p>
  * This class adds row-hash information to the parent model. (See {@linkplain Frontier}).
  * </p><p>
  * Instances are <em>immutable</em>. An instance itself doesn't track input-hashes, but it
- * takes one in order to transiton from one {@linkplain #rowNumber() row number} to the next:
+ * takes one in order to transiton from one {@linkplain #rowNo() row number} to the next:
  * {@linkplain #nextFrontier(ByteBuffer)}. In this way, the state of a skipledger can be
  * "played forward" by only accessing the source-ledger.
  * </p>
+ * <h2>TODO: Redo Implementation</h2>
+ * <p>
+ * The implementation is needlessly inefficient. In particular, {@linkplain RowHash}
+ * instances need not be created. Further, the {@linkplain Serial} encoding of instances
+ * can be made far more compact.
+ * </p>
+ * <h3>Why it might matter</h3>
+ * <p>
+ * Preliminary tests (in other modules) indicate generating
+ * {@linkplain #nextFrontier(ByteBuffer) next frontier} instances in a
+ * pipeline is <em>not I/O bound</em>: it is now CPU-bound, and it might not all be
+ * just computing SHA-256 digests: there's plenty of redundant allocation going on
+ * which can be optimized away.
+ * </p>
  * 
- * @see #firstRow(ByteBuffer, MessageDigest)
+ * @see #firstRow(ByteBuffer)
  */
 public class HashFrontier extends Frontier implements Serial {
   
@@ -74,54 +87,52 @@ public class HashFrontier extends Frontier implements Serial {
    * Stateless instance representing an empty ledger.
    * This is really a hack, so as to avoid checking for the null instance
    * (which I don't want). The <em>only</em> methods that work on this instance
-   * are {@linkplain HashFrontier#nextFrontier(ByteBuffer, MessageDigest)}, and
+   * are {@linkplain HashFrontier#nextFrontier(ByteBuffer)},
    * the zero-returning {@linkplain HashFrontier#frontierHash()} and
-   * {@linkplain HashFrontier#rowNumber()} methods.
+   * {@linkplain HashFrontier#levelHash(int)} methods, and
+   * {@linkplain HashFrontier#rowNo()}.
    * <p>
    * The {@code Serial} interface methods also work on this instance.
    * </p>
    */
   public final static HashFrontier SENTINEL = new HashFrontier(new RowHash[0]) {
     @Override
-    public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
-      return firstRow(inputHash, digest);
+    public HashFrontier nextFrontier(ByteBuffer inputHash) {
+      return firstRow(inputHash);
     }
     @Override
-    public long rowNumber() {
+    public long rowNo() {
       return 0L;
     }
     @Override
     public ByteBuffer frontierHash() {
       return DIGEST.sentinelHash();
     }
+    @Override
+    public ByteBuffer levelHash(int level) {
+      if (level != 0)
+        throw new IllegalArgumentException(
+            "levelHash only defined for level zero for SENTINEL: " + level);
+      return frontierHash();
+    }
   };
   
   
-  /**
-   * @return {@code firstRow(inputHash, null)}
-   * @see #firstRow(ByteBuffer, MessageDigest)
-   */
-  public static HashFrontier firstRow(ByteBuffer inputHash) {
-    return firstRow(inputHash, null);
-  }
   
   
   /**
    * Creates a first-row instance.
    * 
-   * @param inputHash the input-hash for the first row (the hash of a row in a source ledger)
-   * @param digest    Optional. Note if non-null, the algo is <em>not checked for validity</em>.
+   * @param inputHash the input-hash for the first row
+   *                  (the hash of a row in a source ledger)
    * 
    * @return an instance positioned on row [1]
    * 
    * @throws NullPointerException if {@code inputHash} is {@code null}
    */
-  public static HashFrontier firstRow(ByteBuffer inputHash, MessageDigest digest) {
+  public static HashFrontier firstRow(ByteBuffer inputHash) {
     inputHash = sliceInput(inputHash);
-    if (digest == null)
-      digest = DIGEST.newDigest();
-    else
-      digest.reset();
+    var digest = DIGEST.newDigest();
     
     digest.update(inputHash.slice());
     digest.update(DIGEST.sentinelHash());
@@ -153,7 +164,7 @@ public class HashFrontier extends Frontier implements Serial {
     for (int index = 0; index < skipCount; ++index)
       levelFrontier[index] = row;
     for (int index = skipCount; index < frontierLevels; ++index) {
-      long levelRn = levelRowNumber(rowNumber, index);
+      long levelRn = levelRowNo(rowNumber, index);
       ByteBuffer levelHash = skipLedger.rowHash(levelRn);
       levelFrontier[index] = new HashedRow(levelRn, levelHash);
     }
@@ -207,12 +218,12 @@ public class HashFrontier extends Frontier implements Serial {
               expectedLevels, rowNumber, levelHashes.size()));
     
     var deepHash = levelHashes.get(expectedLevels - 1);
-    long deepRn = levelRowNumber(rowNumber, expectedLevels - 1);
+    long deepRn = levelRowNo(rowNumber, expectedLevels - 1);
     
     noSentinel(deepHash, expectedLevels - 1);
     
     for (int index = expectedLevels - 1; index-- > 0; ) {
-      long levelRn = levelRowNumber(rowNumber, index);
+      long levelRn = levelRowNo(rowNumber, index);
       var levelHash = levelHashes.get(index);
       boolean sameHash = levelHash.equals(deepHash);
       if (levelRn == deepRn) {
@@ -236,7 +247,7 @@ public class HashFrontier extends Frontier implements Serial {
     levelFrontier[0] = new HashedRow(rowNumber, levelHashes.get(0));
     long lastRn = rowNumber;
     for (int index = 1; index < expectedLevels; ++index) {
-      long rn = levelRowNumber(rowNumber, index);
+      long rn = levelRowNo(rowNumber, index);
       if (lastRn == rn)
         levelFrontier[index] = levelFrontier[index - 1];
       else {
@@ -276,16 +287,20 @@ public class HashFrontier extends Frontier implements Serial {
   //      M E T H O D S
   
 
+  /**
+   * Instances are equal if they are copies of the same data.
+   */
   @Override
   public final boolean equals(Object o) {
     return o instanceof HashFrontier other &&
-        other.rowNumber() == rowNumber() &&
-        other.frontierHash().equals(frontierHash()) &&
+        other.rowNo() == rowNo() &&
         other.levelRows().equals(levelRows());
   }
   
   
-  
+  /**
+   * @return {@code frontierHash().hashCode()}
+   */
   @Override
   public int hashCode() {
     return frontierHash().hashCode();
@@ -305,7 +320,7 @@ public class HashFrontier extends Frontier implements Serial {
   /**
    * Returns the frontier row.
    * 
-   * @return row numbered {@linkplain #rowNumber()}
+   * @return row numbered {@linkplain #rowNo()}
    */
   public final RowHash frontierRow() {
     return levelFrontier[0];
@@ -357,12 +372,12 @@ public class HashFrontier extends Frontier implements Serial {
    * 
    * @param inputHash 32-byte value (SHA-256)
    * @return the next row (it's row number will be one greater than the
-   *      this instance's {@linkplain #rowNumber()}
+   *      this instance's {@linkplain #rowNo()}
    * @see #nextFrontier(ByteBuffer)
    */
   public Row nextRow(ByteBuffer inputHash) {
     inputHash = sliceInput(inputHash);
-    final long rn = rowNumber() + 1;
+    final long rn = rowNo() + 1;
     
     final int skipCount = SkipLedger.skipCount(rn);
     
@@ -393,6 +408,8 @@ public class HashFrontier extends Frontier implements Serial {
   
   
 
+  
+  
   /**
    * Calculates and returns the next frontier using the given input hash
    * for the next row.
@@ -403,22 +420,8 @@ public class HashFrontier extends Frontier implements Serial {
    * @see #nextRow(ByteBuffer)
    */
   public HashFrontier nextFrontier(ByteBuffer inputHash) {
-    return nextFrontier(inputHash, null);
-  }
-  
-  /**
-   * Calculates and returns the next frontier using the given input hash
-   * for the next row.
-   * 
-   * @param inputHash 32-byte value (SHA-256)
-   * @param digest    optional SHA-256 work instance or {@code null}
-   * 
-   * @return resultant frontier after adding the row with the given {@code inputHash}
-   * @see #nextRow(ByteBuffer)
-   */
-  public HashFrontier nextFrontier(ByteBuffer inputHash, MessageDigest digest) {
     
-    final long rn = rowNumber() + 1;
+    final long rn = rowNo() + 1;
 
     var prevHashes = Lists.functorList(
         SkipLedger.skipCount(rn),
@@ -427,14 +430,6 @@ public class HashFrontier extends Frontier implements Serial {
             levelFrontier[level].hash());
 
     var rowHash = SkipLedger.rowHash(rn, sliceInput(inputHash), prevHashes);
-
-
-
-
-
-
-
-    // inputHash = sliceInput(inputHash);
     
     final int skipCount = SkipLedger.skipCount(rn);
     
@@ -446,43 +441,19 @@ public class HashFrontier extends Frontier implements Serial {
     assert !expand || skipCount == levelFrontier.length + 1 && rn == 2 * tail();
     
 
-    // compute the hash for the new row
-    
-    // if (digest == null)
-    //   digest = DIGEST.newDigest();
-    // else
-    //   digest.reset();
-    
-    // update the digest with a sequence consisting of the new row's input hash
-    // followed by each row hash referenced by that row, from its 0th level to
-    // to (skipCount - 1)'th, in that order.
-    // digest.update(inputHash);?
-    
-    // (exclusive):
-    final int lastNonSentinelLevel = expand ? levelFrontier.length : skipCount;
-    
-    // for (int level = 0; level < lastNonSentinelLevel; ++level)
-    //   digest.update(levelFrontier[level].hash());
     
     
-    // the digest is prepared, excepting 1 corner case: when we expand
-    // check for that, all while you're at it, allocated the next levels array..
     
     RowHash[] nextLevels;
     if (expand) {
-      
-      // when a new highest level row is created, it's highest level pointer
-      // points to row zero (whose hash is just a string of zeros).
-      // digest.update(DIGEST.sentinelHash());
 
       nextLevels = new RowHash[skipCount];
     
     } else
       
       nextLevels = new RowHash[levelFrontier.length];
-    
-    // the digest is ready.
-    // HashedRow next = new HashedRow(rn, digest.digest());
+
+    // compute the hash for the new row
     HashedRow next = new HashedRow(rn, rowHash);
 
     // copy the unaffected levels, back-to-front
@@ -500,9 +471,8 @@ public class HashFrontier extends Frontier implements Serial {
   
 
   @Override
-  public long rowNumber() {
-    return levelFrontier[0].no
-    ();
+  public long rowNo() {
+    return levelFrontier[0].no();
   }
 
   @Override
@@ -512,7 +482,7 @@ public class HashFrontier extends Frontier implements Serial {
 
   
   @Override
-  public List<Long> levelRowNumbers() {
+  public List<Long> levelRowNos() {
     return new Lists.RandomAccessList<Long>() {
 
       @Override
@@ -531,7 +501,7 @@ public class HashFrontier extends Frontier implements Serial {
   @Override
   public String toString() {
     var hash = frontierHash().limit(4);
-    return "%d:%s..".formatted(rowNumber(), IntegralStrings.toHex(hash));
+    return "%d:%s..".formatted(rowNo(), IntegralStrings.toHex(hash));
   }
 
 
@@ -549,7 +519,7 @@ public class HashFrontier extends Frontier implements Serial {
    */
   @Override
   public ByteBuffer writeTo(ByteBuffer out) {
-    out.putLong(rowNumber());
+    out.putLong(rowNo());
     for (var rowHash : levelFrontier)
       out.put(rowHash.hash());
     return out;

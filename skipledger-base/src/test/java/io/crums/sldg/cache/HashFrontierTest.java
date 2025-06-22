@@ -87,20 +87,18 @@ public class HashFrontierTest extends SelfAwareTestCase {
     // reset the for the frontier round
     random.setSeed(seed);
     
-    var digest = SldgConstants.DIGEST.newDigest();
-    
     now = System.nanoTime();
     
     random.nextBytes(hash);
-    HashFrontier frontier = HashFrontier.firstRow(inputHash.clear(), digest);
+    HashFrontier frontier = HashFrontier.firstRow(inputHash.clear());
     for (int count = rows - 1; count-- > 0; ) {
       random.nextBytes(hash); // (indirectly modifies inputHash)
-      frontier = frontier.nextFrontier(inputHash.clear(), digest);
+      frontier = frontier.nextFrontier(inputHash.clear());
     }
     
     long frontLap = System.nanoTime() - now;
     
-    assertEquals(rows, frontier.rowNumber());
+    assertEquals(rows, frontier.rowNo());
     var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
     assertEquals(rows, hiRow.no());
@@ -160,7 +158,7 @@ public class HashFrontierTest extends SelfAwareTestCase {
       frontier = frontier.nextFrontier(inputHash.clear());
     }
 
-    assertEquals(rows, frontier.rowNumber());
+    assertEquals(rows, frontier.rowNo());
     var hiRow = frontier.frontierRow();
     assertEquals(expected.rowHash(rows), hiRow.hash());
     assertEquals(rows, hiRow.no());

@@ -72,7 +72,7 @@ public abstract class Frontier {
    * 
    * @see #levelCount(long)
    */
-  public static long levelRowNumber(long frontierRn, int level) {
+  public static long levelRowNo(long frontierRn, int level) {
     return (frontierRn >>> level) << level;
   }
   
@@ -82,7 +82,7 @@ public abstract class Frontier {
    * 
    * @return non-empty, descending (buy not necessarily monotonic) list of positive row numbers
    */
-  public abstract List<Long> levelRowNumbers();
+  public abstract List<Long> levelRowNos();
   
   
   /**
@@ -91,7 +91,7 @@ public abstract class Frontier {
    * @return the equivalent of {@code frontierRowNumbers().size()}
    */
   public int levelCount() {
-    return levelRowNumbers().size();
+    return levelRowNos().size();
   }
   
 
@@ -100,8 +100,8 @@ public abstract class Frontier {
    * 
    * @return the equivalent of {@code levelRowNumbers().get(0)}
    */
-  public long rowNumber() {
-    return levelRowNumbers().get(0);
+  public long rowNo() {
+    return levelRowNos().get(0);
   }
   
 
@@ -111,7 +111,7 @@ public abstract class Frontier {
    * @return the equivalent of {@code levelRowNumbers().get(levelCount() - 1)}
    */
   public long tail() {
-    return levelRowNumbers().get(levelCount() - 1);
+    return levelRowNos().get(levelCount() - 1);
   }
   
 
@@ -145,13 +145,13 @@ public abstract class Frontier {
     }
 
     @Override
-    public List<Long> levelRowNumbers() {
+    public List<Long> levelRowNos() {
       return new Lists.RandomAccessList<Long>() {
 
         @Override
         public Long get(int index) {
           Objects.checkIndex(index, levelCount());
-          return levelRowNumber(index);
+          return levelRowNo(index);
         }
 
         @Override
@@ -163,19 +163,19 @@ public abstract class Frontier {
     
     
     @Override
-    public final long rowNumber() {
+    public final long rowNo() {
       return frontierRn;
     }
     
     
     @Override
     public final long tail() {
-      return levelRowNumber(levelCount() - 1);
+      return levelRowNo(levelCount() - 1);
     }
     
     
-    private long levelRowNumber(int level) {
-      return levelRowNumber(frontierRn, level);
+    private long levelRowNo(int level) {
+      return levelRowNo(frontierRn, level);
     }
     
     
@@ -186,7 +186,7 @@ public abstract class Frontier {
     
     
     public String toString() {
-      return levelRowNumbers().toString();
+      return levelRowNos().toString();
     }
     
   }

@@ -21,6 +21,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import io.crums.io.buffer.BufferUtils;
+import io.crums.sldg.cache.HashFrontier;
 import io.crums.util.EasyList;
 import io.crums.util.Lists;
 import io.crums.util.Sets;
@@ -107,6 +108,10 @@ import io.crums.util.mrkl.Tree;
  * <ul>
  * <li>Remove {@code Digest} interface. It's not a good way to set the hashing algo
  * and besides.. the code doesn't really use it.</li>
+ * <li>Maintain an in-memory {@linkplain HashFrontier}: this will speed up adding rows (no
+ * reads, just one write).</li>
+ * <li>Maintain state paths in memory: it will speed up other path queries, as every path
+ * to the last committed row intersects the state path.</li>
  * </ul>
  */
 public abstract class SkipLedger implements Digest, AutoCloseable {
@@ -682,8 +687,32 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     // but for now, we exclude it in the implementation.)
     // So we set, somewhat arbitrarily, references to the
     // *nearest row no.s by the first row
+    
+    // THAT WAS A FUCKING BAD DECISION (!)
+    //
+    // shoulda used the link-pointer's merkle root from the getgo
+    //
+    // .. it'll forever wart the API and the API can't change much
+    // w/o breaking the exising timechain crumtrails. (I just created a lot of
+    // unnecessary work if the old crumtrails are to keep working.)
+    // On the bright side, it's an early lesson about migration :/
+    //
+    // Here's how I'd approach this migration..
+    //
+    // (1) Rename exsiting PathPack -> PathPack_0
+    // (2) In the new version of PathPack, the first row no.
+    //     collects no references in this method (see note below).
+    // (3) Upgraded timechains will use both PathPack and PathPack_0, and can
+    //     discern which to use based on the crumtrail's UTC and the time-block
+    //     the upgrade happened
+    // (4) Note the crum CLI does not use condensed paths, so this issue
+    //     does not affect it.
+    // 
+    // Finally, orchestrating this upgrade on a running timechain with no
+    // down-time is doable, but not worth the trouble. 
+    //
 
-    final Long loRn = fullSet.first();
+    final Long loRn = fullSet.first();  // (2)  just skip loRn in new version
     {
       if (alwaysAllLevels(loRn))
         collectRefs(loRn, refOnly, Set.of());

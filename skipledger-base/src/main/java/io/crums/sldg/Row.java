@@ -112,6 +112,25 @@ public abstract class Row extends RowHash {
   public final boolean hasAllLevels() {
     return !isCondensed();
   }
+  
+  
+//  /**
+//   * Determines whether this row has the enough data to be at
+//   * the head of a {@linkplain Path path}.
+//   * <p>
+//   * This is an implementation limitation that will be fixed in a future
+//   * release. The issue is actually with the {@linkplain PathPack} class,
+//   * and back-tracking from there, the issue boils down to <em>this class</em>
+//   * not properly modeling the {@linkplain LevelsPointer#hash() levels
+//   * pointer hash} using just a plain byte sequence. If it did, then
+//   * <em>any</em> condensed row could be at the head of a path.
+//   * </p>
+//   * 
+//   * @return    {@code levelsPointer().coversLevel(0)}
+//   */
+//  public final boolean isHeadable() {
+//    return levelsPointer().coversLevel(0);
+//  }
 
 
 
