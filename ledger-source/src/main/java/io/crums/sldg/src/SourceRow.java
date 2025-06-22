@@ -27,6 +27,39 @@ import io.crums.util.Lists;
  * every <em>get</em> on the list returns a new object).</p>
  */
 public abstract class SourceRow {
+  
+  
+  /**
+   * Returns a <em>null</em> row with no cells. The hash of a null-row
+   * is a sequence of zero-ed bytes.
+   * 
+   * @see #hash()
+   */
+  public static SourceRow nullRow(long rowNo) {
+    if (rowNo <= 0L)
+      throw new IllegalArgumentException("rowNo (" + rowNo + ") <= 0");
+    return new SourceRow() {
+      
+      @Override
+      public long no() {
+        return rowNo;
+      }
+      
+      @Override
+      public List<Cell> cells() {
+        return List.of();
+      }
+      
+      @Override
+      public List<DataType> cellTypes() {
+        return List.of();
+      }
+      
+      public ByteBuffer hash() {
+        return DIGEST.sentinelHash();
+      }
+    };
+  }
 
   
   /**

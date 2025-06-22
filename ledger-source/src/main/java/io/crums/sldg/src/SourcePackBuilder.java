@@ -9,7 +9,10 @@ import static io.crums.sldg.src.SourcePack.*;
 
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.TreeMap;
 
 import io.crums.io.Serial;
@@ -17,7 +20,7 @@ import io.crums.io.Serial;
 /**
  * 
  */
-public class SourcePackBuilder implements Serial {
+public class SourcePackBuilder implements SourceBag, Serial {
   
   private final static int HEADER_SIZE_EST = 32;
   
@@ -35,14 +38,74 @@ public class SourcePackBuilder implements Serial {
   }
   
   
+  /**
+   * Returns the salt scheme. Note this property is not defined in the
+   * {@linkplain SourceBag} interface: it's an artifact of the binary format of
+   * {@linkplain SourcePack}s.
+   */
   public SaltScheme saltScheme() {
     return saltScheme;
   }
   
   
+  //  - - - SourceBag interface methods - - -
   
   
+  @Override
+  public List<SourceRow> sources() {
+    return List.copyOf(rows.values());
+  }
   
+  
+  @Override
+  public List<Long> sourceNos() {
+    return List.copyOf(rows.keySet());
+  }
+
+
+  @Override
+  public SourceRow sourceByNo(long rowNo) throws NoSuchElementException {
+    var row = rows.get(rowNo);
+    if (row == null)
+      throw new NoSuchElementException("row [" + rowNo + "]");
+    return row;
+  }
+
+
+  @Override
+  public Optional<SourceRow> findSourceByNo(long rowNo) {
+    return Optional.ofNullable(rows.get(rowNo));
+  }
+
+
+  @Override
+  public boolean containsSource(long rowNo) {
+    return rows.containsKey(rowNo);
+  }
+
+
+  /**
+   * Adds the given source row if it doesn't already exist.
+   * Although this builder doesn't check the hash of the added row,
+   * the following checks are performed:
+   * <ol>
+   * <li>That the salting of the row's cells is consistent with the
+   * {@linkplain #saltScheme() salt scheme}.
+   * <li>That if a cell is redacted, then so is the row-salt.</li>
+   * <li>That a cell's data size is consistent with its declared type.</li>
+   * </ol>
+   * <p>
+   * Some of the above are <em>implementation</em>-checks.
+   * </p>
+   * 
+   * @param row the source row to be added to the collection
+   * 
+   * @return {@code false} iff there's already an existing source row at that
+   *         row no.
+   *         
+   * @throws IllegalArgumentException
+   *            if the given {@code row} violates any of the above constraints
+   */
   public boolean add(SourceRow row) {
     
     var cells = row.cells();
@@ -269,6 +332,16 @@ public class SourcePackBuilder implements Serial {
     } // for row
       
     return out;
+  }
+
+
+  public boolean isEmpty() {
+    return rows.isEmpty();
+  }
+  
+  
+  public int count() {
+    return rows.size();
   }
   
   

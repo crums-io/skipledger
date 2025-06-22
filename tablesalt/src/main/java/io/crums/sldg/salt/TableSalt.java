@@ -6,6 +6,7 @@ package io.crums.sldg.salt;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
+import java.util.Arrays;
 
 /**
  * A method to salt table cells with <em>unique</em> values per cell coordinate. In this model
@@ -182,8 +183,6 @@ public class TableSalt implements AutoCloseable {
   
   
   
-  
-  
   /**
    * Tests whether the instance is open.
    * 
@@ -202,8 +201,45 @@ public class TableSalt implements AutoCloseable {
     for (int index = seed.length; index-- > 0; )
       seed[index] = 0;
   }
+  
+  
+  
+  
+  @Override
+  public final boolean equals(Object o) {
+    return
+        o == this ||
+        o instanceof TableSalt salter && Arrays.equals(seed, salter.seed);
+  }
+  
+
+  @Override
+  public final int hashCode() {
+    return Arrays.hashCode(seed);
+  }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

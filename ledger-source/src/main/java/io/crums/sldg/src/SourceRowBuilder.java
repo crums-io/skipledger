@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 
 import io.crums.sldg.salt.TableSalt;
-import io.crums.sldg.src.SourcePack.SaltSchemeR;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
 import io.crums.util.SuppliedValue;
@@ -42,11 +41,20 @@ public class SourceRowBuilder {
   
   
   
+  /**
+   * No salt constructor.
+   */
   public SourceRowBuilder() {
-    this(SaltSchemeR.NO_SALT, null);
+    this(SaltScheme.NO_SALT, null);
   }
   
   
+  /**
+   * Full constructor.
+   * 
+   * @param saltScheme not {@code null}
+   * @param tableSalt not {@code null} if {@linkplain SaltScheme#hasSalt() saltScheme.hasSalt()}
+   */
   public SourceRowBuilder(SaltScheme saltScheme, TableSalt tableSalt) {
     this.saltScheme = saltScheme;
     this.shaker = tableSalt;
@@ -260,6 +268,10 @@ public class SourceRowBuilder {
     
     DataType[] cellTypes = new DataType[cc];
     
+    // keep track whether cell types are all the same
+    DataType lastType = null;
+    boolean monoType = true;
+    
     for (int index = 0; index < cc; ++index) {
       
       final boolean isSalted = saltScheme.isSalted(index);
@@ -273,10 +285,14 @@ public class SourceRowBuilder {
         cells[index] = isSalted ?
             new Cell.RowSaltedNull(rowSalt.get(), index) :
               Cell.UNSALTED_NULL;
+        monoType = false;
         continue;
       }
       
       cellTypes[index] = type;
+      if (monoType && index != 0)
+        monoType = lastType == type;
+      lastType = type;
       
       ByteBuffer rawValue = toRawValue(value, type, index);
       assert rawValue != null;
@@ -291,6 +307,11 @@ public class SourceRowBuilder {
             new Cell.UnsaltedReveal(rawValue);
       
     }
+    
+    
+    DataType[] cTypes = monoType && cc > 1 ?
+        new DataType[] { cellTypes[0] } :
+          cellTypes;
     
     var rowSaltOpt = rowSalt.peek().map(ByteBuffer::asReadOnlyBuffer);
     
@@ -308,7 +329,10 @@ public class SourceRowBuilder {
       
       @Override
       public List<DataType> cellTypes() {
-        return Lists.asReadOnlyList(types);
+        return
+            cTypes.length == cells.length ?
+                Lists.asReadOnlyList(types) :
+                  Lists.repeatedList(cTypes[0], cells.length);
       }
       
       @Override
@@ -322,7 +346,7 @@ public class SourceRowBuilder {
   
   private ByteBuffer toRawValue(Object value, DataType type, int index) {
     return switch (type) {
-    case STRING       -> Strings.utf8Buffer((String) value);
+    case STRING       -> Strings.utf8Buffer(value.toString());
     case LONG         -> ByteBuffer.allocate(8).putLong(
                             ((Number) value).longValue()).flip();
     case DATE         -> ByteBuffer.allocate(8).putLong(

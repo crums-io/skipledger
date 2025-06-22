@@ -13,7 +13,7 @@ import java.util.Optional;
 import io.crums.util.Lists;
 
 /**
- * A bag or {@linkplain SourceRow}s.
+ * A bag of {@linkplain SourceRow}s.
  */
 public interface SourceBag {
 
@@ -32,6 +32,11 @@ public interface SourceBag {
   }
   
   
+  /**
+   * Retruns the source row with the given no.
+   * 
+   * @see #findSourceByNo(long)
+   */
   default SourceRow sourceByNo(long rowNo) throws NoSuchElementException {
     int index = binarySearch(sourceNos(), rowNo);
     if (index < 0)
@@ -40,12 +45,19 @@ public interface SourceBag {
   }
   
   
+  /**
+   * Searches and returns the source row with the given number, if any.
+   */
   default Optional<SourceRow> findSourceByNo(long rowNo) {
     int index = binarySearch(sourceNos(), rowNo);
     return index < 0 ? Optional.empty() : Optional.of(sources().get(index));
   }
   
   
+  /**
+   * Returns {@code true} if this bag contains the source row
+   * with the given no.
+   */
   default boolean containsSource(long rowNo) {
     return binarySearch(sourceNos(), rowNo) >= 0;
   }

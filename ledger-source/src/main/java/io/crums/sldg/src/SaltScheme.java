@@ -3,10 +3,37 @@
  */
 package io.crums.sldg.src;
 
+import java.util.Arrays;
 
 /**
  * Cell salting scheme. For the most part, this just documents how the
- * scheme works.
+ * scheme works. It's primary purpose in code is to obviate the need to
+ * preface a row-cell va(lue with a flag (or something similar) indicating
+ * whether it is salted or not.
+ * <p>
+ * In the original salting scheme, ledger cells were either all salted, or
+ * none were. Under the new scheme, certain column numbers (cell indices)
+ * may be either uniformly salted or uniformly <em>unsalted</em>. So this is
+ * slightly more flexible. One could conceive a salting scheme where the
+ * scheme's rules are contingent on what data is in the row, but for now
+ * no such thing is implemented.
+ * </p>
+ * 
+ * <h2>Design Issue</h2>
+ * <p>
+ * The choice of salt scheme is decided by the ledger owner. A receipt from
+ * the ledger, received by a user (recipient), belies the scheme chosen
+ * -- at least for the specific column no.s (cell indices) in the source
+ * row divulged. But why should a user care about such details? Since
+ * {@linkplain SourcePackBuilder} already verifies that every source row
+ * added indeed conforms to the salt scheme, why not discover the salt
+ * scheme (as source rows are added)? That class already "discovers" other
+ * attributes in the data set (e.g. the maximum byte-size of row cells).. we
+ * can add the salting scheme to the discover process as well.
+ * </p><p>
+ * Why is this an issue? Because peeps are supposed to be able to manipulate
+ * morsels without access to the ledger.
+ * </p>
  */
 public interface SaltScheme {
   
@@ -64,6 +91,13 @@ public interface SaltScheme {
     while (index-- > 0 && indices[index] != cell);
     boolean found = index != -1;
     return isPositive() == found;
+  }
+  
+  /** Instances are equivalent if they have the same indices and sign. */
+  default boolean equals(SaltScheme other) {
+    return
+        isPositive() == other.isPositive() &&
+        Arrays.equals(cellIndices(), other.cellIndices());
   }
 
 }
