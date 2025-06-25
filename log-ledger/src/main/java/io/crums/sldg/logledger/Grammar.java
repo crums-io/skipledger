@@ -38,20 +38,14 @@ public class Grammar {
       throw new IllegalArgumentException("empty prefix");
     final byte[] p = Strings.utf8Bytes(prefix);
     if (p.length == 1) {
-      final byte pb = p[0];
-      return new Predicate<ByteBuffer>() {
-        @Override
-        public boolean test(ByteBuffer t) {
-          int pos = t.position();
-          return pos < t.limit() && t.get(pos) == pb;
-        }
-      };
+      final byte c = p[0];
+      return (b) -> b.hasRemaining() && b.get(b.position()) == c;
     }
     
     return new Predicate<ByteBuffer>() {
       @Override
       public boolean test(ByteBuffer t) {
-        int pos = t.position();
+        final int pos = t.position();
         int index = p.length;
         if (index > t.limit() - pos)
           return false;
@@ -76,7 +70,7 @@ public class Grammar {
   
   
   
-  /** Default whitespace-delimited, empty lines included. */
+  /** Default whitespace-delimited, empty lines skipped. */
   public final static Grammar DEFAULT = new Grammar();
   
   
@@ -90,10 +84,10 @@ public class Grammar {
   
   /**
    * Constructs a whitespace-token-delimiting instance with no
-   * comment-matcher. Blank lines are not skipped.
+   * comment-matcher. Blank lines are skipped.
    */
   public Grammar() {
-    this(null, null, false);
+    this(null, null, true);
   }
   
   
@@ -183,7 +177,12 @@ public class Grammar {
   
   
   
-  
+  /**
+   * Parses the given {@code line} into tokens and returns them.
+   * 
+   * @param line        not empty (contains {@code '\n'})
+   * @return            may be empty
+   */
   public List<String> parseTokens(String line) {
     if (line.isEmpty())
       return List.of();
@@ -202,7 +201,11 @@ public class Grammar {
   
   
   
-  
+  /**
+   * Returns {@code this} or another instance with the set property.
+   * 
+   * @see #skipBlankLines()
+   */
   public Grammar skipBlankLines(boolean skipBlank) {
     return this.skipBlankLines == skipBlank ?
         this :
@@ -210,8 +213,24 @@ public class Grammar {
   }
   
   
+  /**
+   * Returns {@code true} if blank lines are skipped during parsing.
+   * 
+   * @see #skipBlankLines(boolean)
+   */
   public boolean skipBlankLines() {
     return skipBlankLines;
+  }
+  
+  
+  
+  /**
+   * Returns {@code true} if some lines may be skipped.
+   * 
+   * @return {@code commentMatcher().isPresent() || skipBlankLines()}
+   */
+  public final boolean skipsLines() {
+    return commentMatcher != null || skipBlankLines();
   }
   
   

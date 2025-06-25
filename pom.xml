@@ -25,6 +25,7 @@
     <maven.compiler.plugin>3.8.1</maven.compiler.plugin>
     <flatten.version>1.2.2</flatten.version>
     <crums.util>1.0.5-SNAPSHOT</crums.util>
+    <crums.timechain>0.2.0-SNAPSHOT</crums.timechain>
     <native.maven.plugin.version>0.9.13</native.maven.plugin.version>
     
   </properties>
@@ -118,9 +119,11 @@
     <module>report-template</module>
     <module>logledge</module>
     <module>jurno</module>
+    <module>morsel</module>
     -->
     <module>tablesalt</module>
     <module>ledger-source</module>
+    <module>log-ledger</module>
   </modules>
   
 
@@ -262,7 +265,7 @@
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>unit-io</artifactId>
-      <version>1.0.0</version>
+      <version>1.0.1</version>
       <scope>test</scope>
     </dependency>
 

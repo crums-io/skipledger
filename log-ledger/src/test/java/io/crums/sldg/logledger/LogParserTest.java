@@ -46,7 +46,7 @@ public class LogParserTest extends IoTestCase {
   public void testVanilla() throws Exception {
     Object label = new Object() { };
     
-    var parser = newParser(label, HD, Grammar.DEFAULT);
+    var parser = newParser(label, HD, Grammar.DEFAULT.skipBlankLines(false));
     parser.parse();
     
     assertEquals(HD_LINE_COUNT, parser.rowNo());
@@ -58,7 +58,7 @@ public class LogParserTest extends IoTestCase {
   public void testVanillaSkipEmptyLines() throws Exception {
     Object label = new Object() { };
     
-    var grammar = Grammar.DEFAULT.skipBlankLines(true);
+    var grammar = Grammar.DEFAULT;
     
     var parser = newParser(label, HD, grammar);
     parser.parse();
