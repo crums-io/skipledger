@@ -24,6 +24,13 @@ public interface SourceBag {
    */
   List<? extends SourceRow> sources();
   
+  
+  /**
+   * Returns the salt scheme {@linkplain SourceRow}s used to
+   * compute each source-row's hash.
+   */
+  SaltScheme saltScheme();
+  
   /**
    * Returns the ordered list of row numbers.
    */

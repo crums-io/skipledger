@@ -99,11 +99,11 @@ public class LogLedger {
   
   
   /**
-   * Initializes (writes) and returns a salted instance in the same directory
-   * as the {@code logFile}.
+   * Initializes (writes) and returns a salted instance in the {@code .lgl}
+   * sibling directory of the given {@code logFile}.
    * 
    * @param logFile     not touched; log's simple filename governs other files
-   * @return {@code initSalt(logFile, logFile.getParentFile(), grammar)}
+   * @return {@code initSalt(logFile, Files.defaultLglDir(logFile), grammar)}
    * @see #initSalt(File, File, Grammar)
    */
   public static LogLedger initSalt(File logFile, Grammar grammar) {

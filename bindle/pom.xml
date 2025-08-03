@@ -1,0 +1,60 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <parent>
+	  <groupId>io.crums</groupId>
+	  <artifactId>ledgers</artifactId>
+	  <version>${revision}</version>
+  </parent>
+  
+  
+  <artifactId>bindle</artifactId>
+  
+  
+  <name>${project.groupId}:${project.artifactId}</name>
+  <description>
+    A file format for packaging related ledger entries and their proofs
+    under the skip ledger commitment scheme.
+  </description>
+
+  
+
+  <dependencies>
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>skipledger-base</artifactId>
+      <version>${revision}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>timechain</artifactId>
+      <version>${crums.timechain}</version>
+    </dependency>
+    
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>ledger-source</artifactId>
+      <version>${revision}</version>
+    </dependency>
+    
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>log-ledger</artifactId>
+      <version>${revision}</version>
+      <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>io-util</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+    
+  </dependencies>
+
+
+</project>

@@ -249,13 +249,21 @@ public class LogParser extends LineParser {
   }
 
 
+  private boolean last;
+  
+  private boolean assertEol(ByteBuffer line) {
+    if (last)
+      return false;
+    last = line.get(line.limit() - 1) != '\n';
+    return true;
+  }
   
   @Override
   protected void observeLine(long lineOffset, long lineNo, ByteBuffer line) {
     
     final int pos = line.position();
     final int limit = line.limit();
-    assert line.get(limit - 1) == '\n';
+    assert assertEol(line);
     
     
     final boolean ledgered;

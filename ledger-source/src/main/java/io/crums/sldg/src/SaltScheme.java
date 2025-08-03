@@ -100,6 +100,11 @@ public interface SaltScheme {
         Arrays.equals(cellIndices(), other.cellIndices());
   }
 
+  /** Returns {@code true} iff some cell-indexes are salted, others not. */
+  default boolean isMixed() {
+    return cellIndices().length > 0;
+  }
+
 }
 
 

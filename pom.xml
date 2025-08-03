@@ -119,11 +119,11 @@
     <module>report-template</module>
     <module>logledge</module>
     <module>jurno</module>
-    <module>morsel</module>
     -->
     <module>tablesalt</module>
     <module>ledger-source</module>
     <module>log-ledger</module>
+    <module>bindle</module>
   </modules>
   
 

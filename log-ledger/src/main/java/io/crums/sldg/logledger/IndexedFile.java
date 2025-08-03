@@ -173,7 +173,7 @@ public class IndexedFile implements Channel {
       endOff = logSize;
     } else
       throw new IndexOutOfBoundsException(
-          "rowNo % > max indexed row (%d)".formatted(rowNo, maxRowNo));
+          "rowNo %d > max indexed row (%d)".formatted(rowNo, maxRowNo));
     
     long length = endOff - startOff;
     sanityCheckOffsets(rowNo, startOff, length);

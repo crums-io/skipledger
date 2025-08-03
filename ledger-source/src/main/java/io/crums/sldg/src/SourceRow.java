@@ -11,7 +11,9 @@ import java.security.MessageDigest;
 import java.util.List;
 import java.util.Optional;
 
+import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
+import io.crums.util.Strings;
 
 /**
  * A ledger row (at its source).
@@ -81,6 +83,18 @@ public abstract class SourceRow {
    * @return of same size as that of {@code cells()}
    */
   public abstract List<DataType> cellTypes();
+  
+  
+  /**
+   * Returns {@code true} if one or more cells are
+   * {@linkplain Cell#isRedacted() redacted}; {@code false}, otherwise.
+   */
+  public boolean hasRedactions() {
+    var cells = cells();
+    int i = cells.size();
+    for (; i-- > 0 && cells.get(i).hasData(); );
+    return i != -1;
+  }
   
   
   
@@ -153,6 +167,41 @@ public abstract class SourceRow {
     return ByteBuffer.wrap(accumulator.digest()).asReadOnlyBuffer();
   }
   
+  
+  
+  public String toString() {
+    var s = new StringBuilder().append('[').append(no()).append("]:<");
+    var cells = cells();
+    var types = cellTypes();
+    for (int i = 0; i < cells.size(); ++i) {
+      Cell cell = cells.get(i);
+      if (cell.isRedacted())
+        s.append('X');
+      else {
+        var data = cell.data();
+        switch (types.get(i)) {
+        case STRING:
+          s.append('\'').append(Strings.utf8String(data)).append('\''); break;
+        case DATE:
+          s.append("UTC");
+        case LONG:
+          s.append(data.getLong()); break;
+        case BOOL:
+          s.append(data.get() == 0 ? "false" : "true"); break;
+        case HASH:
+          s.append('H').append(IntegralStrings.toHex(data.slice().limit(3)));
+          break;
+        case BYTES:
+          s.append("B(").append(data.remaining()).append(')'); break;
+        case NULL:
+          s.append("null");
+        }
+      }
+      s.append(',');
+    }
+    s.setLength(s.length() - 1);
+    return s.append('>').toString();
+  }
   
   
   /**

@@ -98,6 +98,7 @@ public class SourcePack implements SourceBag, Serial {
   }
   
   static class CellFlag {
+    private CellFlag() {  }     // nobody calls
     
     static boolean redacted(int code) {
       return code == 0;
@@ -556,6 +557,11 @@ public class SourcePack implements SourceBag, Serial {
     this.packBuffer = packBuffer;
     this.rowOffsets = rowOffsets;
     this.config = config;
+  }
+  
+  @Override
+  public SaltScheme saltScheme() {
+    return config.saltScheme();
   }
 
   @Override

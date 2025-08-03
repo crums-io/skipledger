@@ -363,11 +363,16 @@ public class Path {
    * intersect, zero is returned. The given path must be from the same ledger.
    * <p>
    * The relationship is <em>symmetric</em>: i.e. <br/>
-   * {@code this.highestCommonNo(other) == other.highestCommonNo(this)}
+   * {@code this.highestCommonNo(other) == other.highestCommonNo(this)} <br/>
+   * always evaluates to {@code true}.
    * </p>
    * 
    * @throws HashConflictException
    *         if the row hashes conflict at this highest common row no.
+   * 
+   * @see #forkedNo(Path)
+   * @see #highestCommonOrForkNo(Path)
+   * @see #highestCommonFullNo(Path)
    */
   public final long highestCommonNo(Path other) throws HashConflictException {
     return highestCommonImpl(other, Path::nosCovered);
@@ -387,48 +392,401 @@ public class Path {
    * 
    * @throws HashConflictException
    *         if the row hashes conflict at this highest common full row no.
+   *         
+   * @see #forkedNo(Path)
    */
   public final long highestCommonFullNo(Path other) throws HashConflictException {
     return highestCommonImpl(other, Path::nos);
   }
 
 
-  /** Returns the highest row no. in the intersection of the no.s generated. */
+  /**
+   * Returns the highest row no. in the intersection of the no.s generated.
+   * 
+   * @param rowNoFunc either {@code Path::nos} or {@code Path::nosCovered}
+   */
   private long highestCommonImpl(
     Path other, Function<Path, Collection<Long>> rowNoFunc) {
-
-    final long hiNo;
-
-    // FIXME
-    // there are way faster (but more complicated) ways to compute hiNo
-    // (since the collection is always sorted). Punting for now..
+    
+    long hiNo;
     {
-      var nosA = rowNoFunc.apply(this);
-      var nosB = rowNoFunc.apply(other);
-
-      // pick the smallest collection, first
-      if (nosA.size() > nosB.size()) {
-        var temp = nosA;
-        nosA = nosB;
-        nosB = temp;
-      }
-
-      Set<Long> intersect = HashSet.newHashSet(nosA.size());
-      intersect.addAll(nosA);
-      intersect.retainAll(nosB);
-      hiNo = intersect.stream().max(Long::compare).orElse(0L);
+      long hi = hi();
+      if (hi > other.hi())
+        return other.highestCommonImpl(this, rowNoFunc);
+      
+      if (other.hasRowCovered(hi))
+        hiNo = hi;
+      else 
+        hiNo =
+            commonNos(other, rowNoFunc).stream().max(Long::compare).orElse(0L);
     }
-
-    if (hiNo != 0L && !getRowHash(hiNo).equals(other.getRowHash(hiNo)))
-      throw new HashConflictException("at [" + hiNo + "]");
+    
+    if (hiNo > 0L && !other.getRowHash(hiNo).equals(getRowHash(hiNo)))
+      throw new HashConflictException("at row [" + hiNo + "]");
 
     return hiNo;
   }
+  
+  
+  
+  private Set<Long> commonNos(
+      Path other, Function<Path, Collection<Long>> rowNoFunc) {
+    
+    var nosA = rowNoFunc.apply(this);
+    var nosB = rowNoFunc.apply(other);
+
+    // pick the smallest collection, first
+    if (nosA.size() > nosB.size()) {
+      var temp = nosA;
+      nosA = nosB;
+      nosB = temp;
+    }
+
+    Set<Long> intersect = HashSet.newHashSet(nosA.size());
+    intersect.addAll(nosA);
+    intersect.retainAll(nosB);
+    return intersect;
+  }
+  
+  
+  
+  
+  /**
+   * Compares this path with the {@code other} and returns the <em>first</em>
+   * (lowest) row number whose hashes differ (conflict), if any. This propery is
+   * <em>symmetric</em>. I.e. for any 2 instances {@code a} and {@code b} the
+   * expression <br/>
+   * {@code a.forkNo(b).equals(b.forkNo(a))} <br/>
+   * evaluates to {@code true}.
+   * 
+   * @param other a path, possibly from another ledger
+   * 
+   * @return the first row no. the 2 paths conflict; empty, if both paths are
+   *         in agreement (whether because they don't intersect, or because
+   *         the row-hashes at the highest common covered no. are equal)
+   *         
+   * @see #highestCommonOrForkNo(Path)
+   */
+  public final Optional<Long> forkedNo(Path other) {
+    long cof = highestCommonOrForkNo(other);
+    return cof < 0L ? Optional.of(-cof) : Optional.empty();
+  }
 
 
+  /**
+   * Compares this path with the {@code other} and returns the <em>highest</em>
+   * intersecting row number iff the row-hashes are equal at that no.;
+   * otherwise the <em>lowest</em> intersecting row number at which the
+   * row-hashes disagree (not equal) is <em>returned in the negative</em>.
+   * <p>
+   * This property is <em>symmetric</em>.
+   * </p>
+   * 
+   * @see #forkedNo(Path)
+   * @see #highestCommonNo(Path)
+   */
+  public final long highestCommonOrForkNo(Path other) {
+    final long hi = hi();
+    if (hi > other.hi())
+      return other.highestCommonOrForkNo(this);
+    
+    // assert hi <= other.hi();
+    
+    if (other.hasRowCovered(hi) &&
+        last().hash().equals(other.getRowHash(hi)))
+      return hi;
+    
+    
+    
+    var coveredNos = commonNos(other, Path::nosCovered);
+    
+    long hiNo = coveredNos.stream().max(Long::compare).orElse(0L);
+    if (hiNo == 0L || other.getRowHash(hiNo).equals(getRowHash(hiNo)))
+      return hiNo;
+    
+    Long[] nos = coveredNos.toArray(new Long[coveredNos.size()]);
+    Arrays.sort(nos);
+    
+    int index = nos.length - 1;
+    while (
+        index-- > 0 &&
+        !other.getRowHash(nos[index]).equals(getRowHash(nos[index])));
+    
+    return -nos[index + 1];
+  }
+  
+  
+  
+  /**
+   * Returns a comparison of this and the {@code other} path. This method
+   * <em>does not throw {@code HashConflictException}</em>s. It's purpose
+   * is to measure to what degree 2 ledgers (as represented by {@code Path}s)
+   * are related, if at all.
+   * <p>
+   * This operation is <em>symmetric</em>. That is, {@code a.comp(b)} equals
+   * {@code b.comp(a)}.
+   * </p>
+   * 
+   * @param other a path from this or another ledger
+   * 
+   * @see Comp
+   */
+  public final Comp comp(Path other) {
+    
+    final long hi = hi();
+    
+    if (other == this)
+      return Comp.ofOk(hi);
+    
+    if (hi > other.hi())
+      return other.comp(this);
+    
+    // assert other.hi() >= hi;
+
+    long commonNo = 0L;
+    long conflictNo = 0L;
+    
+    // optimistically check if this path's last row hash
+    // against that recorded in other; if they agree, we're
+    // done
+    if (other.hasRowCovered(hi)) {
+      if (last().hash().equals(other.getRowHash(hi)))
+        return Comp.ofOk(hi);
+      conflictNo = hi;
+    }
+    
+    // collect the common covered row no.s in both paths into a set
+    Set<Long> coveredNos = commonNos(other, Path::nosCovered);
+    if (coveredNos.isEmpty())
+      return Comp.of();
+    
+    // optimistically check the row-hash of the highest common no
+    // (the optimism, is in avoiding sorting the set)
+    if (conflictNo == 0L) {
+      long hiNo = coveredNos.stream().max(Long::compare).get();
+      if (hiNo == 0L)
+        return Comp.of();
+      
+      if (other.getRowHash(hiNo).equals(getRowHash(hiNo)))
+        return Comp.ofOk(hiNo);
+      
+      conflictNo = hiNo;
+    }    
+    
+    assert conflictNo != 0L;
+    
+    // sort the covered no.s
+    Long[] nos = coveredNos.toArray(new Long[coveredNos.size()]);
+    Arrays.sort(nos);
+    
+    // iterate over the row no.s in reverse; skip the last index
+    // since we've already checked it..
+    // the first row no. at which the row-hashes match breaks the loop
+    //
+    for (int index = nos.length -1; index-- > 0; ) {
+      long rowNo = nos[index];
+      if (rowNo == 0L)
+        break;
+      if (other.getRowHash(rowNo).equals(getRowHash(rowNo))) {
+        commonNo = rowNo;
+        break;
+      }
+      
+      assert conflictNo > rowNo;
+      conflictNo = rowNo;
+    }
+    
+    
+    return new Comp(commonNo, conflictNo);
+  }
+
+  
+
+  /**
+   * A measure of difference and similarity between 2 paths, composed of 2
+   * non-negative numbers {@code commonNo}, and {@code conflictNo}.
+   * 
+   * @see Path#comp(Path)
+   * @see #commonNo()
+   * @see #conflictNo()
+   * @see #ok()
+   * @see #conflict()
+   * @see #forked()
+   * @see #forkNo()
+   * @see #isEmpty()
+   */
+  public record Comp(long commonNo, long conflictNo) implements Comparable<Comp> {
+    
+    public final static Comp EMPTY = new Comp(0L, 0L);
+    
+    
+    /**
+     * Returns an "OK" instance.
+     * 
+     * @param commonNo   the <em>highest</em> row no. the 2 paths' row-hashes
+     *                   match (&ge; 0)
+     */
+    public static Comp ofOk(long commonNo) {
+      return new Comp(commonNo, 0L);
+    }
+    
+    
+    /**
+     * Returns a "Conflict" instance. The 2 ledgers' row-hashes conflict
+     * at the given no.
+     * 
+     * @param conflictNo the <em>lowest</em> row no. the 2 paths' row-hashes
+     *                   conflict; zero, if they don't conflict.
+     */
+    public static Comp ofConflict(long conflictNo) {
+      return new Comp(0L, conflictNo);
+    }
+    
+    
+    /**
+     * Returns the {@linkplain Comp#EMPTY} instance, indicating 2 paths that
+     * do not intersect.
+     */
+    public static Comp of() {
+      return EMPTY;
+    }
+    
+    /**
+     * Full Constructor.
+     * 
+     * @param commonNo   the <em>highest</em> row no. the 2 paths' row-hashes
+     *                   match (&ge; 0)
+     * @param conflictNo the <em>lowest</em> row no. the 2 paths' row-hashes
+     *                   conflict; zero, if they don't conflict. If not zero,
+     *                   then {@code conflictNo > commonNo}.
+     * 
+     * @throws IllegalArgumentException
+     *         if either argument is negative, or if {@code conflictNo} is
+     *         non-zero <em>and</em> {@code commonNo >= conflictNo}
+     */
+    public Comp {
+      if (commonNo < 0L)
+        throw new IllegalArgumentException("commonNo " + commonNo);
+      if (conflictNo < 0L)
+        throw new IllegalArgumentException("conflictNo " + conflictNo);
+      if (conflictNo != 0L && commonNo >= conflictNo)
+        throw new IllegalArgumentException(
+            "commonNo (%d) must be less than (non-zero) conflictNo (%d)"
+            .formatted(commonNo, conflictNo));
+    }
+    
+    
+    /**
+     * The <em>highest</em> row no. the 2 paths' row-hashes are equal.
+     * 
+     * @return &ge; 0
+     */
+    public long commonNo() {
+      return commonNo;
+    }
+    
+    
+    /**
+     * The <em>lowest</em> row number the 2 paths' row-hashes conflict; zero, if
+     * they don't conflict. If not zero, then {@code > commonNo()}.
+     * 
+     * @return &ge; 0
+     */
+    public long conflictNo() {
+      return conflictNo;
+    }
+    
+    
+    /** Returns the greater of {@linkplain #conflictNo()} and {@linkplain #commonNo()} */
+    public long hiNo() {
+      return Math.max(conflictNo, commonNo);
+    }
+    
+    
+    /**
+     * Returns {@code true} if the 2 paths' row-hashes <em>do not conflict</em>
+     * at any row no. Note, empty instances (see {@linkplain #isEmpty()}) are
+     * thus OK.
+     * 
+     * @return {@code conflictNo() == 0L}
+     * 
+     * @see #conflict()
+     */
+    public boolean ok() {
+      return conflictNo == 0L;
+    }
+
+    
+    /**
+     * Returns {@code true} if the 2 paths' row-hashes conflict at some
+     * row no.
+     * 
+     * @return {@code conflictNo() != 0L}
+     * @see #ok()
+     */
+    public boolean conflict() {
+      return conflictNo != 0L;
+    }
+    
+    /**
+     * Returns {@code true} if the 2 paths are forked from a common
+     * ancestor.
+     * 
+     * @return {@code commonNo() != 0L && conflictNo() != 0L}
+     */
+    public boolean forked() {
+      return conflictNo != 0L && commonNo != 0L;
+    }
+    
+    
+    /**
+     * Returns the row number the 2 paths are forked at, if known.
+     * This returns {@linkplain #conflictNo()} iff
+     * {@code conflictNo() - commonNo() == 1L}. That is, not all
+     * {@linkplain #forked()} instances return a fork no.
+     */
+    public Optional<Long> forkNo() {
+      return
+          conflictNo - commonNo == 1L ?
+              Optional.of(conflictNo) :
+                Optional.empty();
+        
+    }
+    
+    /**
+     * Returns {@code true}, iff the 2 paths do not intersect.
+     * 
+     * @return {@code commonNo() == 0L && conflictNo() == 0L}
+     * @see Comp#of()
+     */
+    public boolean isEmpty() {
+      return commonNo == 0L && conflictNo == 0L;
+    }
+    
+    
 
 
-
+    /**
+     * Instances are ordered in <em>descending</em> {@linkplain #conflictNo()}
+     * (excepting zero, which is treated as first, not last); instances are
+     * secondly ordered in <em>ascending</em> {@linkplain #commonNo()}.
+     * 
+     * @return
+     */
+    @Override
+    public int compareTo(Comp o) {
+      
+      int comp = Long.compare(o.compConflictNo(), compConflictNo());
+      return comp == 0 ? Long.compare(commonNo, o.commonNo) : comp;
+    }
+    
+    
+    private long compConflictNo() {
+      return conflictNo == 0L ? Long.MAX_VALUE : conflictNo;
+    }
+    
+    
+  }
 
 
   
@@ -752,17 +1110,21 @@ public class Path {
   
   @Override
   public String toString() {
-    var rns = rowNumbers();
+    var rns = SkipLedger.stitchCompress( rowNumbers());
     final int size = rns.size();
+    StringBuilder s = new StringBuilder(18 + size * 8);
+    s.append("Path[stitch:<");
     if (size > 12) {
-      var str = "Path" + rns.subList(0, 6);
-      str = str.substring(0, str.length() - 1) +
-          ", .. (" + (size - 12) + " more), " +
-          rns.subList(size - 6, size).toString().substring(1);
-
-      return str;
+      s.append(rns.subList(0, 6).toString().substring(1));
+      s.setLength(s.length() - 1);
+      s.append(", ..(").append(size - 12).append(" more), ");
+      s.append(rns.subList(size - 6, size).toString().substring(1));
+      s.setLength(s.length() - 1);
+    } else {
+      s.append(rns.toString().substring(1));
+      s.setLength(s.length() - 1);
     }
-    return "Path" + rowNumbers();
+    return s.append(">]").toString();
   }
   
   
