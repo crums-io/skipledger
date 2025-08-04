@@ -13,8 +13,8 @@
   
   <name>${project.groupId}:${project.artifactId}</name>
   <description>
-    A file format for packaging related ledger entries and their proofs
-    under the skip ledger commitment scheme.
+    A data structure and a byte format for packaging ledger entries and their
+    skipledger proofs in a unified way.
   </description>
 
   
@@ -40,18 +40,19 @@
       <version>${revision}</version>
     </dependency>
     
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>io-util</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+    
+    <!-- TEST SCOPE.. -->
     
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>log-ledger</artifactId>
       <version>${revision}</version>
       <scope>test</scope>
-    </dependency>
-    
-    <dependency>
-      <groupId>io.crums</groupId>
-      <artifactId>io-util</artifactId>
-      <version>${crums.util}</version>
     </dependency>
     
   </dependencies>

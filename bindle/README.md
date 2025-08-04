@@ -1,74 +1,66 @@
-Morsel
+Bindle
 ======
 
-A byte format for packaging ledger entries and their proofs in a unified way.
+A data structure and a byte format for packaging ledger entries and their
+skipledger proofs in a unified way.
 
-### Background
+### Overview
 
-The first version packaged entries from a single ledger. Ledger hashes were
-annotated with witness receipts from crums.io's centralized timechain microservice.
-With the re-write of the timechain using skipleder itself (and open sourcing it),
-encoding a single timestamped ledger now requires packaging *two* ledgers (the
-ledger itself, and a timechain).
+A *bindle* is a bundle of evidence about one or more ledgers. Per ledger,
+evidence is packaged in a data structure called a *nugget*. Each ledger
+nugget contains a set of "mutually agreeing" skipledger commitment paths
+called a *multi-path". Depending on the type of ledger, a nugget may also
+reveal the contents of specific ledger rows.
 
-### Design Goals
+A nugget *may* also cross-reference other nuggets in the same bindle. There are 2
+general categories of such cross-nugget references:
 
-This is designed to package proofs of related entries from *multiple* ledgers.
-The simplest use case for *related* ledger entries involves witness records
-of ledger hash state committed to timechains (which are themselves ledgers).
+1. *Notarized Rows.* A notarized row is a (hash) reference to a *timechain* nugget,
+establishing that the input-hash at a specific row no. in the timechain ledger
+(the so-called *time block*) is derived from a row-hash in this nugget's ledger.
 
-Another goal is to allow the *source data* to live outside the file. Depending on
-ledger "type", not packaging the source may be more appropriate. For example,
-if the "ledger" is a recorded stream, packaging it inside a morsel may be impractical.
+2. *Foregin References*. A foreign reference is a (hash) reference establishing
+that a cell value in one of this nugget's rows is either equal to a cell value in
+another nugget's row, or if a "beacon" reference, equal to the *row-hash* of
+another nugget's row.
+
+
+### Ledger IDs
+
+
 
 ### Format
 
-Here's a preliminary sketch. The model will be made flexible: new sections can be added,
-existing sections partitioned (e.g. the asset sections below), but for now, the focus
+Here's a preliminary sketch. The focus here
 is on enumerating the *kind* of parts we need.
 
 
 
     HEADER        // fixed size (magic + version)
-    LEDGER_NAMES  // not-empty list of ledger names/aliases (unique per morsel)
+    IDS           // list of LEDGER_IDs, always parsed
     
-    MORSEL_NOTES	// Optional. UTF-8, maybe JSON. Important thing is it's text.
-    MORSEL_ASSETS	// Optional. If present, then MORSEL_NOTES is present (a mime type might suffice).
+    PARTITION     // partition: each part is a nugget; associated w/ LEDGER_ID
+                  // provides random access to nuggets
     
-    LEDGERS
-     
-    // per ledger   
-    TYPE            // TABLE, TIMECHAIN, LOG, BSTREAM
-    ALIAS           // 
-    LEDGER_URI      // Optional. This may be a URL (e.g. a timechain).
-    LEDGER_NOTES    // Optional. UTF-8, maybe JSON. Important thing is it's text.
-    LEDGER_ASSETS   // Optional. If present, then LEDGER_NOTES is present.
+    // per part (nugget)
     
-    // for TIMECHAIN ledgers
-    POLICY          // Required. Goes in LEDGER_NOTES
+    NUGGET := ID_NO MULTI_PATH SOURCE_PACK NOTARY_PACK REF_PACK ASSETS
     
-    // for TABLE, LOG, BSTREAM
-    SALTED          // Flag indicates source ledger is salted
-      NOT-SALTED    // cell (column) indices not salted
+    ASSETS        // a named-partition, with certain prefixes in the namespace
+                  // reserved for other library modules
     
-    // for LOG (both log files and journals)
-    ROW_DELIMITER   // defaults to new-line character '\n'
-    COMMENT_PREFIX  // defaults to none. (For journals, only)
-    SKIP_EMPTY_ROW  // defaults to true
-    TOKENIZER       // defaults to whitespace tokenizer; allows no-tokenizer
+
     
 
 
 ### Dependencies (Software)
 
-Since evidence from many types of ledger is to be packaged in morsels, this module
-will necessarily integrate and depend on a good many other modules. Other submodule
-components, therefore, should not know about morsels.
+Since evidence from many types of ledger is to be packaged in bindles, this module
+will likely be integrated with other ledger-type-specific modules. The challenge is to
+minimize this module's dependencies.
 
-But this presents a challenge. For example, *logledge*, which commits logs to morsels
-(does it?) would not be able to use this library without a lot of SQL dependencies
-(which it doesn't need). The *hope* is a common subset of this module can be factored
-out.
+Presently, the strategy to decouple the bindle module's dependencies from other modules that
+use bindle is thru the use of a *named partition* `ASSETS` section in the nugget.
 
 
 

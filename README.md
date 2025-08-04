@@ -1,21 +1,29 @@
 skipledger
 ========
 
-Tools for maintaining tamper proof evolving historical private ledgers and for disclosing any of their parts in an efficient, provable way.
+A commitment scheme and protocol for append-only ledgers, with succinct proofs
+of row entries that survive later additions (commits) to ledger state.
+
+Tools and formats for maintaining tamper proof ledgers, for distributing succinct proofs
+about their contents (of one or more perhaps related ledgers), for collecting such
+proofs in an archive, for redistributing proofs from the archive in redacted form.
+
 
 ## Notes & Changes
 
-I am redesigning the Crums timechain to use the skip ledger data model. Since a good part
-of this code already uses the legacy timechain model, the code has been refactored so that
-the base library does not know about timechains. Once the new timechain is deployed, the
+The Crums timechain was redesigned to use the skipledger data model in the `0.6` release
+(see this [overview](https://crums-io.github.io/timechain/overview.html) which
+also introduces the skipledger scheme). 
+of the tools in the previous prototype knew about (used) the legacy timechain model, 
+much remains to be re-written / refactored. Once the new timechain is deployed, the
 submodules will be retrofitted (refactored). For more info on the new timechain, see this
 [overview](https://crums-io.github.io/timechain/overview.html).
 
 ### Row Hash
 
-The algorithm for calculating a row's hash from hash pointers to previous row no.s has
-changed. A row's hash is still computed using the same information (it's *input* hash,
-and the hash pointers at that row no. to rows at lower no.s); now, however, if a row
+The algorithm for calculating a row's hash from hash pointers to previous row no.s
+changed in release `0.6`. A row's hash is still computed using the same information (it's *input* hash,
+and the hash pointers at that row no. to rows at lower no.s); since release `0.6`, however, if a row
 references 2 or more rows, the hash pointers to all are first merklized,
 and then their Merkle root hash, in combination with the row's input hash, determines
 the row's final hash.
@@ -34,11 +42,22 @@ be of order *log*(*log n*) x *log*(*n*).
 ### Building from Source
 
 Except for the base module `skipledger-base` all other modules know of (and therefore depend on)
-the legacy timechain. A great deal, thus, remains to be refactored. It's a well organized
-transition, but still, a bit messy. I document (and test) how to build crums libary SNAPSHOTS
-(including this project) [here](https://github.com/crums-io/timechain#building-from-source).
+the [timechain](https://github.com/crums-io/timechain) module. Most of the time, this project
+is buildable without having to build `timechain`: maven pulls the dependency from Maven Central.
 
-## Contents
+### Bindles
+
+Previous versions (`0.5` and earlier) featured a data structure and binary file format called 
+a "morsel" which was an archive of succinct proofs from the same ledger. Version `0.7` does away
+with the morsel moniker entirely and introduces a more flexible abstraction.
+
+A *bindle* is a data structure and file format for a bundle of ledger entries along with succinct
+proofs from *multiple*, perhaps related, ledgers. I.e. it's a portable archive of proofs.
+
+
+## TOC (Legacy Version 0.5)
+
+*This is a legacy description of the library. Note, the new bindle abstraction borrows many elements from morsel, described here.*
 
 - [Overview](#overview)
     - [sldg](#sldg)

@@ -32,7 +32,7 @@ import java.util.Arrays;
  * can add the salting scheme to the discover process as well.
  * </p><p>
  * Why is this an issue? Because peeps are supposed to be able to manipulate
- * morsels without access to the ledger.
+ * bindles without access to the ledger.
  * </p>
  */
 public interface SaltScheme {

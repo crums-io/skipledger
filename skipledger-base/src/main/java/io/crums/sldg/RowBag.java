@@ -89,8 +89,7 @@ public interface RowBag {
   
 
   /**
-   * The lowest (full) row number in the bag, or 0 if empty. In the context of morsels,
-   * (i.e. non-empty instances) this is set to 1L.
+   * The lowest (full) row number in the bag, or 0 if empty.
    * 
    * @return &ge; 0
    */
