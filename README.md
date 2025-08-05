@@ -13,11 +13,14 @@ proofs in an archive, for redistributing proofs from the archive in redacted for
 
 The Crums timechain was redesigned to use the skipledger data model in the `0.6` release
 (see this [overview](https://crums-io.github.io/timechain/overview.html) which
-also introduces the skipledger scheme). 
-of the tools in the previous prototype knew about (used) the legacy timechain model, 
-much remains to be re-written / refactored. Once the new timechain is deployed, the
-submodules will be retrofitted (refactored). For more info on the new timechain, see this
-[overview](https://crums-io.github.io/timechain/overview.html).
+also introduces the skipledger scheme). For this reason, ledger entry proofs are
+now packaged in a <em>multi</em>-ledger proof-archive called a *bindle* (described
+below): timechains are now represented like any other ledger and a witnessed (notarized) ledger
+record is now distributed as a bindle recording the state of at least *two* ledgers: one for
+the ledger itself, the other for timechain the ledger's state was notarized on.
+
+This change, in turn, makes a bindle flexible for modeling ledgers with *related* data.
+
 
 ### Row Hash
 
@@ -52,7 +55,15 @@ a "morsel" which was an archive of succinct proofs from the same ledger. Version
 with the morsel moniker entirely and introduces a more flexible abstraction.
 
 A *bindle* is a data structure and file format for a bundle of ledger entries along with succinct
-proofs from *multiple*, perhaps related, ledgers. I.e. it's a portable archive of proofs.
+proofs from *multiple*, perhaps related, ledgers. I.e. it's a portable archive of proofs. See the
+[bindle](./bindle) submodule.
+
+## Deep Dive
+
+This README will be updated before version `0.7`. In the meantime, for a deep dive
+(in pseudo-code) about the algorithm, why I developed it, and what I hope to do with it, see
+this [draft paper](https://crums-io.github.io/skipledger/paper.pdf). Note that document is already dated
+(product name changes etc.).
 
 
 ## TOC (Legacy Version 0.5)
