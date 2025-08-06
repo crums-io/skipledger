@@ -139,7 +139,7 @@ public class NotarizedRow implements Serial {
 
   @Override
   public int serialSize() {
-    return 12 + (crum == null ? cargoProof.serialSize() : crum.serialSize());
+    return 8 + (crum == null ? cargoProof.serialSize() : 4 + crum.serialSize());
   }
 
 

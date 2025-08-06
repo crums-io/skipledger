@@ -27,6 +27,7 @@ import io.crums.sldg.bindle.tc.NotarizedRow;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.logledger.Grammar;
 import io.crums.sldg.logledger.LogLedger;
+import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SourceRow;
 import io.crums.tc.CargoProof;
 import io.crums.tc.Constants;
@@ -201,6 +202,9 @@ public class NuggetBuilderDumptyTest extends IoTestCase {
       var expectedSource = expected.sourcePack().get();
       var actualSource = actual.sourcePack().get();
       assertEquals(expectedSource.sources(), actualSource.sources());
+      assertEquals(
+          SaltScheme.wrap(expectedSource.saltScheme()),
+          SaltScheme.wrap(actualSource.saltScheme()));
     }
 
     assertEquals(expected.notaryPacks().size(), actual.notaryPacks().size());

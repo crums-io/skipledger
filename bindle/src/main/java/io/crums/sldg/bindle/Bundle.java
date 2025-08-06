@@ -170,7 +170,7 @@ public interface Bundle extends Bindle, Serial {
   @Override
   default void writeTo(WritableByteChannel out) throws IOException {
     var ids = ids();
-    ChannelUtils.writeRemaining( out,  serializeIds(ids) );
+    writeIdsTo(ids, out);
     Partitioning.writeSerialPartition(
         out, Lists.map(ids, id -> Nug.asNug(getNugget(id))));
   }

@@ -36,7 +36,7 @@ import io.crums.util.Lists;
  * @see #addReference(LedgerId, LedgerId, Reference)
  * @see #addNotarizedRow(LedgerId, LedgerId, NotarizedRow)
  */
-public class BindleBuilder implements Bindle {
+public class BindleBuilder implements Bundle {
 
   private final TreeMap<Integer, NuggetBuilder> nuggets = new TreeMap<>();
   
