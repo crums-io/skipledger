@@ -4,6 +4,7 @@
 package io.crums.sldg.src;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Cell salting scheme. For the most part, this just documents how the
@@ -37,6 +38,71 @@ import java.util.Arrays;
  */
 public interface SaltScheme {
   
+  /**
+   * Returns an immutable instance.
+   * 
+   * @param cellIndices  copied. See {@linkplain #cellIndices()}
+   * @param positive     see {@linkplain #isPositive()}
+   */
+  public static SaltScheme of(int[] cellIndices, boolean positive) {
+    return new WrappedScheme(cellIndices, positive);
+  }
+  
+  /** Wraps and returns the given scheme, ensuring its wellformed. */
+  public static SaltScheme wrap(SaltScheme s) {
+    return s instanceof WrappedScheme ? s : new WrappedScheme(s);
+  }
+  
+  /**
+   * Implementation / safe-wrapper class.
+   */
+  final static class WrappedScheme implements SaltScheme {
+    final int[] cellIndices;
+    final boolean positive;
+    
+    WrappedScheme(int[] cellIndices, boolean positive) {
+      this.cellIndices = cellIndices.clone();
+      this.positive = positive;
+      if (cellIndices.length == 0)
+        return;
+      
+      Arrays.sort(this.cellIndices);
+      if (this.cellIndices[0] < 0)
+        throw new IllegalArgumentException(
+            "cellIndices[0] (sorted) < 0 (%d)".formatted(this.cellIndices[0]));
+      
+      for (int index = 1; index < cellIndices.length; ++index )
+        if (this.cellIndices[index] == this.cellIndices[index -1])
+          throw new IllegalArgumentException(
+              "duplicate values (%d) in cellIndices[%d:%d] (sorted)"
+              .formatted(this.cellIndices[index], index -1, index));
+    }
+    
+    WrappedScheme(SaltScheme base) {
+      this(base.cellIndices(), base.isPositive());
+    }
+    
+    @Override
+    public boolean equals(Object o) {
+      return o == this || o instanceof WrappedScheme w && equals(w);
+    }
+    
+    @Override
+    public int hashCode() {
+      int code = Arrays.hashCode(cellIndices());
+      return isPositive() ? code : ~code;
+    }
+
+    @Override
+    public int[] cellIndices() {
+      return cellIndices.clone();
+    }
+
+    @Override
+    public boolean isPositive() {
+      return positive;
+    }
+  }
   
   
   public final static SaltScheme SALT_ALL = new EmptyScheme() {
@@ -92,6 +158,7 @@ public interface SaltScheme {
     boolean found = index != -1;
     return isPositive() == found;
   }
+  
   
   /** Instances are equivalent if they have the same indices and sign. */
   default boolean equals(SaltScheme other) {
