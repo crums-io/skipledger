@@ -8,12 +8,14 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
 import io.crums.io.SerialFormatException;
+import io.crums.io.buffer.NamedParts;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Row;
 import io.crums.sldg.bindle.tc.NotarizedRow;
@@ -80,6 +82,7 @@ public class ObjectNug implements Nug {
   private final SourcePack sources;
   private final List<NotaryPack> notaries;
   private final List<ForeignRefs> refs;
+  private final NamedParts assets;
   
   
   /**
@@ -95,7 +98,8 @@ public class ObjectNug implements Nug {
   public ObjectNug(
       LedgerId id,
       MultiPath paths, SourcePack sources,
-      List<NotaryPack> notaries, List<ForeignRefs> refs)
+      List<NotaryPack> notaries, List<ForeignRefs> refs,
+      NamedParts assets)
   
           throws IllegalArgumentException, HashConflictException {
     
@@ -104,6 +108,7 @@ public class ObjectNug implements Nug {
     this.sources = sources;
     this.notaries = List.copyOf(notaries);
     this.refs = List.copyOf(refs);
+    this.assets = assets == null ? NamedParts.EMPTY : assets;
     verify();
   }
   
@@ -120,7 +125,8 @@ public class ObjectNug implements Nug {
         copy.paths(),
         copy.sourcePack().orElse(null),
         copy.notaryPacks(),
-        copy.refPacks());
+        copy.refPacks(),
+        NamedParts.createInstance(copy.assets()));
   }
   
   
@@ -133,6 +139,7 @@ public class ObjectNug implements Nug {
     this.sources = copy.sources;
     this.notaries = copy.notaries;
     this.refs = copy.refs;
+    this.assets = copy.assets;
   }
   
   
@@ -259,6 +266,7 @@ public class ObjectNug implements Nug {
     this.sources = builder.sourcePack().orElse(null);
     this.notaries = builder.notaryPacks();
     this.refs = builder.refPacks();
+    this.assets = NamedParts.createInstance(builder.assets());
   }
   
   
@@ -286,6 +294,12 @@ public class ObjectNug implements Nug {
   @Override
   public final List<ForeignRefs> refPacks() {
     return refs;
+  }
+  
+  
+  @Override
+  public Map<String, ByteBuffer> assets() {
+    return assets.asMap();
   }
 
   

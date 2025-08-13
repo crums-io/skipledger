@@ -10,7 +10,7 @@ import io.crums.sldg.SldgConstants;
  */
 public class LglConstants {
   
-  public final static String LOG_NAME = "logledger";
+  public final static String LOG_NAME = "io.crums.log-ledger";
   
   
   public final static int SEED_SIZE = SldgConstants.HASH_WIDTH;

@@ -36,7 +36,7 @@
     
     <dependency>
       <groupId>io.crums</groupId>
-      <artifactId>ledger-source</artifactId>
+      <artifactId>source-ledger</artifactId>
       <version>${revision}</version>
     </dependency>
     

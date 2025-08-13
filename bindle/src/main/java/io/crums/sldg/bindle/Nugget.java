@@ -3,7 +3,9 @@
  */
 package io.crums.sldg.bindle;
 
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -51,6 +53,10 @@ public interface Nugget {
       @Override
       public LedgerId id() {
         return nugget.id();
+      }
+      @Override
+      public Map<String, ByteBuffer> assets() {
+        return nugget.assets();
       }
     };
   }
@@ -117,5 +123,16 @@ public interface Nugget {
   default List<LedgerId> refIds() {
     return Lists.map(refPacks(), ForeignRefs::foreignId);
   }
+  
+  
+  /**
+   * Returns the ledger's assets, if any. The returned map's values,
+   * the {@code ByteBuffer}s, should be treated as <em>value</em> objects:
+   * each invocation of {@linkplain Map#get(Object)} returns a new read-only
+   * view of the same underlying value.
+   * 
+   * @return the def
+   */
+  Map<String, ByteBuffer> assets();
 
 }

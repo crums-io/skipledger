@@ -6,12 +6,12 @@
     <version>${revision}</version>
   </parent>
   
-  <artifactId>ledger-source</artifactId>
+  <artifactId>source-ledger</artifactId>
   <name>${project.groupId}:${project.artifactId}</name>
   <description>
     Models how the hash of a ledger-row is computed from its values. This per-row
     hash calculation is performed in isolation of other ledger state. In skip ledger
-    terms, this is the input-hash of the ledger row.
+    terms, this is the input-hash of the row in skipledger chain.
   </description>
   
   <dependencies>

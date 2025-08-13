@@ -5,6 +5,7 @@ package io.crums.sldg.bindle;
 
 
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.List;
@@ -443,6 +444,44 @@ public class BindleBuilder implements Bundle {
     }
     
     return nugget(fromId).addForeignRef(toId, ref, expectedValue);
+  }
+  
+  /**
+   * Sets the given named asset in the {@linkplain Nugget} with the specified
+   * ID.
+   * 
+   * @param id          one of {@linkplain #ids()}
+   * @param name        the asset's name
+   * @param bytes       raw bytes (copied); if with no remaining bytes, then
+   *                    the asset is <em>removed</em>
+   *                    
+   * @return {@code true} iff anything was changed
+   */
+  public boolean setAsset(LedgerId id, String name, ByteBuffer bytes) {
+    return setAsset(id, name, bytes, true);
+  }
+  
+  /**
+   * Sets the given named asset in the {@linkplain Nugget} with the specified
+   * ID.
+   * 
+   * @param id          one of {@linkplain #ids()}
+   * @param name        the asset's name
+   * @param bytes       raw bytes (copied); if with no remaining bytes, then
+   *                    the asset is <em>removed</em>
+   * @param copy        if {@code true}, then the {@code bytes} argument is
+   *                    copied; otherwise, {@code bytes} is sliced
+   *                    
+   * @return {@code true} iff anything was changed
+   */
+  public boolean setAsset(
+      LedgerId id, String name, ByteBuffer bytes, boolean copy) {
+    
+    var nugget = nugget(id);
+    if (bytes.hasRemaining() && copy)
+      bytes = ByteBuffer.allocate(bytes.remaining()).put(bytes.slice()).flip();
+    var prev = nugget.setAsset(name, bytes);
+    return !bytes.equals(prev);
   }
 
 

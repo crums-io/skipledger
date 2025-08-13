@@ -16,7 +16,7 @@ import io.crums.util.Strings;
 
 /**
  * Builds {@linkplain SourceRow}s from individual ledgered lines.
- * The set-up (grammar used to parse a line to token, the secret seet for
+ * The set-up (grammar used to parse a line to token, the secret seed for
  * salting those tokens) and procedures to generate {@code SourceRow}s
  * from logs are centralized here.
  * 

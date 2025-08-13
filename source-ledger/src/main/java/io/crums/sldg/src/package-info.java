@@ -2,14 +2,19 @@
  * Copyright 2021-2025 Babak Farhang
  */
 /**
- * Models the representation of source rows in a ledger on the
- * <em>client</em> side. We need this modeling in order to compute
- * a ledger row's hash. In skip ledger terminology, this is all about
- * how each row's <em>input-hash</em> is calculated.
+ * Models the representation of source-rows in a ledger. This serves
+ * 2 purposes:
+ * <ol>
+ * <li>A uniform way to compute the hash of an ordered sequences of
+ * values (cells / columns) in any ledger's rows. This serves as the
+ * skipledger <em>input</em>-hash.</li>
+ * <li>A compact representation of source-row values for 3rd party distribution
+ * with redactable parts: a 3rd party can redact individual cell values for
+ * downstream distribution without mutating the source-row's (verifiable) hash.
+ * </li>
+ * </ol>
  * <p>
- * The main task here concerns packaging this source information compactly,
- * but also, in a way that insulates most of the code from different
- * layout tradeoffs.
+ * T
  * </p>
  * <h2>About the hash of the HASH data type</h2>
  * <p>
@@ -20,5 +25,6 @@
  * from HASH values. Another upside, is that it introduces a data type
  * with this curious hashing property.
  * </p>
+ * <h2>TODO</h2>
  */
 package io.crums.sldg.src;

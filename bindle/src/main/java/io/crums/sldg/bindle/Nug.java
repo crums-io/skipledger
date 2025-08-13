@@ -6,10 +6,12 @@ package io.crums.sldg.bindle;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import io.crums.io.Serial;
+import io.crums.io.buffer.NamedParts;
 import io.crums.io.buffer.Partitioning;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.src.SourcePack;
@@ -53,6 +55,10 @@ public interface Nug extends Nugget, Serial {
           public List<ForeignRefs> refPacks() {
             return nugget.refPacks();
           }
+          @Override
+          public Map<String, ByteBuffer> assets() {
+            return nugget.assets();
+          }
         };
   }
   
@@ -73,6 +79,7 @@ public interface Nug extends Nugget, Serial {
     }
     Partitioning.writePartition(out, notaryPacks());
     Partitioning.writePartition(out, refPacks());
+    NamedParts.writeNamedParts(assets(), out);
     return out;
   }
   
@@ -87,7 +94,7 @@ public interface Nug extends Nugget, Serial {
     
     tally += Partitioning.serialSize(Lists.map(notaryPacks(), NotaryPack::serialSize));
     tally += Partitioning.serialSize(Lists.map(refPacks(), ForeignRefs::serialSize));
-    
+    tally += NamedParts.serialSize(assets());
     return tally;
   }
 

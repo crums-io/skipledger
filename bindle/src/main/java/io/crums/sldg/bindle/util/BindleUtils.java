@@ -4,6 +4,7 @@
 package io.crums.sldg.bindle.util;
 
 
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -236,6 +237,11 @@ public class BindleUtils {
     @Override
     public List<ForeignRefs> refPacks() {
       return List.of();
+    }
+    
+    @Override
+    public Map<String, ByteBuffer> assets() {
+      return Map.of();
     }
     
   }

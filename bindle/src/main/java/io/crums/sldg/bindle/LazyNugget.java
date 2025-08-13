@@ -10,12 +10,14 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
 import io.crums.io.SerialFormatException;
 import io.crums.io.buffer.BufferUtils;
+import io.crums.io.buffer.NamedParts;
 import io.crums.io.buffer.Partitioning;
 import io.crums.io.channels.ChannelUtils;
 import io.crums.sldg.bindle.tc.NotaryPack;
@@ -42,26 +44,18 @@ public class LazyNugget implements Nug {
   private final ByteBuffer sourceBuffer;
   private final Partitioning notaryBuffers;
   private final Partitioning refBuffers;
+  private final NamedParts assets;
   
   private boolean useCachingList = true;
   
-  /**
-   * Full constructor.
-   * 
-   * @param id                  not {@code null}
-   * @param idLookup            not {@code null}
-   * @param pathBuffers         not empty
-   * @param sourceBuffer        optional: may be {@code null}
-   * @param notaryBuffers       not {@code null}, but may be empty
-   * @param refBuffers          not {@code null}, but may be empty
-   */
   private LazyNugget(
       LedgerId id,
       Function<Integer, LedgerId> idLookup,
       MultiPath paths,
       ByteBuffer sourceBuffer,
       Partitioning notaryBuffers,
-      Partitioning refBuffers) {
+      Partitioning refBuffers,
+      NamedParts assets) {
     
     this.id = id;
     this.idLookup = Objects.requireNonNull(idLookup, "idLookup");
@@ -70,8 +64,8 @@ public class LazyNugget implements Nug {
         sourceBuffer == null || !sourceBuffer.hasRemaining() ?
             BufferUtils.NULL_BUFFER : sourceBuffer.slice();
     this.notaryBuffers = Objects.requireNonNull(notaryBuffers, "notaryBuffers");
-    this.refBuffers = refBuffers;
-
+    this.refBuffers = Objects.requireNonNull(refBuffers, "refBuffers");;
+    this.assets = Objects.requireNonNull(assets, "assets");
     
     
     if (id.info().type().commitsOnly() && this.sourceBuffer.hasRemaining())
@@ -91,6 +85,7 @@ public class LazyNugget implements Nug {
     this.sourceBuffer = copy.sourceBuffer;
     this.notaryBuffers = copy.notaryBuffers;
     this.refBuffers = copy.refBuffers;
+    this.assets = copy.assets;
   }
   
   
@@ -157,7 +152,10 @@ public class LazyNugget implements Nug {
   }
   
   
-  
+  @Override
+  public Map<String, ByteBuffer> assets() {
+    return assets.asMap();
+  }
   
   
   
@@ -174,6 +172,7 @@ public class LazyNugget implements Nug {
         paths.serialSize() +
         notaryBuffers.serialSize() +
         refBuffers.serialSize() +
+        assets.serialSize() +
         sourceBuffer.remaining();
   }
 
@@ -187,7 +186,7 @@ public class LazyNugget implements Nug {
       out.put(sourceBuffer.duplicate());
     notaryBuffers.writeTo(out);
     refBuffers.writeTo(out);
-    
+    assets.writeTo(out);
     return out;
   }
   
@@ -205,6 +204,7 @@ public class LazyNugget implements Nug {
       ChannelUtils.writeRemaining(out, sourceBuffer.duplicate());
     notaryBuffers.writeTo(out);
     refBuffers.writeTo(out);
+    assets.writeTo(out);
   }
 
 
@@ -246,10 +246,11 @@ public class LazyNugget implements Nug {
       
     Partitioning notaryBuffers = Partitioning.load(in);
     Partitioning refBuffers = Partitioning.load(in);
+    NamedParts assets = NamedParts.load(in);
     
     try {
       return new LazyNugget(
-          id, idLookup, paths, sourceBuffer, notaryBuffers, refBuffers);
+          id, idLookup, paths, sourceBuffer, notaryBuffers, refBuffers, assets);
     
     } catch (Exception x) {
       throw new SerialFormatException(

@@ -3,7 +3,9 @@
  */
 package io.crums.sldg.bindle.util;
 
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -72,6 +74,11 @@ public class IdMappedNugget implements Nugget {
   @Override
   public List<ForeignRefs> refPacks() {
     return Lists.map(base.refPacks(), fr -> fr.editForeignId(idMapper));
+  }
+  
+  @Override
+  public Map<String, ByteBuffer> assets() {
+    return base.assets();
   }
 
 }

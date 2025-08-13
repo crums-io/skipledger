@@ -4,7 +4,6 @@
 package io.crums.sldg.src;
 
 import java.util.Arrays;
-import java.util.Objects;
 
 /**
  * Cell salting scheme. For the most part, this just documents how the
@@ -45,12 +44,17 @@ public interface SaltScheme {
    * @param positive     see {@linkplain #isPositive()}
    */
   public static SaltScheme of(int[] cellIndices, boolean positive) {
+    if (cellIndices.length == 0)
+      return positive ? SaltScheme.NO_SALT : SaltScheme.SALT_ALL;
     return new WrappedScheme(cellIndices, positive);
   }
   
   /** Wraps and returns the given scheme, ensuring its wellformed. */
   public static SaltScheme wrap(SaltScheme s) {
-    return s instanceof WrappedScheme ? s : new WrappedScheme(s);
+    return
+        s == NO_SALT || s == SALT_ALL || s instanceof WrappedScheme ?
+            s :
+              new WrappedScheme(s);
   }
   
   /**

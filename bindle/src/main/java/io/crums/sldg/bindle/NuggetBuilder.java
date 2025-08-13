@@ -7,8 +7,10 @@ package io.crums.sldg.bindle;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Path;
@@ -21,6 +23,7 @@ import io.crums.sldg.src.SourcePack;
 import io.crums.sldg.src.SourcePackBuilder;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.Lists;
+import io.crums.util.Maps;
 
 /**
  * Nugget builder.
@@ -31,6 +34,7 @@ public final class NuggetBuilder implements Nugget {
 
   private final List<NotaryPack.Builder> notaries = new ArrayList<>();
   private final List<ForeignRefs.Builder> refs = new ArrayList<>();
+  private final Map<String, ByteBuffer> assets = new TreeMap<>();
 
   private final LedgerId id;
   private final MultiPathBuilder paths;
@@ -49,7 +53,7 @@ public final class NuggetBuilder implements Nugget {
   
   
   
-
+  /** Returns the state of the instance as a validated nugget. */
   public ObjectNug build() {
     return new ObjectNug(this);
   }
@@ -84,6 +88,13 @@ public final class NuggetBuilder implements Nugget {
   public List<ForeignRefs> refPacks() {
     return refs.stream().map(ForeignRefs.Builder::build).toList();
   }
+  
+  
+  @Override
+  public Map<String, ByteBuffer> assets() {
+    return Maps.mapValues(assets, ByteBuffer::asReadOnlyBuffer);
+  }
+  
   
   /**
    * Adds the given <em>intersecting</em> path and returns the highest row number
@@ -386,6 +397,15 @@ public final class NuggetBuilder implements Nugget {
     
     return builder.add(ref);
     
+  }
+  
+  
+  public ByteBuffer setAsset(String name, ByteBuffer bytes) {
+    
+    return
+        bytes.hasRemaining() ?
+            assets.put(name, bytes.slice()) :
+              assets.remove(name);
   }
 
 
