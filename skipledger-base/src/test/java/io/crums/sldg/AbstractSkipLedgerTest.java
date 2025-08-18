@@ -8,7 +8,6 @@ import static io.crums.sldg.SldgConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
@@ -67,21 +66,6 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
       
       assertEquals(SkipLedger.skipCount(1L), row.prevLevels());
       assertEquals(SENTINEL_HASH, row.prevHash(0));
-      
-      // ByteBuffer expectedData = ByteBuffer.allocate(2* HASH_WIDTH);
-      // expectedData.put(mockHash).put(SENTINEL_HASH.duplicate()).flip();
-      // assertEquals(expectedData, row.data());
-      
-      // ByteBuffer expectedHash;
-      // {
-      //   MessageDigest digest = DIGEST.newDigest();
-      //   // this taxes the lazy-loading implementation
-      //   digest.update(row.data());
-      //   expectedHash = ByteBuffer.wrap(digest.digest());
-      // }
-      // assertEquals(expectedHash, row.hash());
-
-
     }
   }
   
@@ -244,27 +228,6 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
 
     var expectedHash = SkipLedger.rowHash(rowNumber, entryHash, prevHashes);
     assertEquals(expectedHash, row.hash());
-    
-    // ByteBuffer expectedData = ByteBuffer.allocate((1 + skipPtrCount) * HASH_WIDTH);
-    // expectedData.put(entryHash.duplicate());
-    
-    // for (int p = 0; p < skipPtrCount; ++p) {
-    //   long referencedRowNum = rowNumber - (1 << p);
-    //   ByteBuffer hashPtr = row.prevHash(p);
-    //   ByteBuffer referencedRowHash = ledger.rowHash(referencedRowNum);
-    //   assertEquals(referencedRowHash, hashPtr);
-    //   expectedData.put(referencedRowHash);
-    // }
-    
-    // assertFalse(expectedData.hasRemaining());
-    // expectedData.flip();
-    
-    
-    // MessageDigest digest = DIGEST.newDigest();
-    // digest.update(expectedData);
-    
-    // ByteBuffer expectedRowHash = ByteBuffer.wrap(digest.digest());
-    // assertEquals(expectedRowHash, row.hash());
   }
   
   
@@ -274,7 +237,8 @@ public abstract class AbstractSkipLedgerTest extends IoTestCase {
   
   protected SkipLedger newLedger(Object methodLabel) throws Exception {
     SkipTable table = newTable(methodLabel);
-    return new CompactSkipLedger(table);
+    boolean fast = table instanceof VolatileTable;
+    return new CompactSkipLedger(table, null, fast);
   }
   
   

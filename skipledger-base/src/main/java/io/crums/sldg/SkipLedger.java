@@ -86,12 +86,8 @@ import io.crums.util.mrkl.Tree;
  * path (e.g. proof that an entry belonged in the ledger at the advertised row number) can be
  * patched with the new state information.
  * </p><p>
- * The issue where this state information comes from, how it is validated, etc., is a can
- * deliberately kicked down the road. It could be simply advertised over HTTPS with the existing
- * certificate authority mechanisms. Or the owner of the ledger might insert their public key
- * as the first row, and then periodically add a public entry (the contents of a row they make
- * public) that is a signature of the previous row's hash. The choices are too many to consider at
- * this juncture and probably best left to evolve.
+ * The issue where this commitment hash state information comes from, how it is advertised
+ * (e.g. on website?), validated, etc., is not dealt with in the base library.
  * </p>
  * <h2>Row Numbering</h2>
  * <p>
@@ -104,6 +100,17 @@ import io.crums.util.mrkl.Tree;
  * zero-bytes (as wide as the hash algo requires), the contents of which.. well who knows. (And
  * for our purposes, it wouldn't matter if it were discovered by chance (practically impossible), by say some Bitcoin miner).
  * </p>
+ * <h2>Committing (Adding/Appending) New Rows</h2>
+ * <p>
+ * The base API provides two methods for committing new rows.
+ * </p>
+ * <ol>
+ * <li>{@linkplain #commitRows(long, ByteBuffer) commitRows}. This is the <em>preferred</em>
+ * way to commit new rows, as it takes the starting row no and is <em>idempotent</em>.
+ *  </li>
+ * <li>{@linkplain #appendRows(ByteBuffer) appendRows}. This nasty convenience method
+ * is inherently <em>neither idempotent nor thread-safe</em>: {@code deprecated}.</li>
+ * </ol>
  * <h2>TODO</h2>
  * <ul>
  * <li>Remove {@code Digest} interface. It's not a good way to set the hashing algo
@@ -1158,16 +1165,86 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * Appends one or more hash entries to the end of the ledger.
    * 
    * 
-   * @param entryHashes the input hash of the next {@linkplain Row row}
+   * @param inputHashes the input hashes being committed
    * 
-   * @return the new size of the ledger, or equivalently, the row number of the last
-   * entry just added
-   * 
-   * @see #hashWidth()
+   * @return {@code commitRows(size() + 1L, inputHashes)}
+   * @deprecated This method is error-prone. Use {@linkplain #commitRows(long, ByteBuffer)}, instead.
    */
-  public abstract long appendRows(ByteBuffer entryHashes);
+  public long appendRows(ByteBuffer inputHashes) {
+    return commitRows(size() + 1L, inputHashes);
+  }
+  
+  /**
+   * Writes the given rows starting at the given row no.
+   * 
+   * @param startRn     starting row no.
+   * @param inputHashes the no. of rows to commit is inferred from bytes
+   *                    remaining (multiple of 32)
+   */
+  protected abstract void writeRowsImpl(long startRn, ByteBuffer inputHashes);
   
   
+  /**
+   * Commits the given row <em>input-hash</em>es starting from the specified
+   * row no. This operation is designed to be both idempotent and thread-safe
+   * (so long as all callers are committing the same values).
+   * 
+   * @param startRn     the starting row no.
+   * @param inputHashes the no. of rows to commit is inferred from bytes
+   *                    remaining (multiple of 32)
+   * @return the new size of the ledger (as seen by this thread of execution)
+   * 
+   * @throws HashConflictException
+   *         if {@code inputHashes} conflicts at an already written row
+   */
+  public long commitRows(long startRn, ByteBuffer inputHashes)
+      throws HashConflictException {
+    final long size = size();
+    final int count = hashCount(inputHashes);
+    if (count == 0)
+      throw new IllegalArgumentException("empty inputHashes");
+    if (startRn == size + 1L) { 
+      writeRowsImpl(startRn, inputHashes);
+      return startRn;
+    } else if (startRn > size)
+      throw new IllegalArgumentException(
+          "startRn (%d) leaves gap after row [%d] (current size)"
+          .formatted(startRn, size));
+    
+    checkRealRowNumber(startRn);
+    
+    long rn = startRn;
+    for (; rn <= size; ++rn) {
+      ByteBuffer inputHash = BufferUtils.slice(inputHashes, HASH_WIDTH);
+      if (!getRow(rn).inputHash().equals(inputHash))
+        throw new HashConflictException(
+            "input hash for already-committed row [%d] conflicts with argument"
+            .formatted(rn));
+    }
+    boolean adding = inputHashes.hasRemaining();
+    if (adding)
+      writeRowsImpl(rn, inputHashes);
+    
+    return adding ? startRn + count - 1L : size;
+  }
+  
+  
+  /**
+   * Returns the number of hashes in the given buffer's remaining bytes.
+   * 
+   * @throws IllegalArgumentException
+   *         if {@code inputHashes.remaining() % 32 != 0}
+   */
+  protected final int hashCount(ByteBuffer inputHashes)
+      throws IllegalArgumentException {
+    int remaining = inputHashes.remaining();
+    int count = remaining / HASH_WIDTH;
+    if (count * HASH_WIDTH != remaining)
+      throw new IllegalArgumentException(
+          "inputHashes remaining bytes (%d) not a mutliple of 32: %s"
+          .formatted(remaining, inputHashes));
+    return count;
+  }
   
   
   

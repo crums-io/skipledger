@@ -30,7 +30,7 @@ public interface SkipTable extends AutoCloseable {
    * 
    * @return the new {@linkplain #size()} of the base table
    */
-  long addRows(ByteBuffer rows, long index);
+  long writeRows(ByteBuffer rows, long index);
   
   /**
    * Returns a previously appended row at the given index. Indexes, unlike

@@ -24,25 +24,46 @@ public class CompactSkipLedger extends SkipLedger {
   
   private final SkipTable table;
   protected final RowCache cache;
+  private final boolean fastTable;
   
+  
+  /**
+   * Constructs an instance with no caching. The storage layer is set to
+   * "not-fast".
+   * 
+   * @param table       storage layer (assumed <em>not fast</em>)
+   */
   public CompactSkipLedger(SkipTable table) {
-    this(table, null);
+    this(table, null, false);
   }
   
+  /**
+   * Constructs an instance with optional caching. The storage layer is set to
+   * "not-fast".
+   * 
+   * @param table       storage layer (assumed <em>not fast</em>)
+   * @param cache       optional (may be {@code null})
+   */
   public CompactSkipLedger(SkipTable table, RowCache cache) {
+    this(table, cache, false);
+  }
+  
+  /**
+   * Full constructor.
+   * 
+   * @param table       storage layer
+   * @param cache       optional (may be {@code null})
+   * @param fastTable   if {@code true}, then <em>en bloc</em> commits (see
+   *                    {@linkplain #commitRows(long, ByteBuffer)}) are <em>not
+   *                    </em> first written to an in-memory transaction table
+   */
+  public CompactSkipLedger(SkipTable table, RowCache cache, boolean fastTable) {
     this.table = Objects.requireNonNull(table, "null table");
     this.cache = cache;
+    this.fastTable = fastTable;
   }
   
-  // protected void primeCache() {
-  //   if (cache == null)
-  //     return;
-    
-  //   // cache.clearAll();  (since it never did anything)
-  //   long lastRn = size();
-  //   if (lastRn != 0)
-  //     getRow(lastRn);
-  // }
+  
   
   @Override
   public final int hashWidth() {
@@ -63,50 +84,65 @@ public class CompactSkipLedger extends SkipLedger {
   public final ByteBuffer sentinelHash() {
     return DIGEST.sentinelHash();
   }
-
+  
+  
   @Override
-  public long appendRows(ByteBuffer entryHashes) {
+  protected final void writeRowsImpl(long startRn, ByteBuffer inputHashes) {
     
-    int count = entryHashes.remaining() / HASH_WIDTH;
-    if (count == 0 || entryHashes.remaining() % HASH_WIDTH != 0)
-      throw new IllegalArgumentException(
-          "remaining bytes not a positive multiple of " + HASH_WIDTH + ": " + entryHashes);
+    final int count = hashCount(inputHashes);
     
-    if (count == 1)
-      return appendRow(entryHashes, table);
-    
-    TxnTable txn = new TxnTable(table, count);
-    
-    for (int index = 0, basePos = entryHashes.position(); index < count; ++index) {
-      int pos = basePos + index * HASH_WIDTH;
-      int limit = pos + HASH_WIDTH;
-      appendRow(entryHashes.limit(limit).position(pos), txn);
+    if (count == 1) {
+      writeRow(inputHashes, table, startRn);
+      return;
     }
     
-    return txn.commit();
+    TxnTable txn;
+    SkipTable t;
+    if (fastTable) {
+      txn = null;
+      t = table;
+    } else {
+      txn = new TxnTable(table, startRn - 1L, count);
+      t = txn;
+    }
+    
+    long rn = startRn;
+    for (
+        int index = 0, basePos = inputHashes.position();
+        index < count;
+        ++index, ++rn) {
+      
+      int pos = basePos + index * HASH_WIDTH;
+      int limit = pos + HASH_WIDTH;
+      writeRow(inputHashes.limit(limit).position(pos), t, rn);
+    }
+    
+    if (!fastTable)
+      txn.commit();
   }
   
   
-  private long appendRow(ByteBuffer entryHash, SkipTable table) {
-    ByteBuffer ehCopy = entryHash.slice();
+  
+  
+  private void writeRow(ByteBuffer inputHash, SkipTable table, final long rowNo) {
     
-    final long nextRowNum = table.size() + 1;
-
-    final int levels = skipCount(nextRowNum);
+    final int levels = skipCount(rowNo);
     final List<Long> prevRns = Lists.functorList(
         levels,
-        level -> nextRowNum - (1L << level));
+        level -> rowNo - (1L << level));
 
     var prevHashes = Lists.map(prevRns, rn -> rowHash(rn, table));
     
-    var rowHash = SkipLedger.rowHash(nextRowNum, entryHash, prevHashes);
+    var rowHash = SkipLedger.rowHash(rowNo, inputHash.slice(), prevHashes);
     
     ByteBuffer tableRow =
-        ByteBuffer.allocate(SkipTable.ROW_WIDTH).put(ehCopy).put(rowHash).flip();
+        ByteBuffer.allocate(SkipTable.ROW_WIDTH)
+        .put(inputHash.slice()).put(rowHash).flip();
     
-    return table.addRows(tableRow, nextRowNum - 1);
+    table.writeRows(tableRow, rowNo - 1);
     
   }
+  
 
   @Override
   public long size() {
@@ -188,11 +224,7 @@ public class CompactSkipLedger extends SkipLedger {
       assert rowNumber > 0 && row.remaining() == SkipTable.ROW_WIDTH;
     }
 
-    // @Override
-    // public long no() {
-    //   return rowNumber;
-    // }
-
+    
     @Override
     public ByteBuffer inputHash() {
       return row.asReadOnlyBuffer().limit(hashWidth());
@@ -203,7 +235,6 @@ public class CompactSkipLedger extends SkipLedger {
       return row.asReadOnlyBuffer().position(hashWidth()).slice();
     }
 
-
     @Override
     public LevelsPointer levelsPointer() {
       List<ByteBuffer> levelHashes =
@@ -212,13 +243,6 @@ public class CompactSkipLedger extends SkipLedger {
               lvl -> rowHash(rowNumber - (1L << lvl)));
       return new LevelsPointer(rowNumber, levelHashes);
     }
-
-    // @Override
-    // public ByteBuffer prevHash(int level) {
-    //   Objects.checkIndex(level, prevLevels());
-    //   long referencedRowNum = rowNumber - (1L << level);
-    //   return rowHash(referencedRowNum);
-    // }
     
   }
 

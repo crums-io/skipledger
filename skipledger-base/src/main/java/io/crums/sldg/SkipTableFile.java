@@ -48,7 +48,7 @@ public class SkipTableFile implements SkipTable {
   }
 
   @Override
-  public long addRows(ByteBuffer rows, long index) {
+  public long writeRows(ByteBuffer rows, long index) {
     
     final int rowCount = rows.remaining() / ROW_WIDTH;
     

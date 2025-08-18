@@ -24,7 +24,7 @@ public class SkipLedgerFile extends CompactSkipLedger {
   
   /**
    * Creates a new or loads an existing ledger at the given {@code file} path with
-   * the given {@linkplain Opening opening} {@code mode}. The instance is <em> not
+   * the given {@linkplain Opening opening} {@code mode}. The instance is <em>
    * lazy-loading</em>.
    * 
    * @param file path to a regular file

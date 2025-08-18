@@ -10,6 +10,7 @@ import java.util.ConcurrentModificationException;
 import io.crums.io.buffer.ReadWriteBuffer;
 
 /**
+ * In-memory storage for a {@linkplain CompactSkipLedger}.
  * 
  */
 public class VolatileTable implements SkipTable {
@@ -43,7 +44,7 @@ public class VolatileTable implements SkipTable {
 
 
   @Override
-  public long addRows(ByteBuffer rows, long index) {
+  public long writeRows(ByteBuffer rows, long index) {
     
     ReadWriteBuffer mem = this.mem;
     if (index != size(mem))
@@ -90,7 +91,23 @@ public class VolatileTable implements SkipTable {
   }
   
   
-  
+  /**
+   * <p>Supported.</p>
+   * {@inheritDoc}
+   */
+  @Override
+  public void trimSize(long newSize) {
+    final long sz = size();
+    if (newSize == sz)
+      return;
+    if (newSize > sz)
+      throw new IllegalArgumentException(
+          "newSize (%d) > size() (%d)".formatted(newSize, sz));
+    if (newSize < 0L)
+      throw new IllegalArgumentException("newSize: " + newSize);
+    mem.position((int) newSize * ROW_WIDTH);
+  }
+
   public ByteBuffer serialize() {
     return mem.readBuffer();
   }

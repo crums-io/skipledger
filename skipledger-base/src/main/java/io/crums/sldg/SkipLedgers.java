@@ -23,7 +23,7 @@ public class SkipLedgers {
   
   
   public static SkipLedger inMemoryInstance() {
-    return new CompactSkipLedger(new VolatileTable());
+    return new CompactSkipLedger(new VolatileTable(), null, true);
   }
 
 }

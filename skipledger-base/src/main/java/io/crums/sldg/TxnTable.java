@@ -4,13 +4,27 @@
 package io.crums.sldg;
 
 import java.nio.ByteBuffer;
-import java.util.ConcurrentModificationException;
 import java.util.Objects;
 
 import io.crums.io.buffer.ReadWriteBuffer;
 
 /**
- * Single transaction view over another table.
+ * Single transaction view over another table. Used when <em>multiple</em>
+ * input-hashes are to be committed to the skipledger chain.
+ * 
+ * <h2>Raison D'Etre</h2>
+ * <p>
+ * The computation of row-hashes is dependent on the row-hashes of previous
+ * rows. Some of these are recorded on the chain; others (the new rows), are
+ * recorded in this class's "transaction buffer".
+ * Writes ({@linkplain #writeRows(ByteBuffer, long)}) get written to the
+ * instance's "transaction buffer";
+ * reads ({@linkplain #readRow(long)}), depending on {@code index} argument,
+ * come from either the chain, or the transaction buffer.
+ * {@linkplain CompactSkipLedger} uses instances of this class in order to write
+ * rows <em>en bloc</em> to underlying storage (also a
+ * {@linkplain SkipTable}), instead of one-by-one.
+ * </p>
  */
 final class TxnTable implements SkipTable {
   
@@ -23,39 +37,39 @@ final class TxnTable implements SkipTable {
   /**
    * 
    */
-  public TxnTable(SkipTable primary, int capacity) {
+  public TxnTable(SkipTable primary, long sizeSnapshot, int capacity) {
     this.primary = Objects.requireNonNull(primary, "null primary");
-    this.sizeSnapshot = primary.size();
-    
+    this.sizeSnapshot = sizeSnapshot;
     if (capacity <= 0)
       throw new IllegalArgumentException("capacity " + capacity);
+    
     this.txnBuffer = new ReadWriteBuffer(capacity * ROW_WIDTH);
   }
 
   
   
+  
+  
+  
   @Override
-  public long addRows(ByteBuffer row, long index) {
+  public long writeRows(ByteBuffer row, long index) {
     
-    int rowCount = row.remaining() / ROW_WIDTH;
+    if (row.remaining() != ROW_WIDTH)
+      throw new IllegalArgumentException(
+          "expected to write one row at-a-time. row [%d]: %s"
+          .formatted(index + 1, row));
     
-    if (rowCount > remaining())
+    if (remaining() == 0)
       throw new IllegalStateException(
-          "row count (" + rowCount + ") greater than remaining capacity " + remaining());
+          "capacity breached on row [%d]".formatted(index + 1));
     
-    // internal code expects better use, so we only assert
-    assert rowCount > 0 && row.remaining() % ROW_WIDTH == 0;
-    
-    if (index != size())
-      throw new ConcurrentModificationException("on index " + index + "; size() " + size());
+    long sz = size();
+    if (index != sz)
+      throw new SldgException("on index " + index + "; size() " + sz);
     
     txnBuffer.put(row);
     
-    long sz = size();
-    
-    assert sz == index + rowCount;
-    
-    return sz;
+    return sz + 1;
   }
   
   
@@ -97,7 +111,7 @@ final class TxnTable implements SkipTable {
 
 
   public long commit() {
-    return primary.addRows(txnBuffer.readBuffer(), sizeSnapshot);
+    return primary.writeRows(txnBuffer.readBuffer(), sizeSnapshot);
   }
 
 }
