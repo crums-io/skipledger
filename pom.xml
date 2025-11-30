@@ -1,23 +1,15 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?><project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  
-
   <groupId>io.crums</groupId>
   <artifactId>ledgers</artifactId>
   <version>${revision}</version>
-
   <packaging>pom</packaging>
-
   <name>${project.groupId}:${project.artifactId}</name>
   <url>https://github.com/crums-io/skipledger</url>
-  
   <description>
     Collection of modules and tools for maintaining tamper proof, evolving, historical private ledgers
     and for differentially revealing (reporting) any of their parts in an efficient, provable way.
   </description>
-  
-  
   <properties>
     <revision>0.7.0-SNAPSHOT</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -28,18 +20,13 @@
     <!-- <crums.timechain>0.2.0-SNAPSHOT</crums.timechain> -->
     <crums.timechain>[0.1.0,)</crums.timechain>
     <native.maven.plugin.version>0.9.13</native.maven.plugin.version>
-    
   </properties>
-  
-  
-
   <licenses>
     <license>
       <name>GNU Affero General Public License, Version 3</name>
       <url>https://www.gnu.org/licenses/agpl-3.0.txt</url>
     </license>
   </licenses>
-
   <developers>
     <developer>
       <name>Babak Farhang</name>
@@ -48,7 +35,6 @@
       <organizationUrl>https://crums.io</organizationUrl>
     </developer>
   </developers>
-  
   <profiles>
     <profile>
       <id>deploy-profile</id>
@@ -72,32 +58,21 @@
       </build>
     </profile>
   </profiles>
-  
   <scm>
     <connection>scm:git:git://github.com/crums-io/skipledger.git</connection>
     <developerConnection>scm:git:ssh://github.com:crums-io/skipledger.git</developerConnection>
     <url>http://github.com/crums-io/skipledger/tree/master</url>
   </scm>
-  
   <distributionManagement>
     <snapshotRepository>
       <id>ossrh</id>
       <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
     </snapshotRepository>
-    
     <repository>
       <id>ossrh</id>
       <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
     </repository>
-    
   </distributionManagement>
-  
-  
-  
-
-  
-  
-  
   <!-- For SNAPSHOT releases of dependencies
   <repositories>
     <repository>
@@ -106,8 +81,6 @@
     </repository>
   </repositories>
   -->
-  
-  
   <modules>
     <module>skipledger-base</module>
     <!--
@@ -125,20 +98,18 @@
     <module>source-ledger</module>
     <module>log-ledger</module>
     <module>bindle</module>
+    <module>microchain</module>
+    <module>sql-ledger</module>
+    <module>microchain-mgmt</module>
+    <module>microchain-fx</module>
   </modules>
-  
-
-
   <build>
-
     <plugins>
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${maven.compiler.plugin}</version>
       </plugin>
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
@@ -152,7 +123,6 @@
           </execution>
         </executions>
       </plugin>
-
       <!-- w/o plugin below, sub modules don't inherit $revision string -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
@@ -179,13 +149,6 @@
           </execution>
         </executions>
       </plugin>
-      
-      
-      
-
-
-
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
@@ -206,34 +169,30 @@
           <failOnError>true</failOnError>
           
           -->
-          
           <bottom>
-            <![CDATA[
-            <table width="100%">
-            <tr>
-            <td style="text-align: left;">&nbsp;io.crums:]]>${project.artifactId} v${revision}
-            <![CDATA[ <br/>
-            &nbsp;GNU Affero General Public License v3
-            (<a href="https://www.gnu.org/licenses/agpl-3.0.txt">AGPL</a>)
-            </td>
-            <td style="text-align: right;"><br/>&copy; 2020-2025 <a href="https://crums.io">crums.io</a> All Rights Reserved.&nbsp;&nbsp;</td>
-            </tr>
-            </table>
-            ]]>
+            
+            &lt;table width="100%"&gt;
+            &lt;tr&gt;
+            &lt;td style="text-align: left;"&gt;&amp;nbsp;io.crums:${project.artifactId} v${revision}
+             &lt;br/&gt;
+            &amp;nbsp;GNU Affero General Public License v3
+            (&lt;a href="https://www.gnu.org/licenses/agpl-3.0.txt"&gt;AGPL&lt;/a&gt;)
+            &lt;/td&gt;
+            &lt;td style="text-align: right;"&gt;&lt;br/&gt;&amp;copy; 2020-2025 &lt;a href="https://crums.io"&gt;crums.io&lt;/a&gt; All Rights Reserved.&amp;nbsp;&amp;nbsp;&lt;/td&gt;
+            &lt;/tr&gt;
+            &lt;/table&gt;
+            
           </bottom>
-          
         </configuration>
-        
         <executions>
           <execution>
             <id>attach-javadocs</id>
             <goals>
               <goal>jar</goal>
             </goals>
-            </execution>
+          </execution>
         </executions>
       </plugin>
-        
       <plugin>
         <groupId>org.sonatype.plugins</groupId>
         <artifactId>nexus-staging-maven-plugin</artifactId>
@@ -245,35 +204,21 @@
           <autoReleaseAfterClose>true</autoReleaseAfterClose>
         </configuration>
       </plugin>
-
     </plugins>
-
   </build>
-
-
   <dependencies>
-
-
     <!-- TEST scope -->
-    
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>5.8.2</version>
       <scope>test</scope>
     </dependency>
-    
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>unit-io</artifactId>
       <version>1.0.1</version>
       <scope>test</scope>
     </dependency>
-
   </dependencies>
-
 </project>
-
-
-
-

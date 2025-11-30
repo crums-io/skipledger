@@ -1,0 +1,82 @@
+.round-rect {
+  -fx-arc-height: 20;
+  -fx-arc-width: 20;
+  -fx-fill: #98bfeb;
+  -fx-opacity: 0.75;
+  -fx-stroke: #7290b0;
+  -fx-strok-type: inside;
+  -fx-stroke-width: 1;
+  -fx-effect: dropshadow(gaussian, #3f3f60, 5, 0.5, 3, 3);
+}
+
+.text-announce {
+  -fx-font-family: "Arial", "Helvetica", sans-serif;
+  -fx-font-size: 24pt;
+  -fx-font-weight: bold;
+  -fx-text-alignment: center;
+  -fx-bounds-type: logical-vertical-center;
+}
+
+.text-empty {
+  -fx-font-family: "Arial", "Helvetica", sans-serif;
+  -fx-font-size: 48pt;
+  -fx-font-weight: bold;
+  -fx-text-alignment: center;
+  -fx-bounds-type: logical-vertical-center;
+  -fx-fill: gray;
+}
+
+
+
+.bevel-lowered {
+  -fx-border-width: 1px;
+  -fx-border-color: #a0a0a0 #f0f0f0 #e8e8e8 #a0a0a0; /* Top, Right, Bottom, Left */
+  -fx-background-color: #e0e0e0;
+  -fx-padding: 5px;
+  -fx-font-family: "Arial", "Helvetica", sans-serif;
+}
+
+
+.bevel-raised {
+  -fx-border-width: 1px;
+  -fx-border-color: #f0f0f0 #a0a0a0 #a0a0a0 #f0f0f0; /* Top, Right, Bottom, Left */
+  -fx-background-color: #e0e0e0;
+  -fx-padding: 5px;
+}
+
+
+
+.toc-list .list-cell {
+  -fx-background-color: #f0f0f0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
