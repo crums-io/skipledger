@@ -16,7 +16,7 @@ public class SharedConstants {
   // never
   private SharedConstants() {  }
   
-  final static Digest DIGEST = Digests.SHA_256;
+  public final static Digest DIGEST = Digests.SHA_256;
   
   public final static int HASH_WIDTH = DIGEST.hashWidth();
 

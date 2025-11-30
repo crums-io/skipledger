@@ -6,7 +6,6 @@ package io.crums.sldg.salt;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.util.Arrays;
 
 /**
  * A method to salt table cells with <em>unique</em> values per cell coordinate. In this model
@@ -161,6 +160,24 @@ public class TableSalt implements AutoCloseable {
   }
   
   
+  /**
+   * Returns {@code true} iff this instance has the same (single) seed as the
+   * {@code other}. This is a <em>commutative</em> relationship.
+   * 
+   * <h4>API Note</h4>
+   * 
+   * This method is introduced in lieu of overriding {@code Object.equals}
+   * (which would complicate matters for subclasses).
+   */
+  public final boolean sameSeed(TableSalt other) {
+    if (other.seed.length != seed.length)
+      return false;
+    int index = seed.length;
+    while (index-- > 0 && seed[index] == other.seed[index]);
+    return index == -1;
+  }
+  
+  
   
   /**
    * Returns the cell-specific salt.
@@ -203,20 +220,6 @@ public class TableSalt implements AutoCloseable {
   }
   
   
-  
-  
-  @Override
-  public final boolean equals(Object o) {
-    return
-        o == this ||
-        o instanceof TableSalt salter && Arrays.equals(seed, salter.seed);
-  }
-  
-
-  @Override
-  public final int hashCode() {
-    return Arrays.hashCode(seed);
-  }
 
 }
 

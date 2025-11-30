@@ -38,6 +38,35 @@ import java.util.Arrays;
 public interface SaltScheme {
   
   /**
+   * Returns an instance that salts all cells except the ones at the given
+   * indices.
+   * 
+   * @param cellIndices non-negative indices
+   */
+  public static SaltScheme ofAllExcept(int... cellIndices) {
+    return of(cellIndices, false);
+  }
+  
+  /**
+   * Returns an instance that salts only the cells at the given indices.
+   * 
+   * @param cellIndices non-negative indices
+   */
+  public static SaltScheme of(int... cellIndices) {
+    return of(cellIndices, true);
+  }
+  
+  /** Returns the {@linkplain #NO_SALT NO_SALT} instance.  */
+  public static SaltScheme of() {
+    return SaltScheme.NO_SALT;
+  }
+
+  /** Returns the {@linkplain #SALT_ALL SALT_ALL} instance.  */
+  public static SaltScheme ofAll() {
+    return SaltScheme.SALT_ALL;
+  }
+  
+  /**
    * Returns an immutable instance.
    * 
    * @param cellIndices  copied. See {@linkplain #cellIndices()}
@@ -49,7 +78,7 @@ public interface SaltScheme {
     return new WrappedScheme(cellIndices, positive);
   }
   
-  /** Wraps and returns the given scheme, ensuring its wellformed. */
+  /** Wraps and returns the given scheme, ensuring its well-formed. */
   public static SaltScheme wrap(SaltScheme s) {
     return
         s == NO_SALT || s == SALT_ALL || s instanceof WrappedScheme ?
@@ -108,11 +137,13 @@ public interface SaltScheme {
     }
   }
   
-  
+
+  /** <em>Salt-every-cell</em> instance. */
   public final static SaltScheme SALT_ALL = new EmptyScheme() {
     @Override public boolean isPositive() { return false; }
   };
   
+  /** <em>Do-not-salt</em> instance. */
   public final static SaltScheme NO_SALT = new EmptyScheme() {
     @Override public boolean isPositive() { return true; }
   };
