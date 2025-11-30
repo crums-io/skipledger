@@ -1,0 +1,43 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.crums</groupId>
+    <artifactId>ledgers</artifactId>
+    <version>${revision}</version>
+  </parent>
+  
+  <artifactId>sql-ledger</artifactId>
+  <name>${project.groupId}:${project.artifactId}</name>
+  <description>
+    Ledgers defined by a pair of SQL SELECT statements: one, for the row-count;
+    the other, for the contents of the row (by row-number).
+  </description>
+  
+  
+  <dependencies>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>source-ledger</artifactId>
+      <version>${revision}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>jsonimple</artifactId>
+      <version>1.0.5-SNAPSHOT</version>
+    </dependency>
+    
+    <!-- T E S T -->
+    
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.3.232</version>
+      <scope>test</scope>
+    </dependency>
+   
+  </dependencies>
+  
+</project>
+
