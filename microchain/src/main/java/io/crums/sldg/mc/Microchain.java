@@ -169,7 +169,7 @@ public class Microchain {
     
     for (long rowNo = status.rowsCommitted() + 1; rowNo <= lastNo; ++rowNo) {
       SourceRow srcRow = ledger.getSourceRow(rowNo);
-      chain.appendRows(srcRow.hash());
+      chain.commitRows(rowNo, srcRow.hash());
     }
     
     guardOutsideRace(lastNo);
