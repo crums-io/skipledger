@@ -141,7 +141,7 @@ public class SaltMgr extends DeletablesMgr {
     
     try (var closeOnFail = new TaskStack()) {
       
-      closeOnFail.push(con);
+      closeOnFail.pushClose(con);
       
       if (create && env.readWrite()) {
         var sql = env.applyTablePrefix(CREATE_LEDGER_SALTS_TABLE);
