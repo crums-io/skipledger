@@ -1205,7 +1205,7 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
       throw new IllegalArgumentException("empty inputHashes");
     if (startRn == size + 1L) { 
       writeRowsImpl(startRn, inputHashes);
-      return startRn;
+      return size + count;
     } else if (startRn > size)
       throw new IllegalArgumentException(
           "startRn (%d) leaves gap after row [%d] (current size)"
