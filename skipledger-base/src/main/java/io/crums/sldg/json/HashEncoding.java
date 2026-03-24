@@ -51,13 +51,30 @@ public enum HashEncoding {
   }
   
   /**
-   * Decodes and returns a 32-byte value.
+   * Decodes and returns a 32-byte value, whether in Base64-32 (43 chars)
+   * or hex (64 chars).
+   * 
+   * @param hash 43 Base64-32 chars, or 64 hex chars
    */
   public byte[] decode(CharSequence hash) {
+    // Fix for timechain issue #3
+    // C.f. https://github.com/crums-io/timechain/issues/3
+    //
+    // return this == HEX ?
+    //     IntegralStrings.hexToBytes(hash) :
+    //     Base64_32.decode(hash);
+    int len = hash.length();
     return
-        this == HEX ?
-            IntegralStrings.hexToBytes(hash) :
-            Base64_32.decode(hash);
+        switch (len) {
+          case 43 -> Base64_32.decode(hash);
+          case 64 -> IntegralStrings.hexToBytes(hash);
+          default -> throw new IllegalArgumentException(
+              "hash length must be 43 or 64: actual given is " + len +
+              "; arg given " + hash);
+        };
+
+
+    
   }
   
   
