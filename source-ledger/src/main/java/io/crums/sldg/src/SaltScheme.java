@@ -8,7 +8,7 @@ import java.util.Arrays;
 /**
  * Cell salting scheme. For the most part, this just documents how the
  * scheme works. It's primary purpose in code is to obviate the need to
- * preface a row-cell va(lue with a flag (or something similar) indicating
+ * preface a row-cell value with a flag (or something similar) indicating
  * whether it is salted or not.
  * <p>
  * In the original salting scheme, ledger cells were either all salted, or
