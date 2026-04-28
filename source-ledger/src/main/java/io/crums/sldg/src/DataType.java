@@ -6,7 +6,10 @@ package io.crums.sldg.src;
 
 import static io.crums.sldg.src.SharedConstants.HASH_WIDTH;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Date;
 
 import io.crums.util.Strings;
 
@@ -15,21 +18,39 @@ import io.crums.util.Strings;
  * this concerns (and defines) the byte-sequence used to represent a cell value.
  * The only use for this byte-sequence is in the calculation of the cell's hash.
  * So, while a source ledger's data types may be more rich than this taxanomy
- * (e.g. SQL types), the few base types defined here should be suffice.
+ * (e.g. SQL types), the few base types defined here should suffice.
  * <p>
  * Note, there are <em>no floating point</em> types. The main rational for
- * disallowing it is that it's complicated (implementation specific,
- * multiple values such as 0, 0+, multiple standards, etc.). When constructing
- * a ledger view, <em>fractional values must be promoted to integers</em> (e.g.
- * multiplying by 100, perhaps rounding, when the decimal point marks cents).
+ * disallowing it is that it complicates the implementation
+ * (multiple values such as 0, 0+, multiple standards, etc.).
  * </p>
+ * <h2>The Role of NULL</h2>
+ * <p>
+ * Finally, note the {@linkplain #NULL} type is anamolous to the other types in
+ * the following respects:
+ * </p><ol>
+ * <li>It is <em>not used in column type declarations</em>.</li>
+ * <li>If a read-in typed value is {@code null}, its type then falls back to
+ * the {@linkplain #NULL} type.</li>
+ * </ol>
  */
 public enum DataType {
   
+  /**
+   * A null value is specially marked. It is a zeroed 5-byte value.
+   */
+  NULL(5),
   /** UTF-8 string. Variable size. */
   STRING(0),
   /** Signed big endian long. 8 bytes. */
   LONG(8),
+  /** {@linkplain BigInteger}. Variable size; 1-byte, minimum. */
+  BIG_INT(0, 1),
+  /**
+   * {@linkplain BigDecimal}. Variable size; 2-byte, minimum.
+   * Scale must be within the range [-128, 127], inclusive.
+   */
+  BIG_DEC(0, 2),
   /** UTC. This is a qualified {@linkplain #LONG}. */
   DATE(8),
   /** Boolean value. 1 byte.  */
@@ -41,16 +62,44 @@ public enum DataType {
    * By convention, redacted cells are of this type, but
    * this is seldom important.
    */
-  HASH(HASH_WIDTH),
-  /**
-   * A null value is specially marked. This is a qualified {@linkplain #BOOL}
-   * (always {@code 0}).
-   */
-  NULL(1);
+  HASH(HASH_WIDTH);
   
   
   private final static DataType[] SET = values();
+
+  private final static ByteBuffer NULL_DATA_BUFFER =
+    ByteBuffer.wrap(new byte[NULL.size()]).asReadOnlyBuffer();
+
+  private ByteBuffer nullDataBuffer() {
+    return NULL_DATA_BUFFER.duplicate();
+  }
   
+  public static DataType guessType(Object value) {
+    if (value == null)
+      return NULL;
+    if (value instanceof CharSequence)
+      return STRING;
+    if (value instanceof Long ||
+        value instanceof Integer ||
+        value instanceof Short ||
+        value instanceof Byte)
+      return LONG;
+    if (value instanceof Date)
+      return DATE;
+    if (value instanceof BigInteger)
+      return BIG_INT;
+    if (value instanceof BigDecimal)
+      return BIG_DEC;
+    if (value instanceof Boolean)
+      return BOOL;
+    if (value instanceof ByteBuffer b)
+      return b.remaining() == HASH_WIDTH ? HASH : BYTES;
+    if (value instanceof byte[] b)
+      return b.length == HASH_WIDTH ? HASH : BYTES;
+    
+    throw new IllegalArgumentException(
+        "value %s (class %s)".formatted(value, value.getClass()));
+  }
   
   /**
    * Returns the type by the zero-based ordinal no.
@@ -61,9 +110,16 @@ public enum DataType {
   }
   
   private final int size;
+  private final int minimumSize;
   
   private DataType(int size) {
+    this(size, size);
+  }
+
+
+  private DataType(int size, int minimumSize) {
     this.size = size;
+    this.minimumSize = minimumSize;
   }
   
 
@@ -88,12 +144,23 @@ public enum DataType {
    * @see #isFixedSize()
    */
   public boolean isVarSize() {
-    return size == 0;
+    return !isFixedSize();
+  }
+
+
+  /**
+   * Returns the minimum byte-size. For fixed-size types, this is the same as
+   * {@linkplain #size()}; for variable-size types {@linkplain #BIG_INT} and
+   * {@linkplain #BIG_DEC}, the returned value is non-zero.
+   */
+  public int minimumSize() {
+    return minimumSize;
   }
   
   
   /**
-   * Returns the type's byte-size, if fixed; zero, otherwise.
+   * Returns the type's byte-size, if fixed; zero, otherwise. The only exception
+   * to this rule is {@linkplain #NULL}.
    * 
    * @return &ge; 0
    */
@@ -109,15 +176,34 @@ public enum DataType {
   
   /**
    * Determines whether this is the {@linkplain #HASH} instance.
-   * Because {@code HASH} instances are not supposed to be rehashed
+   * {@code HASH} instances are not supposed to be rehashed.
    */
   public boolean isHash() {
     return this == HASH;
   }
   
-  
+  /**
+   * Returns {@code true} iff this type is a number. Note,
+   * {@linkplain #BOOL} is <em>not</em> considered a number.
+   */
   public boolean isNumber() {
-    return this == LONG || this == DATE;
+    switch (this) {
+      case LONG:
+      case DATE:
+      case BIG_INT:
+      case BIG_DEC:
+        return true;
+    
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Returns {@code true} iff this is the {@linkplain #STRING} insstance.
+   */
+  public boolean isString() {
+    return this == STRING;
   }
   
   
@@ -131,38 +217,212 @@ public enum DataType {
    *                    (only absolute bulk operations)
    *                    
    * @return either a {@code java.lang.String, java.lang.Long, java.lang.Boolean,
-   *                   java.nio.ByteBuffer, } or {@code null}
+   *                   java.math.BigInteger, java.math.BigDecimal,
+   *                   java.nio.ByteBuffer}, or {@code null}
    */
   public Object toValue(ByteBuffer input) {
     
     if (isFixedSize()) {
-      int fixedInputSize = this == NULL ? 0 : size();
+      int fixedInputSize = size();
       if (fixedInputSize != input.remaining())
         throw new IllegalArgumentException(
-            "expected input size type %s is %d; input arg %s"
-            .formatted(this, size(), input));
+            "expected input size for type %s is %d; actual was %d"
+            .formatted(this, fixedInputSize, input.remaining()));
+    } else if (input.remaining() < minimumSize()) {
+      throw new IllegalArgumentException(
+            "at least %d bytes expected for type %s; actual was %d"
+            .formatted(minimumSize(), this, input.remaining()));
     }
     
     switch (this) {
     case STRING:        return Strings.utf8String(input);
     case LONG:
     case DATE:          return input.getLong(input.position());
+    case BIG_INT:
+      {
+        byte[] array = new byte[input.remaining()];
+        input.get(input.position(), array);
+        return new BigInteger(array);
+      }
+    case BIG_DEC:
+      {
+        int pos = input.position();
+        int size = input.remaining();
+        int scale = input.get(pos);
+        byte[] unscaledVal = new byte[size - 1];
+        input.get(pos + 1, unscaledVal);
+        return new BigDecimal(new BigInteger(unscaledVal), scale);
+      }
     case BOOL:
       {
         byte b = input.get(input.position());
         if ((b & 1) != b)
           throw new IllegalArgumentException(
-              "input byte (" + Integer.toHexString(b & 0xff) +
+              "input byte for type BOOL (" + Integer.toHexString(b & 0xff) +
               ") must be either 0 or 1");
         return b == 0 ? Boolean.FALSE : Boolean.TRUE;
       }
     case BYTES:
     case HASH:          return input.slice();
-    case NULL:          return null;
+    case NULL:
+      for (int pos = input.position(); pos < input.limit(); ++pos)
+        if (input.get(pos) != 0)
+          throw new IllegalArgumentException(
+              "type NULL expected zeroed byte at index %d; actual was 0x%s"
+              .formatted(pos, Integer.toHexString(0xff & input.get(pos))));
+      return null;
     default:
       throw new RuntimeException("Unaccount enum type " + this);
     }
   }
+
+
+
+  /**
+   * Converts the given value to a byte sequence suitable for hashing depending
+   * on the enum instance.
+   * 
+   * @param value permissable types depend on the enum
+   */
+  public ByteBuffer toByteBuffer(Object value) {
+    if (value == null)
+      return nullDataBuffer();
+    return switch (this) {
+      case STRING   -> toStringBuffer(value);
+      case LONG     -> toLongBuffer(value);
+      case BIG_INT  -> toBigIntBuffer(value);
+      case BIG_DEC  -> toBigDecBuffer(value);
+      case DATE     -> toDateBuffer(value);
+      case BOOL     -> toBoolBuffer(value);
+      case BYTES    -> toByteSequenceBuffer(value);
+      case HASH     -> toHashBuffer(value);
+      case NULL     -> throw new IllegalArgumentException(
+          "type NULL cannot convert non-null value (quoted) '" + value + "'' to null");
+    };
+  }
+
+  private ByteBuffer toHashBuffer(Object value) {
+    var buf = toByteSequenceBuffer(value);
+    if (buf.remaining() != HASH_WIDTH)
+      throw new IllegalArgumentException(
+          "expected %d bytes for HASH type; actual was %d"
+          .formatted(HASH_WIDTH, buf.remaining()));
+    return buf;
+  }
+
+  private ByteBuffer toByteSequenceBuffer(Object value) {
+    if (value instanceof ByteBuffer buf)
+      return buf.slice();
+    else if (value instanceof byte[] array)
+      return ByteBuffer.wrap(array);
+    else
+      throw new IllegalArgumentException(
+          conversionErrorMsg(value, ByteBuffer.class));
+  }
+
+
+  private ByteBuffer toBoolBuffer(Object value) {
+    if (value instanceof Boolean b) {
+      byte[] single = new byte[] { (byte) (Boolean.TRUE.equals(value) ? 1 : 0)};
+      return ByteBuffer.wrap(single);
+    }
+    throw new IllegalArgumentException(
+        conversionErrorMsg(value, Boolean.class));
+  }
+
+
+  private String conversionErrorMsg(Object value, Class<?> targetClass) {
+    return
+        "type %s cannot convert class %s (%s) to %s"
+        .formatted(
+            this,
+            value.getClass().getSimpleName(),
+            value, targetClass.getSimpleName());
+  }
+
+
+  private ByteBuffer toBigDecBuffer(Object value) {
+    BigDecimal bigDec;
+    if (value instanceof BigDecimal d) {
+      bigDec = d;
+    } else if (value instanceof Integer ||
+        value instanceof Long ||
+        value instanceof Short ||
+        value instanceof Byte) {
+      bigDec = BigDecimal.valueOf(((Number) value).longValue());
+    } else
+      throw new IllegalArgumentException(
+          conversionErrorMsg(value, BigDecimal.class));
+
+    byte scale = (byte) bigDec.scale();
+    if (scale != bigDec.scale())
+      throw new IllegalArgumentException(
+        "%s: out-of-bounds scale (%d) for value ~ %s"
+        .formatted(
+            this, bigDec.scale(), bigDec.doubleValue()));
+    byte[] unscaled = bigDec.unscaledValue().toByteArray();
+    return
+        ByteBuffer.allocate(1 + unscaled.length)
+        .put(scale).put(unscaled).flip();
+  }
+
+  private ByteBuffer toBigIntBuffer(Object value) {
+    BigInteger bigInt;
+    if (value instanceof BigInteger i) {
+      bigInt = i;
+    } else if (value instanceof Integer ||
+        value instanceof Long ||
+        value instanceof Short ||
+        value instanceof Byte) {
+      bigInt = BigInteger.valueOf(((Number) value).longValue());
+    } else
+      throw new IllegalArgumentException(
+          conversionErrorMsg(value, BigInteger.class));
+
+    return ByteBuffer.wrap(bigInt.toByteArray());
+  }
+
+
+  private ByteBuffer toDateBuffer(Object value) {
+    long utc;
+    if (value instanceof Long d) {
+      utc = d;
+    } else if (value instanceof Date d) {
+      utc = d.getTime();
+    } else
+      throw new IllegalArgumentException(
+          conversionErrorMsg(value, Long.class));
+
+    return ByteBuffer.allocate(8).putLong(utc).flip();
+  }
+
+  private ByteBuffer toLongBuffer(Object value) {
+    if (value instanceof Integer ||
+        value instanceof Long ||
+        value instanceof Short ||
+        value instanceof Byte) {
+
+      Number n = (Number) value;
+      return ByteBuffer.allocate(8).putLong(n.longValue()).flip();
+    
+    } else {
+      throw new IllegalArgumentException(
+          conversionErrorMsg(value, Long.class));
+    }
+  }
+
+
+  private ByteBuffer toStringBuffer(Object value) {
+    if (value instanceof CharSequence)
+      return Strings.utf8Buffer(value.toString());
+
+    throw new IllegalArgumentException(
+        conversionErrorMsg(value, String.class));
+  }
+
+
+
+
 
 }
 

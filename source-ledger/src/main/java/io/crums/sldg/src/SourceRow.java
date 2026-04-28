@@ -13,7 +13,6 @@ import java.util.Optional;
 
 import io.crums.util.IntegralStrings;
 import io.crums.util.Lists;
-import io.crums.util.Strings;
 
 /**
  * A ledger row (at its source).
@@ -82,7 +81,9 @@ public abstract class SourceRow {
    * 
    * @return of same size as that of {@code cells()}
    */
-  public abstract List<DataType> cellTypes();
+  public List<DataType> cellTypes() {
+    return Lists.map(cells(), Cell::dataType);
+  }
   
   
   /**
@@ -179,22 +180,28 @@ public abstract class SourceRow {
         s.append('X');
       else {
         var data = cell.data();
-        switch (types.get(i)) {
+        var type = types.get(i);
+        Object value = type.toValue(data);
+
+
+        switch (type) {
         case STRING:
-          s.append('\'').append(Strings.utf8String(data)).append('\''); break;
+          s.append('"').append(value).append('"'); break;
         case DATE:
           s.append("UTC");
         case LONG:
-          s.append(data.getLong()); break;
-        case BOOL:
-          s.append(data.get() == 0 ? "false" : "true"); break;
+          s.append(value); break;
+        case BIG_INT:
+          s.append('G').append(value); break;
+        case BIG_DEC:
+          s.append('D').append(value); break;
         case HASH:
           s.append('H').append(IntegralStrings.toHex(data.slice().limit(3)));
           break;
         case BYTES:
           s.append("B(").append(data.remaining()).append(')'); break;
-        case NULL:
-          s.append("null");
+        default:
+          s.append(value);
         }
       }
       s.append(',');
@@ -212,31 +219,15 @@ public abstract class SourceRow {
     if (cellsList.get(cell).isRedacted())
       return this;
     
-    var typesList = cellTypes();
-    final int cc = cellTypes().size();
-    assert cc == cellsList.size();
-    DataType[] types = typesList.toArray(new DataType[cc]);
-    Cell[] cells = cellsList.toArray(new Cell[cc]);
+    Cell[] cells = cellsList.toArray(new Cell[cellsList.size()]);
     cells[cell] = cells[cell].redact();
     
     
-    // About the type convention below:
-    //
-    // the exact value is unimportant; what's important is
-    // that it's set to _same_ value when redacted, so the cell's data type
-    // is obfuscated on redaction (in the event the schema allows rows to have
-    // different data types for cells at the same coordinate).
-    //
-    // On the choice of HASH.. DataType.BYTES might be a better choice semantically,
-    // but I expect HASH will be used sparingly as a data type, while BYTES
-    // will be find common use for media mime-types. So in this sense, HASH is more
-    // distinguishing.
-    //
-    types[cell] = DataType.HASH;
+    
     
     // this would be an anonymous type, if I were sure it would compile to a _static_
     // type (w/o a pointer to this)
-    return new RedactedSource(no(), types, cells);
+    return new RedactedSource(no(), cells);
   }
   
   
@@ -254,14 +245,12 @@ public abstract class SourceRow {
   private final static class RedactedSource extends SourceRow {
     
     private final long no;
-    private final DataType[] types;
     private final Cell[] cells;
     
-    private RedactedSource(long no, DataType[] types, Cell[] cells) {
+    private RedactedSource(long no, Cell[] cells) {
       this.no = no;
-      this.types = types;
       this.cells = cells;
-      assert no > 1L && types.length > 0 && types.length == cells.length;
+      assert no > 0L && cells.length > 0;
     }
 
     @Override
@@ -270,13 +259,13 @@ public abstract class SourceRow {
     }
 
     @Override
-    public List<DataType> cellTypes() {
-      return Lists.asReadOnlyList(types);
+    public List<Cell> cells() {
+      return Lists.asReadOnlyList(cells);
     }
 
     @Override
-    public List<Cell> cells() {
-      return Lists.asReadOnlyList(cells);
+    public boolean hasRedactions() {
+      return true;
     }
     
   }

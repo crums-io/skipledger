@@ -34,20 +34,29 @@ public abstract class Cell {
   
   /**
    * Returns the cell hash, using the given work digest to calculate it,
-   * if necessary. If the cell is not salted, then this is just the hash of
-   * the {@linkplain #data() data}; if it is salted ({@linkplain #hasSalt()})
+   * if necessary. If the cell is <em>not salted</em>, then this is just the hash of
+   * the concatenation of the {@linkplain #dataType()} (one byte) and the
+   * {@linkplain #data() data}; if it is salted ({@linkplain #hasSalt()}),
    * then it is hash of the concatenation of the {@linkplain #salt() salt}
-   * followed by the {@linkplain #data() data}.
+   * followed by {@linkplain #dataType()}, then {@linkplain #data() data}.
    * 
    * @param digest      SHA-256 digester
    * 
    * @return    32-byte hash
    */
   public abstract ByteBuffer hash(MessageDigest digest);
+
+
+  /**
+   * Returns the cell's data type.
+   */
+  public abstract DataType dataType();
   
   
   /**
    * Determines whether the cell's data is <em>not redacted</em>.
+   * 
+   * @see #isRedacted()
    */
   public abstract boolean hasData();
   
@@ -65,9 +74,36 @@ public abstract class Cell {
    * Redacted cells only have {@linkplain #hash() hash}.
    * 
    * @return {@code !hasData()}
+   * @see #hasData()
    */
   public final boolean isRedacted() {
     return !hasData();
+  }
+
+
+  /**
+   * Returns the cell's cannonical value as a Java object, iff the instance
+   * {@linkplain #hasData() has data}; otherwise, throws an exception. Depending
+   * on {@linkplain #dataType()}, this returns an instance of either
+   * <ol>
+   * <li>{@linkplain String}</li>
+   * <li>{@linkplain Long}</li>
+   * <li>{@linkplain java.math.BigDecimal}</li>
+   * <li>{@linkplain java.math.BigInteger}</li>
+   * <li>{@linkplain ByteBuffer}</li>
+   * <li>or {@code null} (!)</li>
+   * </ol>
+   * <p>
+   * Note, since {@code null} is a first class object in this model (following
+   * the SQL DDL), unlike with {@linkplain #data()} and {@linkplain #getData()},
+   * this method has <em>no corresponding
+   * {@code public Optional<Object> getValue()} method </em>.
+   * </p>
+   */
+  public Object value() throws NoSuchElementException {
+    if (isRedacted())
+      throw new NoSuchElementException("redacted cells do not expose value()");
+    return dataType().toValue(data());
   }
   
   
@@ -78,7 +114,8 @@ public abstract class Cell {
    * 
    * @return a read-only buffer
    * 
-   * @throws NoSuchElementException  if {@linkplain #hasData()} returns {@code false}
+   * @throws NoSuchElementException
+   *    if {@linkplain #hasData()} returns {@code false}
    * 
    * @see #getData()
    * @see #hasData()
@@ -87,7 +124,9 @@ public abstract class Cell {
   
   
   /**
-   * Returns the cell value as an optional.
+   * Returns the data buffer as an optional. Unredacted cells always have
+   * data. That is, even {@code null} values are represented by some byte
+   * sequence.
    * 
    * @see #data()
    * @see #hasData()
@@ -195,6 +234,13 @@ public abstract class Cell {
             "argument must have exactly " + HASH_WIDTH + " remaining bytes: " +
             hash);
     }
+
+
+    public DataType dataType() {
+      return DataType.HASH;
+    }
+
+
     /** @return the pre-computed hash */
     @Override
     public ByteBuffer hash() {
@@ -284,28 +330,39 @@ public abstract class Cell {
   
   private static abstract class Null extends Revealed {
 
-    private final static ByteBuffer ZERO = ByteBuffer.allocate(1).asReadOnlyBuffer();
+    private final static ByteBuffer ZERO =
+        ByteBuffer.allocate(DataType.NULL.size() + 1).asReadOnlyBuffer();
     
     private final static ByteBuffer UNSALTED_HASH;
     
     static {
       var digest = DIGEST.newDigest();
-      digest.update((byte) 0);
+      digest.update(ZERO.duplicate());
       UNSALTED_HASH = ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
+    }
+
+
+    @Override
+    public DataType dataType() {
+      return DataType.NULL;
     }
     
     ByteBuffer unsaltedHash() {
       return UNSALTED_HASH.duplicate();
     }
+
+    ByteBuffer zero() {
+      return ZERO.duplicate();
+    }
     
     @Override
     public int dataSize() {
-      return 1;
+      return DataType.NULL.size();
     }
 
     @Override
     public ByteBuffer data() {
-      return ZERO.duplicate();
+      return zero().position(1);
     }
     
   }
@@ -354,7 +411,7 @@ public abstract class Cell {
     public ByteBuffer hash(MessageDigest digest) {
       digest.reset();
       digest.update(salt());
-      digest.update((byte) 0);
+      digest.update(zero());
       return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
     }
 
@@ -379,13 +436,14 @@ public abstract class Cell {
     /**
      * 
      */
-    public static Cell load(ByteBuffer in, int dataSize) {
+    public static Cell load(DataType type, ByteBuffer in, int dataSize) {
       if (dataSize < 0)
         throw new IllegalArgumentException("negative dataSize: " + dataSize);
-      return new SaltedCell(BufferUtils.slice(in, HASH_WIDTH + dataSize), false);
+      return new SaltedCell(type, BufferUtils.slice(in, HASH_WIDTH + dataSize), false);
     }
     
     
+    private final byte type;
     private final ByteBuffer saltData;
     
     private ByteBuffer saltData() {   return saltData.asReadOnlyBuffer(); }
@@ -393,7 +451,8 @@ public abstract class Cell {
     /**
      * @param data      positioned at zero, limit == remaining
      */
-    private SaltedCell(ByteBuffer saltData, boolean dummy) {
+    private SaltedCell(DataType type, ByteBuffer saltData, boolean dummy) {
+      this.type = (byte) type.ordinal();
       this.saltData = saltData;
       assert saltData.remaining() == saltData.capacity();
     }
@@ -401,8 +460,8 @@ public abstract class Cell {
     /**
      * @param saltData  sliced, not copied. <em>Do not modify contents!</em>
      */
-    public SaltedCell(ByteBuffer saltData) {
-      this.saltData = saltData.slice();
+    public SaltedCell(ByteBuffer saltData, DataType type) {
+      this(type, saltData.slice(), false);
       if (this.saltData.remaining() < HASH_WIDTH)
         throw new IllegalArgumentException(
             "too few remaining bytes: " + saltData);
@@ -410,9 +469,17 @@ public abstract class Cell {
     
 
     @Override
+    public DataType dataType() {
+      return DataType.forOrdinal(0xff & type);
+    }
+
+    @Override
     public ByteBuffer hash(MessageDigest digest) {
       digest.reset();
-      digest.update(saltData());
+      var sd = saltData();
+      digest.update(sd.limit(HASH_WIDTH));
+      digest.update(type);
+      digest.update(sd.clear().position(HASH_WIDTH));
       return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
     }
     /** @return &ge; 0 (since it the instance has data) */
@@ -453,15 +520,6 @@ public abstract class Cell {
     }
 
     @Override
-    public ByteBuffer hash(MessageDigest digest) {
-      byte[] salt = salt(digest);
-      digest.reset();
-      digest.update(salt);
-      digest.update(data());
-      return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
-    }
-
-    @Override
     public ByteBuffer salt() {
       return ByteBuffer.wrap(salt(DIGEST.newDigest())).asReadOnlyBuffer();
     }
@@ -472,10 +530,17 @@ public abstract class Cell {
   
   public final static class RowSaltedNull extends RowSaltedReveal {
     
-    private final static ByteBuffer Z = ByteBuffer.wrap(new byte[1]).asReadOnlyBuffer();
+    private final static ByteBuffer Z =
+        ByteBuffer.wrap(new byte[DataType.NULL.size()]).asReadOnlyBuffer();
     
     RowSaltedNull(ByteBuffer rowSalt, int index) {
       super(index, rowSalt);
+    }
+
+
+    @Override
+    public DataType dataType() {
+      return DataType.NULL;
     }
 
     @Override
@@ -483,19 +548,21 @@ public abstract class Cell {
       byte[] salt = salt(digest);
       digest.reset();
       digest.update(salt);
-      digest.update((byte) 0);
+      digest.update((byte) DataType.NULL.ordinal());  // (zero)
+      digest.update(data());
       return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
     }
 
     @Override
     public int dataSize() {
-      return 1;
+      return DataType.NULL.size();
     }
 
     @Override
     public ByteBuffer data() {
       return Z.duplicate();
     }
+    
   }
   
   
@@ -504,20 +571,21 @@ public abstract class Cell {
     
     
     private final ByteBuffer data;
-    
+    private final byte type;
     
     
     
 
-    RowSaltedCell(ByteBuffer rowSalt, int index, ByteBuffer data, boolean dummy) {
+    RowSaltedCell(ByteBuffer rowSalt, int index, DataType type, ByteBuffer data, boolean dummy) {
       super(index, rowSalt);
       this.data = data;
+      this.type = (byte) type.ordinal();
       assert checkArgs(rowSalt, index, data);
     }
     
     
-    public RowSaltedCell(ByteBuffer rowSalt, int index, ByteBuffer data) {
-      this(rowSalt.slice(), index, data.slice(), false);
+    public RowSaltedCell(ByteBuffer rowSalt, int index, DataType type, ByteBuffer data) {
+      this(rowSalt.slice(), index, type, data.slice(), false);
       if (!checkArgs(rowSalt(), index, data())) {
         throw new IllegalArgumentException(
             "illegal arguments rowSalt: %s, index: %d, data: %s"
@@ -534,30 +602,27 @@ public abstract class Cell {
           data.remaining() == data.capacity();
     }
     
+
+    @Override
+    public DataType dataType() {
+      return DataType.forOrdinal(type);
+    }
     
     @Override
     public ByteBuffer data() {
       return data.asReadOnlyBuffer();
     }
-    
-//    public byte[] salt(MessageDigest digest) {
-//      return TableSalt.cellSalt(rowSalt(), index, digest);
-//    }
-//
-//    @Override
-//    public ByteBuffer hash(MessageDigest digest) {
-//      byte[] salt = salt(digest);
-//      digest.reset();
-//      digest.update(salt);
-//      digest.update(data());
-//      return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
-//    }
-//
-//    @Override
-//    public ByteBuffer salt() {
-//      return ByteBuffer.wrap(salt(DIGEST.newDigest())).asReadOnlyBuffer();
-//    }
 
+
+    @Override
+    public ByteBuffer hash(MessageDigest digest) {
+      byte[] salt = salt(digest);
+      digest.reset();
+      digest.update(salt);
+      digest.update(type);
+      digest.update(data());
+      return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
+    }
 
 
     @Override
@@ -570,17 +635,19 @@ public abstract class Cell {
   
   public final static class UnsaltedReveal extends Revealed {
     
-    public static Cell load(ByteBuffer in, int size) {
+    public static Cell load(DataType type, ByteBuffer in, int size) {
       var data = BufferUtils.slice(in, size);
-      return new UnsaltedReveal(data, false);
+      return new UnsaltedReveal(type, data, false);
     }
     
+    private final byte type;
     private final ByteBuffer data;
     
     /**
      * @param data      positioned at zero, limit == remaining
      */
-    UnsaltedReveal(ByteBuffer data, boolean dummy) {
+    UnsaltedReveal(DataType type, ByteBuffer data, boolean dummy) {
+      this.type = (byte) type.ordinal();
       this.data = data;
       assert data.remaining() == data.capacity();
     }
@@ -589,13 +656,23 @@ public abstract class Cell {
      * 
      * @param data      sliced, not copied. <em>Do not modify contents!</em>
      */
-    public UnsaltedReveal(ByteBuffer data) {
-      this.data = data.slice();
+    public UnsaltedReveal(DataType type ,ByteBuffer data) {
+      this(type, data.slice(), false);
+    }
+
+
+    @Override
+    public DataType dataType() {
+      return DataType.forOrdinal(0xff & type);
     }
 
     @Override
     public final ByteBuffer hash(MessageDigest digest) {
+      if (dataType().isHash())
+        return data();
+
       digest.reset();
+      digest.update(type);
       digest.update(data.duplicate());
       return ByteBuffer.wrap(digest.digest()).asReadOnlyBuffer();
     }

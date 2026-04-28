@@ -8,14 +8,11 @@ import static io.crums.sldg.src.SharedConstants.*;
 
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
 import io.crums.sldg.salt.TableSalt;
 import io.crums.util.Lists;
-import io.crums.util.Strings;
 import io.crums.util.SuppliedValue;
 
 /**
@@ -86,13 +83,15 @@ public class SourceRowBuilder {
    * {@code DataType.HASH}.
    * </p>
    * <ol>
-   * <li>{@code java.lang.String} maps to {@linkplain DataType#STRING}. </li>
-   * <li>{@code java.lang.Number} maps to an 8-byte {@linkplain DataType#LONG}.
+   * <li>{@code java.lang.CharSequence} maps to {@linkplain DataType#STRING}. </li>
+   * <li>Fixed precision numeric primitives map to 8-byte {@linkplain DataType#LONG}s.
    *   However, floating point types are not supported. </li>
    * <li>{@code java.util.Date} maps to {@linkplain DataType#DATE}, which is
    *   a {@code LONG} subtype encoding UTC milliseconds. </li>
-   * <li>{@code byte[]} maps to {@linkplain DataType#BYTES}. </li>
-   * <li>{@code java.nio.ByteBuffer} maps to {@linkplain DataType#BYTES}. </li>
+   * <li>{@code java.math.BigDecimal} and {@code java.math.BigInteger} types are
+   * encoded as {@linkplain DataType#BIG_DEC} and {@linkplain DataType#BIG_INT},
+   * resp.</li> 
+   * <li>{@code byte[]} and {@code java.nio.ByteBuffer} map to {@linkplain DataType#BYTES}. </li>
    * </ol>
    * 
    * @param no          &ge; 1
@@ -134,7 +133,6 @@ public class SourceRowBuilder {
     assert cc > 0;
     
     Cell[] cells = new Cell[cc];
-    DataType[] types = new DataType[cc];
     
     // if we might need salt the cells create the row salt
     // (slightly more complicated design option commented out below)
@@ -152,66 +150,23 @@ public class SourceRowBuilder {
       hasSalt |= salt;
       
       if (value == null) {
-        types[index] = DataType.NULL;
         cells[index] = salt ?
             new Cell.RowSaltedNull(rowSalt, index) : Cell.UNSALTED_NULL;
         continue;
       }
 
-      ByteBuffer valBuf;
-      if (value instanceof String) {
-        types[index] = DataType.STRING;
-        valBuf = Strings.utf8Buffer(value.toString());
-      } else if (value instanceof Long n) {
-        types[index] = DataType.LONG;
-        valBuf = toLongBuffer(n);
-      } else if (value instanceof Integer n) {
-        types[index] = DataType.LONG;
-        valBuf = toLongBuffer(n.longValue());
-      } else if (value instanceof Number n) {
-        if (n instanceof Double || n instanceof Float)
-          throw new IllegalArgumentException(
-              "floating point numbers not supported in ledgers: " + n);
-        types[index] = DataType.LONG;
-        valBuf = toLongBuffer(n.longValue());
-      } else if (value instanceof java.util.Date d) {
-        types[index] = DataType.DATE;
-        valBuf = toLongBuffer(d.getTime());
-      } else if (value instanceof Boolean bool) {
-        types[index] = DataType.BOOL;
-        byte val = bool.booleanValue() ? (byte) 1 : 0;
-        valBuf = ByteBuffer.wrap(new byte[] { val } );
-      } else if (value instanceof byte[] b) {
-        types[index] = DataType.BYTES;
-        valBuf = ByteBuffer.wrap(b);
-      } else if (value instanceof ByteBuffer b) {
-        types[index] = DataType.BYTES;
-        valBuf = b.slice();
-      } else {
-        throw new IllegalArgumentException(
-            "unrecognized value type (class: %s) at index [%d]: %s"
-            .formatted(value.getClass().getName(), index, Arrays.asList(values)));
-      }
+      DataType type = DataType.guessType(value);
+      ByteBuffer valBuf = type.toByteBuffer(value);
       
       cells[index] = salt ?
-          new Cell.RowSaltedCell(rowSalt, index, valBuf) :
-            new Cell.UnsaltedReveal(valBuf, false);
+          new Cell.RowSaltedCell(rowSalt, index, type, valBuf) :
+            new Cell.UnsaltedReveal(type, valBuf, false);
     }
     
-    return new RevealedRow(no, types, cells, hasSalt ? rowSalt : null);
+    return new RevealedRow(no, cells, hasSalt ? rowSalt : null);
    
   }
-  
-  
-  private ByteBuffer toLongBuffer(long n) {
-    return ByteBuffer.allocate(8).putLong(n).flip();
-  }
-  
-  
-  
-  
-  
-  
+
   
   /**
    * 
@@ -264,13 +219,7 @@ public class SourceRowBuilder {
     final var rowSalt = SuppliedValue.of(
         () -> ByteBuffer.wrap(shaker.rowSalt(no, digest)).asReadOnlyBuffer());
     
-    Cell[] cells = new Cell[cc];
-    
-    DataType[] cellTypes = new DataType[cc];
-    
-    // keep track whether cell types are all the same
-    DataType lastType = null;
-    boolean monoType = true;
+    final Cell[] cells = new Cell[cc];
     
     for (int index = 0; index < cc; ++index) {
       
@@ -281,39 +230,23 @@ public class SourceRowBuilder {
       var value = cellValues.get(index);
       
       if (value == null) {
-        cellTypes[index] = DataType.NULL;
         cells[index] = isSalted ?
             new Cell.RowSaltedNull(rowSalt.get(), index) :
               Cell.UNSALTED_NULL;
-        monoType = false;
         continue;
       }
       
-      cellTypes[index] = type;
-      if (monoType && index != 0)
-        monoType = lastType == type;
-      lastType = type;
-      
-      ByteBuffer rawValue = toRawValue(value, type, index);
-      assert rawValue != null;
-      
-      if (type.isFixedSize() && rawValue.remaining() != type.size())
-        throw new IllegalArgumentException(
-            "fixed size cell type (%) / data-size mismatch (expected %d; actual %d) index %d"
-            .formatted(type.name(), type.size(), rawValue.remaining(), index));
+      ByteBuffer rawValue = type.toByteBuffer(value);
       
       cells[index] = isSalted ?
-          new Cell.RowSaltedCell(rowSalt.get(), index, rawValue) :
-            new Cell.UnsaltedReveal(rawValue);
+          new Cell.RowSaltedCell(rowSalt.get(), index, type, rawValue) :
+            new Cell.UnsaltedReveal(type, rawValue);
       
     }
     
     
-    DataType[] cTypes = monoType && cc > 1 ?
-        new DataType[] { cellTypes[0] } :
-          cellTypes;
     
-    var rowSaltOpt = rowSalt.peek().map(ByteBuffer::asReadOnlyBuffer);
+    var rowSaltOpt = rowSalt.peek();
     
     return new SourceRow() {
       
@@ -328,77 +261,29 @@ public class SourceRowBuilder {
       }
       
       @Override
-      public List<DataType> cellTypes() {
-        return
-            cTypes.length == cells.length ?
-                Lists.asReadOnlyList(types) :
-                  Lists.repeatedList(cTypes[0], cells.length);
-      }
-      
-      @Override
       public Optional<ByteBuffer> rowSalt() {
         return rowSaltOpt.map(ByteBuffer::asReadOnlyBuffer);
       }
       
     };
   }
-  
-  
-  private ByteBuffer toRawValue(Object value, DataType type, int index) {
-    return switch (type) {
-    case STRING       -> Strings.utf8Buffer(value.toString());
-    case LONG         -> ByteBuffer.allocate(8).putLong(
-                            ((Number) value).longValue()).flip();
-    case DATE         -> ByteBuffer.allocate(8).putLong(
-        value instanceof Date date ? date.getTime() : (Long) value).flip();
-    case BOOL         -> ByteBuffer.wrap(
-        new byte[] { ((Boolean) value).booleanValue() ? 0 : (byte) 1 });
-    case BYTES        -> fromByteSequence(value, type, index);
-    case HASH         -> fromByteSequence(value, type, index);
-    case NULL         -> assertNullValue(value, index);
-    };
-  }
-  
-  
-  private ByteBuffer assertNullValue(Object value, int index) {
-    if (value != null)
-      throw new IllegalArgumentException(
-          "NULL type with non-null value %s at index %d"
-          .formatted(value, index));
-    return null;
-  }
-  
-  private ByteBuffer fromByteSequence(Object value, DataType hashOrBytes, int index) {
-    if (value instanceof ByteBuffer buf)
-      return buf.slice();
-    else if (value instanceof byte[] array)
-      return ByteBuffer.wrap(array);
-    else
-      throw new IllegalArgumentException(
-          "value class %s (%s) with data type %s for cell [%d]"
-          .formatted(
-              value.getClass().getName(), value, hashOrBytes.name(), index));
-          
-  }
+
   
   
   private static class RevealedRow extends SourceRow {
     
     private final long no;
     private final Cell[] cells;
-    private final DataType[] types;
     
     private final ByteBuffer rowSalt;
     
 
-    RevealedRow(long no, DataType[] types, Cell[] cells, ByteBuffer rowSalt) {
+    RevealedRow(long no, Cell[] cells, ByteBuffer rowSalt) {
       this.no = no;
-      this.types = types;
       this.cells = cells;
       this.rowSalt = rowSalt;
       
       assert no > 0;
-      assert types.length == cells.length;
       assert rowSalt == null || rowSalt.remaining() == rowSalt.capacity();
     }
     @Override
@@ -409,11 +294,6 @@ public class SourceRowBuilder {
     @Override
     public List<Cell> cells() {
       return Lists.asReadOnlyList(cells);
-    }
-
-    @Override
-    public List<DataType> cellTypes() {
-      return Lists.asReadOnlyList(types);
     }
     
     

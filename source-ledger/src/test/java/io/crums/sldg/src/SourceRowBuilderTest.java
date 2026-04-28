@@ -17,11 +17,10 @@ import org.junit.jupiter.api.Test;
 
 import io.crums.sldg.salt.TableSalt;
 import io.crums.testing.SelfAwareTestCase;
-import io.crums.util.Strings;
 
 /**
  * This actually tests both the builder and some base class methods of
- * {@code SourceBuilder}.
+ * {@code SourceRowBuilder}.
  */
 public class SourceRowBuilderTest extends SelfAwareTestCase {
  
@@ -228,7 +227,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     
     final long no = 11L;
     
-    final int id = 99;
+    final long id = 99;
     final String alias = "smarter than max";
     
     var row = builder.buildRow(no, id, alias);
@@ -239,58 +238,32 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     assertValues(row, List.of(DataType.LONG, DataType.STRING), List.of(id, alias), true);
     
   }
+
+
   
   
   
   
+  /** Asserts values, types, and cell hash calculation. */
   private void assertValues(
       SourceRow row, List<DataType> expTypes, List<?> expValues, boolean salted) {
     
     assertEquals(expTypes.size(), row.cells().size());
     assertEquals(expTypes, row.cellTypes());
     
-    var digest = DIGEST.newDigest();
-    
     for (int index = 0; index < expTypes.size(); ++index) {
       Cell cell = row.cells().get(index);
-      Object expected = expValues.get(index);
-      final var type = expTypes.get(index);
-      switch (type) {
-      case STRING:
-        assertEquals(expected.toString(), Strings.utf8String(cell.data()));
-        break;
-      case LONG:
-        assertEquals(((Number) expected).longValue(), cell.data().getLong());
-        assertEquals(8, cell.data().remaining());
-        break;
-      case DATE:
-        assertEquals(8, cell.data().remaining());
-        {
-          long expValue =
-              expected instanceof Date d ? d.getTime() :
-                ((Number) expected).longValue();
-          assertEquals(expValue, cell.data().getLong());
-        }
-        break;
-      case NULL:
-        assertEquals(1, cell.data().remaining());
-        assertEquals(0, cell.data().get());
-        break;
-      case HASH:
-        assertEquals(HASH_WIDTH, cell.data().remaining());
-        // fall thru..
-      case BYTES:
-        assertEquals(expected, cell.data());
-        break;
-      default:
-        fail();
-      }
+      assertEquals(expTypes.get(index), cell.dataType());
+      assertEquals(expValues.get(index), cell.value());
+      
       
       assertEquals(salted, cell.hasSalt());
       
+      var digest = DIGEST.newDigest();
       if (salted)
         assertSaltedHash(cell, row.rowSalt().get(), index, digest);
-      
+      else
+        assertUnsaltedCellHash(cell, digest);
     }
   }
   
@@ -301,12 +274,21 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     assertEquals(HASH_WIDTH, salt.remaining());
     digest.reset();
     digest.update(salt);
+    digest.update((byte) cell.dataType().ordinal());
     digest.update(cell.data());
     assertEquals(ByteBuffer.wrap(digest.digest()), cell.hash());
 
     assertEquals(
         ByteBuffer.wrap(TableSalt.cellSalt(rowSalt, index, digest)),
         cell.salt());
+  }
+
+
+  private void assertUnsaltedCellHash(Cell cell, MessageDigest digest) {
+    digest.reset();
+    digest.update((byte) cell.dataType().ordinal());
+    digest.update(cell.data());
+    assertEquals(ByteBuffer.wrap(digest.digest()), cell.hash());
   }
   
   
@@ -323,7 +305,6 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
   
   private void assertSingleNullRow(SourceRow row, boolean salted) {
     assertSingleCellRow(row, DataType.NULL, salted);
-    assertEquals(0, row.cells().get(0).data().get());
   }
   
   

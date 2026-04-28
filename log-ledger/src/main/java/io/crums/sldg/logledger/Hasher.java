@@ -18,6 +18,7 @@ import io.crums.sldg.SldgConstants;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.logledger.LogParser.Listener;
 import io.crums.sldg.salt.TableSalt;
+import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SaltScheme;
 import io.crums.util.Lists;
 import io.crums.util.Strings;
@@ -175,6 +176,7 @@ public class Hasher implements Listener {
     default void parseEnded() {  }
   }
   
+  private final static byte TT = (byte) DataType.STRING.ordinal();
   
   private final MessageDigest rowDigester = DIGEST.newDigest();
   private final MessageDigest cellDigester = DIGEST.newDigest();
@@ -384,6 +386,7 @@ public class Hasher implements Listener {
       
       if (saltScheme.isSalted(0))
         rowDigester.update(salter.cellSalt(rowNo, 0, cellDigester));
+      rowDigester.update(TT);
       rowDigester.update(tokenBytes.get(0));
       
     } else if (saltScheme.saltAll()) {
@@ -393,6 +396,7 @@ public class Hasher implements Listener {
         var cellSalt = TableSalt.cellSalt(rowSalt, index, cellDigester);
         cellDigester.reset();
         cellDigester.update(cellSalt);
+        cellDigester.update((byte) DataType.STRING.ordinal());
         cellDigester.update(tokenBytes.get(index));
         rowDigester.update(cellDigester.digest());
       }
@@ -411,15 +415,18 @@ public class Hasher implements Listener {
           cellDigester.update(cellSalt);
         } else
           cellDigester.reset();
+        cellDigester.update(TT);
         cellDigester.update(tokenBytes.get(index));
         rowDigester.update(cellDigester.digest());
       }
       
-    } else {
+    } else {  // not salted
       
       for (int index = 0; index < cc; ++index) {
         cellDigester.reset();
-        rowDigester.update(cellDigester.digest(tokenBytes.get(index)));
+        cellDigester.update(TT);
+        cellDigester.update(tokenBytes.get(index));
+        rowDigester.update(cellDigester.digest());
       }
     }
     

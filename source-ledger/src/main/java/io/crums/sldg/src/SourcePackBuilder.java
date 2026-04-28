@@ -302,7 +302,6 @@ public class SourcePackBuilder implements SourceBag, Serial {
           out.put(rowSalt.get());
       }
       
-      var types = row.cellTypes();
       
       for (int index = 0; index < cellCount; ++index) {
         
@@ -312,7 +311,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
           continue;
         }
         
-        var type = types.get(index);
+        var type = cell.dataType();
         out.put(CellFlag.encodeUnredacted(type));
         
         assert cell.hasSalt() == saltScheme.isSalted(index);

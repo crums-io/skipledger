@@ -29,7 +29,7 @@ import io.crums.util.Lists;
  * from revealed ones. This <em>cell-code</em> is also used to encode the
  * the cell's {@linkplain DataType data type}. (Note the corner-case type
  * {@linkplain DataType#NULL NULL} is meant to represent SQL NULL, but does
- * not distinguish which type has been set to null. Its value is a zero byte.)
+ * not distinguish which type has been set to null. Its value is a zeroed 5-byte buffer.)
  * </p>
  * <p>See also: SourcePackBinaryFormat.txt (in sub-module top directory).
  */
@@ -86,10 +86,6 @@ public class SourcePack implements SourceBag, Serial {
     final static int HAS_ROW_SALT = 1;
     final static int WHITESPACE_TOKENIZED = 2;
     
-//    /** One or more cells in the row are redacted.  */
-//    final static boolean redacted(int code) {
-//      return (code & HAS_ROW_SALT) == 0;
-//    }
     /** No cells in the row are redacted. */
     static boolean hasRowSalt(int code) {
       return (code & HAS_ROW_SALT) != 0;
@@ -277,10 +273,6 @@ public class SourcePack implements SourceBag, Serial {
   
   record SaltSchemeR(int[] cellIndices, boolean isPositive)
       implements SaltScheme {
-    
-//    final static SaltSchemeR SALT_ALL = new SaltSchemeR(new int[0], false);
-//    
-//    final static SaltSchemeR NO_SALT = saltOnlyInstance(new int[0]);
     
     
     static SaltSchemeR saltOnlyInstance(int[] indices) {
@@ -470,7 +462,6 @@ public class SourcePack implements SourceBag, Serial {
     final int rowStatus = 0xff & in.get();
     
     Cell[] cells = new Cell[cc];
-    DataType[] types = new DataType[cc];
     
       
     final boolean hasRowSalt = RowFlag.hasRowSalt(rowStatus);
@@ -498,13 +489,10 @@ public class SourcePack implements SourceBag, Serial {
                   Integer.toHexString(rowStatus)));
         
         cells[c] = Cell.Redacted.load(in);
-        types[c] = DataType.HASH;     // just a convention
         continue;
       }
       
       final var type = CellFlag.decodeType(cellCode);
-//      debug.printf("type[%d]: %s%n", c, type);
-      types[c] = type;
       
       if (type.isNull()) {
         if (config.saltScheme.isSalted(c)) {
@@ -521,24 +509,21 @@ public class SourcePack implements SourceBag, Serial {
       int dataSize = type.isFixedSize() ?
           type.size() : config.varSizeReader.getSize(in);
       
-//      debug.println("dataSize: " + dataSize);
-      
       if (config.saltScheme.isSalted(c)) {
         if (hasRowSalt) {
           cells[c] = new Cell.RowSaltedCell(
-              rowSalt, c, BufferUtils.slice(in, dataSize), false);
+              rowSalt, c, type, BufferUtils.slice(in, dataSize), false);
         } else {
-          cells[c] = Cell.SaltedCell.load(in, dataSize);
+          cells[c] = Cell.SaltedCell.load(type, in, dataSize);
         }
       } else
-        cells[c] = Cell.UnsaltedReveal.load(in, dataSize);
+        cells[c] = Cell.UnsaltedReveal.load(type, in, dataSize);
       
     }
-//    debug.println("===========");
     
     return !hasRowSalt ?
-        new Row(no, cells, types) :
-          new Row(no, cells, types) {
+        new Row(no, cells) :
+          new Row(no, cells) {
             @Override public Optional<ByteBuffer> rowSalt() {
               return Optional.of(rowSalt.asReadOnlyBuffer());
             }
@@ -590,13 +575,10 @@ public class SourcePack implements SourceBag, Serial {
     
     private final long no;
     private final Cell[] cells;
-    private final DataType[] types;
     
-    Row(long no, Cell[] cells, DataType[] types) {
+    Row(long no, Cell[] cells) {
       this.no = no;
       this.cells = cells;
-      this.types = types;
-      assert no > 0 && cells.length == types.length && cells.length > 0;
     }
     
 
@@ -605,11 +587,6 @@ public class SourcePack implements SourceBag, Serial {
       return no;
     }
 
-
-    @Override
-    public final List<DataType> cellTypes() {
-      return Lists.asReadOnlyList(types);
-    }
 
 
     @Override
