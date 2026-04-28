@@ -668,9 +668,6 @@ public abstract class Cell {
 
     @Override
     public final ByteBuffer hash(MessageDigest digest) {
-      if (dataType().isHash())
-        return data();
-
       digest.reset();
       digest.update(type);
       digest.update(data.duplicate());
