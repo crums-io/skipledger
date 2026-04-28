@@ -18,7 +18,7 @@
     <flatten.version>1.2.2</flatten.version>
     <crums.util>1.0.5-SNAPSHOT</crums.util>
     <!-- <crums.timechain>0.2.0-SNAPSHOT</crums.timechain> -->
-    <crums.timechain>[0.1.0,)</crums.timechain>
+    <crums.timechain>0.2.0-SNAPSHOT</crums.timechain>
     <native.maven.plugin.version>0.9.13</native.maven.plugin.version>
   </properties>
   <licenses>
