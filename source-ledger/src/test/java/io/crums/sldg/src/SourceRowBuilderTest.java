@@ -7,6 +7,8 @@ package io.crums.sldg.src;
 import static io.crums.sldg.src.SharedConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -345,8 +347,110 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     byte[] salt = DIGEST.newDigest().digest(method(label).getBytes());
     return new TableSalt(salt);
   }
-  
-  
-  
+
+
+  @Test
+  public void testUnsaltedSingleBigInt() {
+    var builder = new SourceRowBuilder();
+    final long no = 20L;
+    BigInteger value = BigInteger.valueOf(9_876_543_210L);
+    var row = builder.buildRow(no, value);
+    assertEquals(no, row.no());
+    assertEquals(List.of(DataType.BIG_INT), row.cellTypes());
+    assertEquals(value, row.cells().get(0).value());
+    assertUnsaltedCellHash(row.cells().get(0), DIGEST.newDigest());
+  }
+
+
+  @Test
+  public void testSaltedSingleBigInt() {
+    final Object label = new Object() {  };
+    var tableSalt = testShaker(label);
+    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    final long no = 21L;
+    BigInteger value = BigInteger.valueOf(9_876_543_210L);
+    var row = builder.buildRow(no, value);
+    assertEquals(no, row.no());
+    assertEquals(List.of(DataType.BIG_INT), row.cellTypes());
+    Cell cell = row.cells().get(0);
+    assertTrue(cell.hasSalt());
+    assertEquals(value, cell.value());
+    assertSaltedHash(cell, row.rowSalt().get(), 0, DIGEST.newDigest());
+  }
+
+
+  @Test
+  public void testUnsaltedSingleBigDec() {
+    var builder = new SourceRowBuilder();
+    final long no = 22L;
+    BigDecimal value = new BigDecimal("12345.67");
+    var row = builder.buildRow(no, value);
+    assertEquals(no, row.no());
+    assertEquals(List.of(DataType.BIG_DEC), row.cellTypes());
+    assertEquals(value, row.cells().get(0).value());
+    assertUnsaltedCellHash(row.cells().get(0), DIGEST.newDigest());
+  }
+
+
+  @Test
+  public void testSaltedSingleBigDec() {
+    final Object label = new Object() {  };
+    var tableSalt = testShaker(label);
+    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    final long no = 23L;
+    BigDecimal value = new BigDecimal("12345.67");
+    var row = builder.buildRow(no, value);
+    assertEquals(no, row.no());
+    assertEquals(List.of(DataType.BIG_DEC), row.cellTypes());
+    Cell cell = row.cells().get(0);
+    assertTrue(cell.hasSalt());
+    assertEquals(value, cell.value());
+    assertSaltedHash(cell, row.rowSalt().get(), 0, DIGEST.newDigest());
+  }
+
+
+  @Test
+  public void testMixedNumericRow() {
+    final Object label = new Object() {  };
+    var tableSalt = testShaker(label);
+    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    final long no = 24L;
+
+    final long longVal = 42L;
+    final BigInteger bigIntVal = BigInteger.valueOf(9_876_543_210L);
+    final BigDecimal bigDecVal = new BigDecimal("12345.67");
+    final String stringVal = "mixed row";
+
+    List<DataType> types = List.of(
+        DataType.LONG, DataType.BIG_INT, DataType.BIG_DEC, DataType.STRING);
+    List<Object> values = List.of(longVal, bigIntVal, bigDecVal, stringVal);
+
+    var row = builder.buildRow(no, types, values);
+    assertEquals(row, builder.buildRow(no, types, values));
+    assertValues(row, types, values, true);
+  }
+
+
+  @Test
+  public void testBigIntViaListApi() {
+    var builder = new SourceRowBuilder();
+    final long no = 25L;
+    BigInteger value = BigInteger.valueOf(1_234_567_890_123L);
+    var varargs = builder.buildRow(no, value);
+    var listApi  = builder.buildRow(no, List.of(DataType.BIG_INT), List.of(value));
+    assertEquals(varargs, listApi);
+  }
+
+
+  @Test
+  public void testBigDecViaListApi() {
+    var builder = new SourceRowBuilder();
+    final long no = 26L;
+    BigDecimal value = new BigDecimal("9999.99");
+    var varargs = builder.buildRow(no, value);
+    var listApi  = builder.buildRow(no, List.of(DataType.BIG_DEC), List.of(value));
+    assertEquals(varargs, listApi);
+  }
+
 
 }

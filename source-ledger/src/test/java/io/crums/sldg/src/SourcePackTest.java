@@ -7,6 +7,8 @@ package io.crums.sldg.src;
 import static io.crums.sldg.src.SharedConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -152,6 +154,79 @@ public class SourcePackTest extends SelfAwareTestCase {
   
   
   
+  @Test
+  public void testBigNumericNoSalt() {
+    final Object label = new Object() {  };
+    bigNumericTest(label, SaltScheme.NO_SALT);
+  }
+
+
+  @Test
+  public void testBigNumericSaltAll() {
+    final Object label = new Object() {  };
+    bigNumericTest(label, SaltScheme.SALT_ALL);
+  }
+
+
+  @Test
+  public void testBigNumericSaltSome() {
+    final Object label = new Object() {  };
+    SaltScheme scheme = SaltSchemeR.saltOnlyInstance(new int[] { 0, 2 });
+    bigNumericTest(label, scheme);
+  }
+
+
+  /**
+   * Verifies that BIG_INT and BIG_DEC cell values survive a serialize/deserialize
+   * roundtrip with explicit value assertions (not just equality of row objects).
+   */
+  @Test
+  public void testBigNumericCellValues() {
+    final Object label = new Object() {  };
+    final TableSalt shaker = tableSalt(label);
+    SaltScheme saltScheme = SaltScheme.SALT_ALL;
+
+    BigInteger bigInt = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE);
+    BigDecimal bigDec = new BigDecimal("12345.678");
+
+    var rowBuilder  = new SourceRowBuilder(saltScheme, shaker);
+    var packBuilder = new SourcePackBuilder(saltScheme);
+
+    final long no = 5L;
+    packBuilder.add(rowBuilder.buildRow(no, bigInt, bigDec));
+
+    SourcePack pack = packBuilder.build();
+
+    // verify values in the in-memory pack
+    var row = pack.findSourceByNo(no).get();
+    assertEquals(bigInt, row.cells().get(0).value());
+    assertEquals(bigDec, row.cells().get(1).value());
+
+    // verify values survive serialization
+    SourcePack packCopy = SourcePack.load(pack.serialize());
+    var rowCopy = packCopy.findSourceByNo(no).get();
+    assertEquals(bigInt, rowCopy.cells().get(0).value());
+    assertEquals(bigDec, rowCopy.cells().get(1).value());
+  }
+
+
+  private void bigNumericTest(Object testLabel, SaltScheme saltScheme) {
+    long[] rowNos = { 1L, 7L, 42L, 100L };
+
+    BigInteger beyondMax  = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE);
+    BigInteger beyondMin  = BigInteger.valueOf(Long.MIN_VALUE).subtract(BigInteger.ONE);
+
+    Object[][] values = {
+        { BigInteger.ZERO,  BigDecimal.ZERO },
+        { beyondMax,        new BigDecimal("99999.999") },
+        { beyondMin,        new BigDecimal("-0.001"),  "label" },
+        { 42L, BigInteger.valueOf(1_234_567_890L), new BigDecimal("3.14159"), "pi" },
+    };
+
+    doTest(testLabel, saltScheme, rowNos, values);
+  }
+
+
   private void moonshineTest(Object testLabel, SaltScheme saltScheme) {
     
     long[] rowNos = {
