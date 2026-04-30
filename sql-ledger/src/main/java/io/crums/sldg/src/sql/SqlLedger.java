@@ -304,6 +304,8 @@ public class SqlLedger implements SourceLedger, Channel {
           "SQL type ARRAY not supported; cell [%d:%d]".formatted(row, col));
     
     case Types.BOOLEAN:
+      return rs.getBoolean(col);
+
     case Types.TINYINT:
     case Types.SMALLINT:
     case Types.INTEGER:
@@ -312,6 +314,10 @@ public class SqlLedger implements SourceLedger, Channel {
         long longVal = rs.getLong(col);
         return rs.wasNull() ? null : longVal;
       }
+    case Types.DECIMAL:
+    case Types.NUMERIC:   // NUMERIC and DECIMAL are semantically identical in SQL
+      return rs.getBigDecimal(col);
+
     case Types.DATE:
     case Types.TIME:
     case Types.TIME_WITH_TIMEZONE:
@@ -324,10 +330,8 @@ public class SqlLedger implements SourceLedger, Channel {
     case Types.NULL:
       return null;
       
-    case Types.DECIMAL:
     case Types.DOUBLE:
     case Types.FLOAT:
-    case Types.NUMERIC:
     case Types.REAL:
       throw new SqlLedgerException(
           "SQL type %s is not supported; cell [%d:%d]".formatted(
@@ -341,13 +345,45 @@ public class SqlLedger implements SourceLedger, Channel {
         if (len > config.maxBlobSize)
           throw new SqlLedgerException(
               "BLOB length %d > max blob size (%d bytes); cell [%d:%d]"
-              .formatted(len, config.maxBlobSize));
+              .formatted(len, config.maxBlobSize, row, col));
         return blob.getBytes(0, (int) len);
       }
      
-    // the various char types (not worth enumerating) are cast as strings below
-    default:
+    // character / text types
+    case Types.CHAR:
+    case Types.VARCHAR:
+    case Types.LONGVARCHAR:
+    case Types.NCHAR:
+    case Types.NVARCHAR:
+    case Types.LONGNVARCHAR:
+    case Types.CLOB:
+    case Types.NCLOB:
       return rs.getString(col);
+
+    // single-bit type: common alias for BOOLEAN in MySQL/MariaDB
+    // (H2 maps BOOLEAN → Types.BOOLEAN, so this branch is not exercised by the H2 test suite)
+    case Types.BIT:
+      return rs.getBoolean(col);   // → DataType.BOOL, consistent with Types.BOOLEAN
+
+    // fixed / variable binary — treat like BLOB with the same size guard
+    case Types.BINARY:
+    case Types.VARBINARY:
+    case Types.LONGVARBINARY:
+      {
+        byte[] bytes = rs.getBytes(col);
+        if (bytes == null) return null;
+        if (bytes.length > config.maxBlobSize)
+          throw new SqlLedgerException(
+              "BINARY/VARBINARY length %d > max blob size (%d bytes); cell [%d:%d]"
+              .formatted(bytes.length, config.maxBlobSize, row, col));
+        return bytes;   // → DataType.BYTES
+      }
+
+    // anything else is not supported
+    default:
+      throw new SqlLedgerException(
+          "SQL type %s (code %d) is not supported; cell [%d:%d]"
+          .formatted(meta.getColumnTypeName(col), meta.getColumnType(col), row, col));
     }
   }
 

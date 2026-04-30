@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 
 import java.io.File;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -461,11 +463,503 @@ public class SqlLedgerTest extends IoTestCase {
     new Random(seed).nextBytes(salt);
     return new TableSalt(salt);
   }
-  
-  
-  
-  
-  
+
+
+  // ---- Financial Ledger: DECIMAL + BOOLEAN coverage ----
+
+  final static String FINANCIAL_LEDGER_CREATE =
+      """
+      CREATE TABLE financial_ledger (
+        txn_no     BIGINT        NOT NULL AUTO_INCREMENT,
+        txn_date   DATE          NOT NULL,
+        amount     DECIMAL(18,4) NOT NULL,
+        fee        DECIMAL(10,4),
+        balance    DECIMAL(20,4) NOT NULL,
+        memo       VARCHAR(256),
+        is_credit  BOOLEAN       NOT NULL,
+        PRIMARY KEY (txn_no)
+      )""";
+
+  final static void createFinancialLedger(Connection con) throws SQLException {
+    try (var stmt = con.createStatement()) {
+      stmt.execute(FINANCIAL_LEDGER_CREATE);
+    }
+  }
+
+  final static String FINANCIAL_LEDGER_SIZE_QUERY =
+      "SELECT MAX(txn_no) FROM financial_ledger";
+
+  static PreparedStatement prepareFinancialLedgerSizeQuery(Connection con)
+      throws SQLException {
+    return con.prepareStatement(FINANCIAL_LEDGER_SIZE_QUERY);
+  }
+
+  final static String FINANCIAL_LEDGER_ROW_QUERY =
+      """
+      SELECT txn_date, amount, fee, balance, memo, is_credit
+      FROM financial_ledger WHERE txn_no = ?""";
+
+  static PreparedStatement prepareFinancialLedgerRowQuery(Connection con)
+      throws SQLException {
+    return con.prepareStatement(FINANCIAL_LEDGER_ROW_QUERY);
+  }
+
+  final static String FINANCIAL_LEDGER_INSERT =
+      """
+      INSERT INTO financial_ledger (txn_date, amount, fee, balance, memo, is_credit)
+      VALUES (?, ?, ?, ?, ?, ?)""";
+
+  static PreparedStatement prepareFinancialLedgerInsert(Connection con)
+      throws SQLException {
+    return con.prepareStatement(FINANCIAL_LEDGER_INSERT);
+  }
+
+
+  record FinancialRow(
+      long txnNo, Date txnDate,
+      BigDecimal amount, Optional<BigDecimal> fee,
+      BigDecimal balance, Optional<String> memo,
+      boolean isCredit) {
+
+    FinancialRow {
+      Objects.requireNonNull(txnDate, "txnDate");
+      Objects.requireNonNull(amount, "amount");
+      Objects.requireNonNull(balance, "balance");
+      if (fee == null)
+        fee = Optional.empty();
+      if (memo == null)
+        memo = Optional.empty();
+    }
+
+    /** Convenience constructor: fee and memo both absent. */
+    FinancialRow(
+        long txnNo, Date txnDate,
+        BigDecimal amount, BigDecimal balance,
+        boolean isCredit) {
+      this(txnNo, txnDate, amount, null, balance, null, isCredit);
+    }
+  }
+
+
+  static void insert(PreparedStatement insertStmt, FinancialRow row)
+      throws SQLException {
+    insertStmt.setDate(1, row.txnDate());
+    insertStmt.setBigDecimal(2, row.amount());
+    if (row.fee().isEmpty())
+      insertStmt.setNull(3, Types.DECIMAL);
+    else
+      insertStmt.setBigDecimal(3, row.fee().get());
+    insertStmt.setBigDecimal(4, row.balance());
+    if (row.memo().isEmpty())
+      insertStmt.setNull(5, Types.VARCHAR);
+    else
+      insertStmt.setString(5, row.memo().get());
+    insertStmt.setBoolean(6, row.isCredit());
+    insertStmt.execute();
+  }
+
+
+  static SqlLedger financialLedgerSource(
+      Connection con, SaltScheme saltScheme, TableSalt shaker)
+      throws SQLException {
+    PreparedStatement sizeQuery = prepareFinancialLedgerSizeQuery(con);
+    assertNotNull(sizeQuery);
+    PreparedStatement rowQuery = prepareFinancialLedgerRowQuery(con);
+    assertNotNull(rowQuery);
+    var config = new SqlLedger.Config(sizeQuery, rowQuery, saltScheme, shaker);
+    return new SqlLedger(config);
+  }
+
+
+  @SuppressWarnings("deprecation")
+  static void assertFinancialExpected(FinancialRow expected, SqlLedger source) {
+    SourceRow srcRow = source.getSourceRow(expected.txnNo());
+    assertEquals(expected.txnNo(), srcRow.no());
+    var saltScheme = source.saltScheme();
+
+    // col 0: txn_date — DATE
+    {
+      final int index = 0;
+      assertEquals(DataType.DATE, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      Date expectedDate = expected.txnDate();
+      Date actual = new Date(cell.data().getLong());
+      assertEquals(expectedDate.getYear(), actual.getYear());
+      assertEquals(expectedDate.getMonth(), actual.getMonth());
+      assertEquals(expectedDate.getDate(), actual.getDate());
+    }
+
+    // col 1: amount — BIG_DEC (non-null)
+    {
+      final int index = 1;
+      assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(0, expected.amount().compareTo((BigDecimal) cell.value()));
+    }
+
+    // col 2: fee — BIG_DEC or NULL
+    {
+      final int index = 2;
+      DataType expectedType =
+          expected.fee().isEmpty() ? DataType.NULL : DataType.BIG_DEC;
+      assertEquals(expectedType, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      if (!expectedType.isNull())
+        assertEquals(0, expected.fee().get().compareTo((BigDecimal) cell.value()));
+    }
+
+    // col 3: balance — BIG_DEC (non-null)
+    {
+      final int index = 3;
+      assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(0, expected.balance().compareTo((BigDecimal) cell.value()));
+    }
+
+    // col 4: memo — STRING or NULL
+    {
+      final int index = 4;
+      DataType expectedType =
+          expected.memo().isEmpty() ? DataType.NULL : DataType.STRING;
+      assertEquals(expectedType, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      if (!expectedType.isNull())
+        assertEquals(expected.memo().get(), Strings.utf8String(cell.data()));
+    }
+
+    // col 5: is_credit — BOOL
+    {
+      final int index = 5;
+      assertEquals(DataType.BOOL, srcRow.cellTypes().get(index));
+      Cell cell = srcRow.cells().get(index);
+      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(expected.isCredit(), cell.value());
+    }
+  }
+
+
+  @Test
+  public void testDecimalNoSalt() throws Exception {
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      createFinancialLedger(con);
+
+      SqlLedger source = financialLedgerSource(con, SaltScheme.of(), null);
+      closer.pushClose(source);
+
+      assertEquals(0L, source.size());
+
+      PreparedStatement insertStmt = prepareFinancialLedgerInsert(con);
+      closer.pushClose(insertStmt);
+
+      // debit, no fee, no memo
+      var row = new FinancialRow(
+          1L,
+          date(2025, 0, 15, 0, 0),
+          new BigDecimal("1000.0000"),
+          new BigDecimal("5000.0000"),
+          false);
+      insert(insertStmt, row);
+
+      assertEquals(1L, source.updateSize());
+      assertFinancialExpected(row, source);
+    }
+  }
+
+
+  @Test
+  public void testDecimalSaltAll() throws Exception {
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      createFinancialLedger(con);
+
+      TableSalt shaker = makeTableSalt(label);
+      SqlLedger source = financialLedgerSource(con, SaltScheme.ofAll(), shaker);
+      closer.pushClose(source);
+
+      PreparedStatement insertStmt = prepareFinancialLedgerInsert(con);
+      closer.pushClose(insertStmt);
+
+      // credit, all fields populated
+      var row = new FinancialRow(
+          1L,
+          date(2025, 0, 20, 0, 0),
+          new BigDecimal("2500.7500"),
+          Optional.of(new BigDecimal("25.0000")),
+          new BigDecimal("7500.7500"),
+          Optional.of("Payment received"),
+          true);
+      insert(insertStmt, row);
+
+      assertEquals(1L, source.updateSize());
+      assertFinancialExpected(row, source);
+    }
+  }
+
+
+  @Test
+  public void testDecimalTwoRowsMixedSalt() throws Exception {
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      createFinancialLedger(con);
+
+      // salt all except txn_date (0) and memo (4)
+      SaltScheme saltScheme = SaltScheme.ofAllExcept(0, 4);
+      TableSalt shaker = makeTableSalt(label);
+      SqlLedger source = financialLedgerSource(con, saltScheme, shaker);
+      closer.pushClose(source);
+
+      PreparedStatement insertStmt = prepareFinancialLedgerInsert(con);
+      closer.pushClose(insertStmt);
+
+      // row 1: debit, fee absent
+      var row1 = new FinancialRow(
+          1L,
+          date(2025, 1, 1, 0, 0),
+          new BigDecimal("500.0000"),
+          new BigDecimal("4500.0000"),
+          false);
+      insert(insertStmt, row1);
+
+      // row 2: credit, fee present
+      var row2 = new FinancialRow(
+          2L,
+          date(2025, 1, 5, 0, 0),
+          new BigDecimal("1000.0000"),
+          Optional.of(new BigDecimal("10.0000")),
+          new BigDecimal("5500.0000"),
+          Optional.of("Wire transfer"),
+          true);
+      insert(insertStmt, row2);
+
+      assertEquals(2L, source.updateSize());
+      assertFinancialExpected(row1, source);
+      assertFinancialExpected(row2, source);
+    }
+  }
+
+
+  @Test
+  public void testDecimalBeyondLongRange() throws Exception {
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      try (var stmt = con.createStatement()) {
+        stmt.execute("""
+            CREATE TABLE big_amount_test (
+              row_no BIGINT NOT NULL AUTO_INCREMENT,
+              amount DECIMAL(24,0) NOT NULL,
+              PRIMARY KEY (row_no)
+            )""");
+      }
+
+      BigDecimal bigAmount = new BigDecimal(
+          BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE));
+
+      try (var ps = con.prepareStatement(
+          "INSERT INTO big_amount_test (amount) VALUES (?)")) {
+        ps.setBigDecimal(1, bigAmount);
+        ps.execute();
+      }
+
+      PreparedStatement sizeQuery = con.prepareStatement(
+          "SELECT MAX(row_no) FROM big_amount_test");
+      closer.pushClose(sizeQuery);
+      PreparedStatement rowQuery = con.prepareStatement(
+          "SELECT amount FROM big_amount_test WHERE row_no = ?");
+      closer.pushClose(rowQuery);
+
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      SqlLedger source = new SqlLedger(config);
+      closer.pushClose(source);
+
+      assertEquals(1L, source.size());
+
+      SourceRow srcRow = source.getSourceRow(1L);
+      assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(0));
+      BigDecimal actual = (BigDecimal) srcRow.cells().get(0).value();
+      assertEquals(0, bigAmount.compareTo(actual));
+    }
+  }
+
+
+  @Test
+  public void testVarbinaryColumn() throws Exception {
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      try (var stmt = con.createStatement()) {
+        stmt.execute("""
+            CREATE TABLE binary_test (
+              row_no  BIGINT       NOT NULL AUTO_INCREMENT,
+              payload VARBINARY(256) NOT NULL,
+              PRIMARY KEY (row_no)
+            )""");
+      }
+
+      byte[] expected = { 0x01, 0x02, 0x03, (byte) 0xDE, (byte) 0xAD, (byte) 0xBE, (byte) 0xEF };
+
+      try (var ps = con.prepareStatement(
+          "INSERT INTO binary_test (payload) VALUES (?)")) {
+        ps.setBytes(1, expected);
+        ps.execute();
+      }
+
+      PreparedStatement sizeQuery = con.prepareStatement(
+          "SELECT MAX(row_no) FROM binary_test");
+      closer.pushClose(sizeQuery);
+      PreparedStatement rowQuery = con.prepareStatement(
+          "SELECT payload FROM binary_test WHERE row_no = ?");
+      closer.pushClose(rowQuery);
+
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      SqlLedger source = new SqlLedger(config);
+      closer.pushClose(source);
+
+      assertEquals(1L, source.size());
+
+      SourceRow srcRow = source.getSourceRow(1L);
+      assertEquals(DataType.BYTES, srcRow.cellTypes().get(0));
+      java.nio.ByteBuffer buf = srcRow.cells().get(0).data();
+      byte[] actual = new byte[buf.remaining()];
+      buf.get(actual);
+      assertArrayEquals(expected, actual);
+    }
+  }
+
+
+  @Test
+  public void testUnsupportedDefaultTypeRejected() throws Exception {
+    // H2's ARRAY type falls to the already-present Types.ARRAY case (throws), so we use
+    // it as a proxy to confirm that unsupported types surface as SqlLedgerException.
+    // The new default branch covers other driver-specific types (JAVA_OBJECT, STRUCT,
+    // REF, etc.) that cannot be easily created in H2 but are rejected by the same path.
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      try (var stmt = con.createStatement()) {
+        // H2 requires a base type for ARRAY columns (e.g. VARCHAR ARRAY)
+        stmt.execute("""
+            CREATE TABLE array_test (
+              row_no BIGINT        NOT NULL AUTO_INCREMENT,
+              tags   VARCHAR ARRAY NOT NULL,
+              PRIMARY KEY (row_no)
+            )""");
+        stmt.execute("INSERT INTO array_test (tags) VALUES (ARRAY['a','b'])");
+      }
+
+      PreparedStatement sizeQuery = con.prepareStatement(
+          "SELECT MAX(row_no) FROM array_test");
+      closer.pushClose(sizeQuery);
+      PreparedStatement rowQuery = con.prepareStatement(
+          "SELECT tags FROM array_test WHERE row_no = ?");
+      closer.pushClose(rowQuery);
+
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      SqlLedger source = new SqlLedger(config);
+      closer.pushClose(source);
+
+      assertEquals(1L, source.size());
+      assertThrows(SqlLedgerException.class, () -> source.getSourceRow(1L));
+    }
+  }
+
+
+  @Test
+  public void testNumericColumn() throws Exception {
+    // Types.NUMERIC is semantically identical to Types.DECIMAL — both map to BIG_DEC.
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      BigDecimal expected = new BigDecimal("1.23");
+
+      try (var stmt = con.createStatement()) {
+        stmt.execute("""
+            CREATE TABLE numeric_test (
+              row_no BIGINT NOT NULL AUTO_INCREMENT,
+              val NUMERIC(10,2) NOT NULL,
+              PRIMARY KEY (row_no)
+            )""");
+        stmt.execute("INSERT INTO numeric_test (val) VALUES (1.23)");
+      }
+
+      PreparedStatement sizeQuery = con.prepareStatement(
+          "SELECT MAX(row_no) FROM numeric_test");
+      closer.pushClose(sizeQuery);
+      PreparedStatement rowQuery = con.prepareStatement(
+          "SELECT val FROM numeric_test WHERE row_no = ?");
+      closer.pushClose(rowQuery);
+
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      SqlLedger source = new SqlLedger(config);
+      closer.pushClose(source);
+
+      assertEquals(1L, source.size());
+
+      SourceRow srcRow = source.getSourceRow(1L);
+      assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(0));
+      assertEquals(0, expected.compareTo((BigDecimal) srcRow.cells().get(0).value()));
+    }
+  }
+
+
+  @Test
+  public void testFloatColumnRejected() throws Exception {
+    // Floating-point types (FLOAT, DOUBLE, REAL) are deliberately unsupported:
+    // their imprecise representation would make ledger hashes non-reproducible.
+    Object label = new Object() { };
+    try (var closer = new TaskStack()) {
+      var con = newDatabase(label);
+      closer.pushClose(con);
+
+      try (var stmt = con.createStatement()) {
+        stmt.execute("""
+            CREATE TABLE float_test (
+              row_no BIGINT NOT NULL AUTO_INCREMENT,
+              val    DOUBLE NOT NULL,
+              PRIMARY KEY (row_no)
+            )""");
+        stmt.execute("INSERT INTO float_test (val) VALUES (1.23)");
+      }
+
+      PreparedStatement sizeQuery = con.prepareStatement(
+          "SELECT MAX(row_no) FROM float_test");
+      closer.pushClose(sizeQuery);
+      PreparedStatement rowQuery = con.prepareStatement(
+          "SELECT val FROM float_test WHERE row_no = ?");
+      closer.pushClose(rowQuery);
+
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      SqlLedger source = new SqlLedger(config);
+      closer.pushClose(source);
+
+      assertEquals(1L, source.size());
+      assertThrows(SqlLedgerException.class, () -> source.getSourceRow(1L));
+    }
+  }
+
 
 }
 
