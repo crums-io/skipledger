@@ -74,6 +74,28 @@ public enum DataType {
     return NULL_DATA_BUFFER.duplicate();
   }
   
+
+  /**
+   * Guesses and returns the enum instance corresponding to the given value.
+   *
+   * <table border="1">
+   *   <caption>Java type → DataType mapping</caption>
+   *   <tr><th>Java type</th><th>Returns</th><th>Notes</th></tr>
+   *   <tr><td>{@code null}</td><td>{@link #NULL}</td><td></td></tr>
+   *   <tr><td>{@link CharSequence} (incl. {@code String})</td><td>{@link #STRING}</td><td></td></tr>
+   *   <tr><td>{@link Long}, {@link Integer}, {@link Short}, {@link Byte}</td><td>{@link #LONG}</td><td></td></tr>
+   *   <tr><td>{@link java.util.Date}</td><td>{@link #DATE}</td><td></td></tr>
+   *   <tr><td>{@link java.math.BigInteger}</td><td>{@link #BIG_INT}</td><td></td></tr>
+   *   <tr><td>{@link java.math.BigDecimal}</td><td>{@link #BIG_DEC}</td><td></td></tr>
+   *   <tr><td>{@link Boolean}</td><td>{@link #BOOL}</td><td></td></tr>
+   *   <tr><td>{@link java.nio.ByteBuffer} (32 remaining bytes)</td><td>{@link #HASH}</td><td>exactly 32 bytes remaining (SHA-256 width)</td></tr>
+   *   <tr><td>{@link java.nio.ByteBuffer} (other)</td><td>{@link #BYTES}</td><td></td></tr>
+   *   <tr><td>{@code byte[]} (length 32)</td><td>{@link #HASH}</td><td>exactly 32 bytes (SHA-256 width)</td></tr>
+   *   <tr><td>{@code byte[]} (other)</td><td>{@link #BYTES}</td><td></td></tr>
+   * </table>
+   *
+   * @throws IllegalArgumentException if {@code value} is a type not listed above
+   */
   public static DataType guessType(Object value) {
     if (value == null)
       return NULL;

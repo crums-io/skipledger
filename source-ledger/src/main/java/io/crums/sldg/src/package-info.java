@@ -13,18 +13,5 @@
  * downstream distribution without mutating the source-row's (verifiable) hash.
  * </li>
  * </ol>
- * <p>
- * T
- * </p>
- * <h2>About the hash of the HASH data type</h2>
- * <p>
- * Presently, this data type is hashed like any other byte sequence.
- * I'm on the fence whether it ought to be so: maybe its hash should
- * be itself. In that event, HASH types cannot take any salt. That's the
- * downside; the upside would be that redacted cells would be indistiguishable
- * from HASH values. Another upside, is that it introduces a data type
- * with this curious hashing property.
- * </p>
- * <h2>TODO</h2>
  */
 package io.crums.sldg.src;
