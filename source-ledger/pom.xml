@@ -27,7 +27,13 @@
       <artifactId>tablesalt</artifactId>
       <version>${revision}</version>
     </dependency>
-   
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>jsonimple</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+
   </dependencies>
   
 </project>

@@ -533,7 +533,7 @@ public abstract class Cell {
     private final static ByteBuffer Z =
         ByteBuffer.wrap(new byte[DataType.NULL.size()]).asReadOnlyBuffer();
     
-    RowSaltedNull(ByteBuffer rowSalt, int index) {
+    public RowSaltedNull(ByteBuffer rowSalt, int index) {
       super(index, rowSalt);
     }
 
