@@ -22,6 +22,7 @@ import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.SourceRowBuilder;
 import io.crums.testing.SelfAwareTestCase;
 import io.crums.util.json.JsonParsingException;
+import io.crums.util.json.JsonPrinter;
 import io.crums.util.json.simple.JSONArray;
 import io.crums.util.json.simple.JSONObject;
 
@@ -55,12 +56,16 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
   @Test
   public void testUnsaltedInferrableTypes() {
+    final Object label = new Object() { };
+    
     // null, boolean, long, string — written as bare JSON values
     var builder = new SourceRowBuilder();
     SourceRow row = builder.buildRow(1L, (Object) null, true, 42L, "hello");
     assertRoundtrip(row);
 
     JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     assertNull(cells.get(0),              "null → bare null");
     assertEquals(Boolean.TRUE, cells.get(1), "bool → bare boolean");
@@ -72,6 +77,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
   @Test
   public void testUnsaltedNonInferrableTypes() {
+    final Object label = new Object() { };
     // DATE, BIG_DEC, BIG_INT, BYTES, HASH — require object form with "type" key
     var builder = new SourceRowBuilder();
     long utcMillis = new Date(2025, 0, 15).getTime(); // Jan 2025
@@ -94,6 +100,8 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
     // Verify BIG_DEC is written as a string
     JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     JSONObject decCell = (JSONObject) cells.get(1);
     assertEquals(SourceRowParser.T_DEC, decCell.get(SourceRowParser.TYPE_KEY));
@@ -108,9 +116,13 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
   @Test
   public void testUnsaltedNullOnlyRow() {
+    final Object label = new Object() { };
     var builder = new SourceRowBuilder();
     SourceRow row = builder.buildRow(3L, (Object) null);
     assertRoundtrip(row);
+    JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
   }
 
 
@@ -126,6 +138,8 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
     // Row salt appears at row level, not cell level
     JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
     assertNotNull(jObj.get(SourceRowParser.SALT_KEY), "row salt present");
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     // Cells in compact form (no cell-level salt keys)
@@ -146,6 +160,9 @@ public class SourceRowParserTest extends SelfAwareTestCase {
         java.util.List.of(DataType.NULL, DataType.DATE),
         Arrays.asList(null, utc));
     assertRoundtrip(row);
+    JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
   }
 
 
@@ -169,6 +186,8 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
     // Verify the surviving revealed cell is written with a "salt" key
     JSONObject jObj = PARSER.toJsonObject(row);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
     assertNull(jObj.get(SourceRowParser.SALT_KEY), "no row-level salt");
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     // Cell 0 is redacted
@@ -197,6 +216,8 @@ public class SourceRowParserTest extends SelfAwareTestCase {
 
     // Verify redacted cell uses { "type": "X", "hash": "..." }
     JSONObject jObj = PARSER.toJsonObject(redacted);
+    System.out.println("=== " + method(label) + " ===");
+    JsonPrinter.println(jObj);
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     JSONObject xCell = (JSONObject) cells.get(1);
     assertEquals(SourceRowParser.T_REDACT, xCell.get(SourceRowParser.TYPE_KEY));

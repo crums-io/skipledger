@@ -7,6 +7,7 @@ package io.crums.sldg.src.json;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Optional;
@@ -201,7 +202,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
       case BIG_INT -> value.toString();                            // "12345..."
       case BIG_DEC -> ((BigDecimal) value).toPlainString();        // "99.9500"
       case BOOL    -> value;                                       // Boolean
-      case BYTES   -> IntegralStrings.toHex((ByteBuffer) value);   // hex string
+      case BYTES   -> encodeBytes((ByteBuffer) value);              // base64
       case HASH    -> encodeFixed((ByteBuffer) value);             // base64_32
       default      -> throw new IllegalArgumentException("unexpected type: " + type);
     };
@@ -405,7 +406,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
         case BIG_DEC -> new BigDecimal((String) rawValue);
         case BOOL    -> (Boolean) rawValue;
         case BYTES   -> ByteBuffer.wrap(
-                            IntegralStrings.hexToBytes((String) rawValue));
+                            Base64.getDecoder().decode((String) rawValue));
         case HASH    -> decodeFixed((String) rawValue, VALUE_KEY);
         default      -> throw new JsonParsingException("unsupported type: " + type);
       };
@@ -425,6 +426,12 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
    */
   private static String encodeFixed(ByteBuffer buf) {
     return Base64_32.encode(buf);
+  }
+
+  private static String encodeBytes(ByteBuffer buf) {
+    byte[] bytes = new byte[buf.remaining()];
+    buf.duplicate().get(bytes);
+    return Base64.getEncoder().encodeToString(bytes);
   }
 
 
