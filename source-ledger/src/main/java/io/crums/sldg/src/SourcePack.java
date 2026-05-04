@@ -508,7 +508,14 @@ public class SourcePack implements SourceBag, Serial {
       
       int dataSize = type.isFixedSize() ?
           type.size() : config.varSizeReader.getSize(in);
-      
+
+      if (type == DataType.BIG_DEC) {
+        // Per-cell salted cells store [salt | data] in stream; skip salt to reach data bytes.
+        boolean saltInStream = config.saltScheme.isSalted(c) && !hasRowSalt;
+        int dataStart = in.position() + (saltInStream ? HASH_WIDTH : 0);
+        type.toValue(in.slice(dataStart, dataSize));
+      }
+
       if (config.saltScheme.isSalted(c)) {
         if (hasRowSalt) {
           cells[c] = new Cell.RowSaltedCell(

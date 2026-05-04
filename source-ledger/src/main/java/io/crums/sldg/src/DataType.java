@@ -269,11 +269,16 @@ public enum DataType {
     case BIG_DEC:
       {
         int pos = input.position();
-        int size = input.remaining();
         int scale = input.get(pos);
-        byte[] unscaledVal = new byte[size - 1];
+        byte[] unscaledVal = new byte[input.remaining() - 1];
         input.get(pos + 1, unscaledVal);
-        return new BigDecimal(new BigInteger(unscaledVal), scale);
+        var unscaled = new BigInteger(unscaledVal);
+        if (unscaled.signum() == 0 ? scale != 0
+                                   : unscaled.remainder(BigInteger.TEN).signum() == 0)
+          throw new IllegalArgumentException(
+              "BIG_DEC bytes not in canonical form (unscaled %s, scale %d)"
+              .formatted(unscaled, (int) scale));
+        return new BigDecimal(unscaled, scale);
       }
     case BOOL:
       {
@@ -375,6 +380,9 @@ public enum DataType {
     } else
       throw new IllegalArgumentException(
           conversionErrorMsg(value, BigDecimal.class));
+
+    // Canonicalize: strip trailing zeros so numerically equal values hash identically.
+    bigDec = bigDec.stripTrailingZeros();
 
     byte scale = (byte) bigDec.scale();
     if (scale != bigDec.scale())

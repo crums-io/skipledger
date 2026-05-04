@@ -97,7 +97,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
     JSONObject decCell = (JSONObject) cells.get(1);
     assertEquals(SourceRowParser.T_DEC, decCell.get(SourceRowParser.TYPE_KEY));
-    assertEquals("99.9500", decCell.get(SourceRowParser.VALUE_KEY));
+    assertEquals("99.95", decCell.get(SourceRowParser.VALUE_KEY));
 
     // Verify BIG_INT is written as a string
     JSONObject bigIntCell = (JSONObject) cells.get(2);
