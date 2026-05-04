@@ -314,7 +314,14 @@ public abstract class Cell {
     public final boolean hasData() {
       return true;
     }
-    
+
+    void checkDataSize(DataType type, int dataSize) {
+      if (dataSize < type.minimumSize())
+        throw new IllegalArgumentException(
+            "data too small for %s: %d < minimum %d"
+            .formatted(type, dataSize, type.minimumSize()));
+    }
+
   }
   
   
@@ -455,6 +462,7 @@ public abstract class Cell {
       this.type = (byte) type.ordinal();
       this.saltData = saltData;
       assert saltData.remaining() == saltData.capacity();
+      checkDataSize(type, saltData.remaining() - HASH_WIDTH);
     }
     
     /**
@@ -581,6 +589,7 @@ public abstract class Cell {
       this.data = data;
       this.type = (byte) type.ordinal();
       assert checkArgs(rowSalt, index, data);
+      checkDataSize(type, data.remaining());
     }
     
     
@@ -650,6 +659,7 @@ public abstract class Cell {
       this.type = (byte) type.ordinal();
       this.data = data;
       assert data.remaining() == data.capacity();
+      checkDataSize(type, data.remaining());
     }
     
     /**
