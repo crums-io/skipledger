@@ -88,14 +88,8 @@
  *     SourceRow row = ledger.getSourceRow(42L);
  * }
  * }</pre>
- * <p>
- * {@link io.crums.sldg.src.sql.DbSession DbSession} is a higher-level factory that
- * handles JDBC driver loading, connection creation, and {@code SqlLedger} construction
- * from {@link io.crums.sldg.src.sql.config config} package objects.
- * </p>
  *
  * @see io.crums.sldg.src.sql.SqlLedger
- * @see io.crums.sldg.src.sql.DbSession
  * @see io.crums.sldg.src.sql.config
  */
 package io.crums.sldg.src.sql;

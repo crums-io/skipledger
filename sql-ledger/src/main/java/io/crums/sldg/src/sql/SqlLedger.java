@@ -6,6 +6,7 @@ package io.crums.sldg.src.sql;
 
 import java.nio.channels.Channel;
 import java.sql.Blob;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -36,7 +37,7 @@ public class SqlLedger implements SourceLedger, Channel {
   /**
    * Chunky configuration parameters.
    */
-  protected record Config(
+  public record Config(
       PreparedStatement sizeQuery,
       PreparedStatement rowByNoQuery,
       SaltScheme saltScheme,
@@ -143,16 +144,45 @@ public class SqlLedger implements SourceLedger, Channel {
   
 
   /**
-   * 
+   * Opens a new {@code SqlLedger} using the given connection and SQL queries.
+   *
+   * <p>Prepares both statements against the supplied connection; if either
+   * {@code prepareStatement} call fails the other is closed before the
+   * exception propagates.</p>
+   *
+   * @param connection    open JDBC connection (should be read-only)
+   * @param sizeQuery     parameter-free SQL returning the row count
+   * @param rowByNoQuery  single-parameter SQL returning one row by 1-based number
+   * @param saltScheme    not {@code null}
+   * @param shaker        required when {@code saltScheme.hasSalt()}; may be
+   *                      {@code null} otherwise
    */
-  SqlLedger(Config config) {
+  public static SqlLedger open(
+      Connection connection,
+      String sizeQuery,
+      String rowByNoQuery,
+      SaltScheme saltScheme,
+      TableSalt shaker) throws SQLException {
+    try (var closeOnFail = new TaskStack()) {
+      PreparedStatement sizeStmt = connection.prepareStatement(sizeQuery);
+      closeOnFail.pushClose(sizeStmt);
+      PreparedStatement rowStmt = connection.prepareStatement(rowByNoQuery);
+      closeOnFail.pushClose(rowStmt);
+      var ledger = new SqlLedger(new Config(sizeStmt, rowStmt, saltScheme, shaker));
+      closeOnFail.clear();
+      return ledger;
+    }
+  }
+
+
+  public SqlLedger(Config config) {
     this.config = config;
     builder = new SourceRowBuilder(config.saltScheme, config.shaker);
     sizeSnapshot.set(liveSize());
   }
 
   /**
-   * 
+   *
    */
   SqlLedger(Config config, long size) {
     builder = new SourceRowBuilder(config.saltScheme, config.shaker);
