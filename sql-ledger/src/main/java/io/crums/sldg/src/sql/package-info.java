@@ -90,6 +90,5 @@
  * }</pre>
  *
  * @see io.crums.sldg.src.sql.SqlLedger
- * @see io.crums.sldg.src.sql.config
  */
 package io.crums.sldg.src.sql;
