@@ -1,6 +1,6 @@
 module io.crums.sldg.src.sql {
   
-  requires java.sql;
+  requires transitive java.sql;
   requires transitive io.crums.jsonimple;
   requires transitive io.crums.sldg.src;
   
