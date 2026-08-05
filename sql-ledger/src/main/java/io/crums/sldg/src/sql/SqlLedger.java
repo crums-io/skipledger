@@ -295,36 +295,48 @@ public class SqlLedger implements SourceLedger, Channel {
    * @param rn          range-checked
    */
   protected SourceRow getSourceRowImpl(long rn) throws SQLException {
-    
     config.rowByNoQuery.setLong(1, rn);
     ResultSet rs = config.rowByNoQuery.executeQuery();
-    
     if (!rs.next())
       return SourceRow.nullRow(rn);
-    
+    return buildSourceRowFromResultSet(rs, rn, 0);
+  }
+
+  /**
+   * Builds a {@link SourceRow} from the current row of an already-positioned
+   * {@link ResultSet}.
+   *
+   * @param rs         ResultSet positioned at the row to read (i.e. {@code next()}
+   *                   has already been called and returned {@code true})
+   * @param rn         skipledger row number (1-based); used for salt derivation
+   *                   and error messages
+   * @param colOffset  zero-based column offset: {@code 0} means read all columns
+   *                   starting from SQL column 1; {@code 1} means skip the first
+   *                   column (e.g. when column 1 holds the row number itself)
+   */
+  protected final SourceRow buildSourceRowFromResultSet(
+      ResultSet rs, long rn, int colOffset) throws SQLException {
+
     ResultSetMetaData meta = rs.getMetaData();
-    
-    final int cc = meta.getColumnCount();
-    if (cc == 0)
+    int cc = meta.getColumnCount() - colOffset;
+    if (cc <= 0)
       return SourceRow.nullRow(rn);
-    
+
     Object[] values = new Object[cc];
-    
-    for (int index = 0; index < cc; ++index)
-      values[index] = getColumnValue(rs, meta, rn, 1 + index);
-    
+    for (int i = 0; i < cc; i++)
+      values[i] = getColumnValue(rs, meta, rn, colOffset + 1 + i);
     return builder.buildRow(rn, values);
   }
-  
+
   /**
    * Returns the column value.
-   * 
-   * @param row         used only exception messages
+   *
+   * @param row         used only in exception messages
    * @param col         1-based col no. (per SQL convention)
-   * 
+   *
    * @see SourceRowBuilder#buildRow(long, Object...)
    */
-  private Object getColumnValue(ResultSet rs, ResultSetMetaData meta, long row, int col)
+  protected final Object getColumnValue(ResultSet rs, ResultSetMetaData meta, long row, int col)
       throws SQLException {
     
     switch (meta.getColumnType(col)) {

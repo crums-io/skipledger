@@ -29,7 +29,6 @@ import io.crums.sldg.src.Cell;
 import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SharedConstants;
-import io.crums.sldg.src.SourceLedger;
 import io.crums.sldg.src.SourceRow;
 import io.crums.testing.IoTestCase;
 import io.crums.util.Strings;
