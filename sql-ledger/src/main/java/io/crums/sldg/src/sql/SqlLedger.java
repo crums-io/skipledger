@@ -322,10 +322,32 @@ public class SqlLedger implements SourceLedger, Channel {
     if (cc <= 0)
       return SourceRow.nullRow(rn);
 
+    observeMeta(meta, colOffset);
+
     Object[] values = new Object[cc];
     for (int i = 0; i < cc; i++)
       values[i] = getColumnValue(rs, meta, rn, colOffset + 1 + i);
     return builder.buildRow(rn, values);
+  }
+
+  /**
+   * Hook invoked once per {@link #buildSourceRowFromResultSet} call, after
+   * the columns to be read have been determined but before any values are
+   * extracted. No-op by default.
+   *
+   * <p>Subclasses may override this to inspect {@code meta} — e.g. to
+   * capture {@code getColumnLabel(int)} as a naming fallback for consumers
+   * that want a column name when no other column metadata is configured.
+   * Note the off-by-one: JDBC column numbers are 1-based, so a row's
+   * zero-based cell index {@code i} corresponds to JDBC column
+   * {@code colOffset + 1 + i}, for {@code i} in
+   * {@code [0, meta.getColumnCount() - colOffset)}.</p>
+   *
+   * @param meta      result set metadata for the just-positioned row
+   * @param colOffset columns before {@code colOffset} are skipped (not part of the row)
+   */
+  protected void observeMeta(ResultSetMetaData meta, int colOffset)
+      throws SQLException {
   }
 
   /**
