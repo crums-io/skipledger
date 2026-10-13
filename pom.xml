@@ -83,25 +83,12 @@
   -->
   <modules>
     <module>skipledger-base</module>
-    <!--
-    <module>skipledger</module>
-    <module>skipledger-sql</module>
-    <module>reports</module>
-    <module>sldg</module>
-    <module>mrsl</module>
-    <module>b64</module>
-    <module>report-template</module>
-    <module>logledge</module>
-    <module>jurno</module>
-    -->
     <module>tablesalt</module>
     <module>source-ledger</module>
     <module>log-ledger</module>
     <module>bindle</module>
     <module>microchain</module>
     <module>sql-ledger</module>
-    <module>microchain-mgmt</module>
-    <module>microchain-fx</module>
   </modules>
   <build>
     <plugins>

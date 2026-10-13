@@ -7,7 +7,7 @@ package io.crums.sldg.bindle;
 import java.nio.ByteBuffer;
 import java.util.function.Function;
 
-import io.crums.io.buffer.Partition;
+import io.crums.util.io.buffer.Partition;
 
 /**
  * Lazy-loading, unverified, {@linkplain Bindle}.

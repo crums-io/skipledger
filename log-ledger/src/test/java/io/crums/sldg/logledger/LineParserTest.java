@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 
 import org.junit.jupiter.api.Test;
 
-import io.crums.io.Opening;
+import io.crums.util.api.Opening;
 import io.crums.testing.IoTestCase;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;

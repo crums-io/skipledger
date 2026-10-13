@@ -11,7 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.function.Function;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Base class for the {@linkplain Bindle}

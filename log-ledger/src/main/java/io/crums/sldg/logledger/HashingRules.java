@@ -8,8 +8,8 @@ import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.SaltScheme;
 

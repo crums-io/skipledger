@@ -6,7 +6,7 @@ package io.crums.sldg.json;
 
 import java.nio.ByteBuffer;
 
-import io.crums.util.Base64_32;
+import io.crums.util.api.Base64_32;
 import io.crums.util.IntegralStrings;
 
 /**

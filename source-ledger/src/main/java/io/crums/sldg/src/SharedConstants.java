@@ -3,8 +3,8 @@
  */
 package io.crums.sldg.src;
 
-import io.crums.util.hash.Digest;
-import io.crums.util.hash.Digests;
+import io.crums.util.api.Digest;
+import io.crums.util.api.Digests;
 
 /**
  * Some constants in the base module are reused here. Redefined here so that

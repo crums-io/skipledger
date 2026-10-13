@@ -7,7 +7,7 @@ package io.crums.sldg;
 import static io.crums.sldg.SkipLedger.skipCount;
 import java.nio.ByteBuffer;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A self-contained row laid out in serial form.

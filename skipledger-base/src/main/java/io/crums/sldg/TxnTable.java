@@ -6,7 +6,7 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import io.crums.io.buffer.ReadWriteBuffer;
+import io.crums.util.io.buffer.ReadWriteBuffer;
 
 /**
  * Single transaction view over another table. Used when <em>multiple</em>

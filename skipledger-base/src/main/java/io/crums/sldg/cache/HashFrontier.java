@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Objects;
 
-import io.crums.io.Serial;
+import io.crums.util.api.Serial;
 import io.crums.sldg.ByteFormatException;
 import io.crums.sldg.Row;
 import io.crums.sldg.RowHash;
@@ -18,7 +18,7 @@ import io.crums.sldg.SerialRow;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.SldgConstants;
 import io.crums.util.IntegralStrings;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Models the <em>minimum</em> information necessary starting from some row numer

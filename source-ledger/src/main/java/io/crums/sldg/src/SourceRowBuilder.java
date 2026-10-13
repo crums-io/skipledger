@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import io.crums.sldg.salt.TableSalt;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 import io.crums.util.SuppliedValue;
 
 /**

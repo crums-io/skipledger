@@ -10,15 +10,15 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.function.Function;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.bindle.LedgerId;
 import io.crums.sldg.bindle.LedgerType;
 import io.crums.sldg.bindle.Nugget;
 import io.crums.sldg.bindle.TimechainInfo;
 import io.crums.tc.ChainParams;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Binary package containing witness proofs of a ledger's rows on a timechain.

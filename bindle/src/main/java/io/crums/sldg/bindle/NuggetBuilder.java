@@ -22,8 +22,8 @@ import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SourcePack;
 import io.crums.sldg.src.SourcePackBuilder;
 import io.crums.sldg.src.SourceRow;
-import io.crums.util.Lists;
-import io.crums.util.Maps;
+import io.crums.util.collections.Lists;
+import io.crums.util.collections.Maps;
 
 /**
  * Nugget builder.

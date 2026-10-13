@@ -6,8 +6,8 @@ package io.crums.sldg;
 
 import java.lang.System.Logger;
 
-import io.crums.util.hash.Digest;
-import io.crums.util.hash.Digests;
+import io.crums.util.api.Digest;
+import io.crums.util.api.Digests;
 
 /**
  * Library constants.

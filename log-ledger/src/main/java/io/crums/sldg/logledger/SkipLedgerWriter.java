@@ -12,7 +12,7 @@ import java.lang.System.Logger.Level;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.io.channels.ChannelUtils;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.logledger.Hasher.RowHashListener;

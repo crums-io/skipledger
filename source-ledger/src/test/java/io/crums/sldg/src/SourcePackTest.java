@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.SourcePack.SaltSchemeR;
 import io.crums.testing.SelfAwareTestCase;
-import io.crums.util.Base64_32;
+import io.crums.util.api.Base64_32;
 
 /**
  * 

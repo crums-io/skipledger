@@ -20,13 +20,12 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.cache.HashFrontier;
-import io.crums.util.EasyList;
-import io.crums.util.Lists;
-import io.crums.util.Sets;
+import io.crums.util.collections.Lists;
+import io.crums.util.collections.Sets;
 import io.crums.util.Strings;
-import io.crums.util.hash.Digest;
+import io.crums.util.api.Digest;
 import io.crums.util.mrkl.FixedLeafBuilder;
 import io.crums.util.mrkl.Proof;
 import io.crums.util.mrkl.Tree;
@@ -983,28 +982,28 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     if (!Objects.requireNonNull(knownRows, "null knownRows").containsAll(targets))
       throw new IllegalArgumentException("targets contains one or more unknown rows: " + targets);
     
-    EasyList<Long> targetRns;
+    ArrayList<Long> targetRns;
     {
       SortedSet<Long> t = new TreeSet<>(targets);
       if (t.size() != targets.size())
         throw new IllegalArgumentException("targets contains duplicates: " + targets);
-      
-      targetRns = new EasyList<>(t.size());
+
+      targetRns = new ArrayList<>(t.size());
       targetRns.addAll(t);
     }
-    
-    EasyList<Long> stitched = new EasyList<>(targetRns.size() + 16);
-    stitched.add(targetRns.first());
+
+    ArrayList<Long> stitched = new ArrayList<>(targetRns.size() + 16);
+    stitched.add(targetRns.getFirst());
     for (int index = 1; index < targetRns.size(); ++index) {
       Long nextTarget = targetRns.get(index);
-      if (rowsLinked(stitched.last(), nextTarget)) {
+      if (rowsLinked(stitched.getLast(), nextTarget)) {
         stitched.add(nextTarget);
       } else {
-        EasyList<Long> pathToNext = stitchPathRecurse(stitched.last(), nextTarget, knownRows);
+        ArrayList<Long> pathToNext = stitchPathRecurse(stitched.getLast(), nextTarget, knownRows);
         if (pathToNext == null)
           return Optional.empty();
-        
-        stitched.addAll(pathToNext.tailList(1));
+
+        stitched.addAll(pathToNext.subList(1, pathToNext.size()));
       }
     }
     
@@ -1070,34 +1069,34 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
    * @return stitched path composed of strictly ascending row numbers from {@code lo} to {@code hi} (inc)
    *         or {@code null} if not found
    */
-  private static EasyList<Long> stitchPathRecurse(long lo, long hi, SortedSet<Long> known) {
-    
+  private static ArrayList<Long> stitchPathRecurse(long lo, long hi, SortedSet<Long> known) {
+
     final int skipCount = skipCount(hi);
-    
+
     // we search from highest skip pointer to lowest
     // this way, we discover the shortest path
     for (int exp = skipCount; exp-- > 0; ) {
       long delta = 1L << exp;
-      
+
       long linkedByHi = hi - delta;
-      
+
       if (linkedByHi < lo)
         continue;
-      
+
       if (linkedByHi == lo) {
         // *lo is in *known, no need to check
-        EasyList<Long> out = new EasyList<>(8);
+        ArrayList<Long> out = new ArrayList<>(8);
         out.add(lo);
         out.add(hi);
         return out;
       }
-      
+
       if (!known.contains(linkedByHi))
         continue;
-      
+
       // lo < linkedByHi < hi
-      
-      EasyList<Long> upstream = stitchPathRecurse(lo, linkedByHi, known);
+
+      ArrayList<Long> upstream = stitchPathRecurse(lo, linkedByHi, known);
       if (upstream != null) {
         upstream.add(hi);
         return upstream;
@@ -1136,10 +1135,10 @@ public abstract class SkipLedger implements Digest, AutoCloseable {
     }
     
     // create a descending list of row numbers (which we'll reverse)
-    EasyList<Long> path = new EasyList<>(16);
+    ArrayList<Long> path = new ArrayList<>(16);
     path.add(hi);
-    
-    for (long last = path.last(); last > lo; last = path.last()) {
+
+    for (long last = path.getLast(); last > lo; last = path.getLast()) {
       
       for (int base2Exponent = skipCount(last); base2Exponent-- > 0; ) {
         long delta = 1L << base2Exponent;

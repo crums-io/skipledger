@@ -9,8 +9,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 
-import io.crums.io.Opening;
-import io.crums.io.sef.Alf;
+import io.crums.util.api.Opening;
+import io.crums.util.io.sef.Alf;
 import io.crums.sldg.src.SourceRow;
 import io.crums.util.TaskStack;
 

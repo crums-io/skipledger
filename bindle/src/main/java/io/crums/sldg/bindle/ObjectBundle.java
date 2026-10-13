@@ -6,14 +6,14 @@ package io.crums.sldg.bindle;
 
 import java.nio.ByteBuffer;
 
-import io.crums.io.SerialFormatException;
+import io.crums.util.api.SerialFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Row;
 import io.crums.sldg.src.Cell;
 import io.crums.sldg.src.SourcePack;
 import io.crums.sldg.src.SourceRow;
 import io.crums.tc.ChainParams;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A well-formed, validated {@linkplain Bindle}.

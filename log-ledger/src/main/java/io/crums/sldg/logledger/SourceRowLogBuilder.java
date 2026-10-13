@@ -11,7 +11,7 @@ import io.crums.sldg.SldgConstants;
 import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.SourceRowBuilder;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 import io.crums.util.Strings;
 
 /**

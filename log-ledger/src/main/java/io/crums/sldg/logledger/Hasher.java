@@ -20,7 +20,7 @@ import io.crums.sldg.logledger.LogParser.Listener;
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SaltScheme;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 import io.crums.util.Strings;
 
 /**

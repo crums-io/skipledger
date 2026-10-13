@@ -7,7 +7,7 @@ package io.crums.sldg;
 import java.io.File;
 import java.io.IOException;
 
-import io.crums.io.Opening;
+import io.crums.util.api.Opening;
 import io.crums.sldg.cache.RowCache;
 
 /**

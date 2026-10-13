@@ -15,11 +15,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.FileChannel;
 
-import io.crums.io.FileUtils;
-import io.crums.io.Opening;
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.FilePartition;
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.io.FileUtils;
+import io.crums.util.api.Opening;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.FilePartition;
+import io.crums.util.io.channels.ChannelUtils;
 import io.crums.util.TaskStack;
 
 /**

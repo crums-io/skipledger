@@ -11,9 +11,9 @@ import java.util.List;
 import java.util.TreeSet;
 import java.util.function.Function;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
-import io.crums.util.Lists;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.collections.Lists;
 
 /**
  * Sorted listed of references to a foreign ledger.

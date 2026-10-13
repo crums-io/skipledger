@@ -5,7 +5,7 @@ package io.crums.sldg.src.json;
 
 
 import io.crums.sldg.salt.EpochedTableSalt.EpochSeed;
-import io.crums.util.Base64_32;
+import io.crums.util.api.Base64_32;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;
 import io.crums.util.json.JsonUtils;

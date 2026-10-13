@@ -8,7 +8,7 @@ import java.io.File;
 import org.junit.jupiter.api.Assertions;
 
 
-import io.crums.io.Opening;
+import io.crums.util.api.Opening;
 import io.crums.sldg.cache.RowCache;
 
 /**

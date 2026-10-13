@@ -11,8 +11,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ConcurrentModificationException;
 
-import io.crums.io.Opening;
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.api.Opening;
+import io.crums.util.io.channels.ChannelUtils;
 
 /**
  * File-based {@linkplain SkipTable} implementation.

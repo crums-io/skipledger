@@ -8,9 +8,9 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.Partitioning;
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.Partitioning;
+import io.crums.util.io.channels.ChannelUtils;
 
 /**
  * Lazy-loading, unverified, serialized {@linkplain Bindle}.

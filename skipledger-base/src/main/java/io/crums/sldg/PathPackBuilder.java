@@ -14,8 +14,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import io.crums.util.Lists;
-import io.crums.util.Sets;
+import io.crums.util.collections.Lists;
+import io.crums.util.collections.Sets;
 
 /**
  * Builder for a {@linkplain PathPack}.

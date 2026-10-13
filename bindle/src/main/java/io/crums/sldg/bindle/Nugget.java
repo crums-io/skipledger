@@ -15,7 +15,7 @@ import io.crums.sldg.bindle.tc.NotarizedRow;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.src.SourcePack;
 import io.crums.sldg.src.SourceRow;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A nugget of proofs about the contents of a ledger.

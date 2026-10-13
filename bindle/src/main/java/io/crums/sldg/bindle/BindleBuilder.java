@@ -22,7 +22,7 @@ import io.crums.sldg.src.SourceRow;
 import io.crums.tc.BlockProof;
 import io.crums.tc.ChainParams;
 import io.crums.tc.Crumtrail;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Mutable bindle. Presently, one can only <em>add</em> information;

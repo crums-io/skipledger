@@ -14,7 +14,7 @@ import static io.crums.sldg.SldgConstants.DIGEST;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 import io.crums.util.mrkl.Proof;
 
 /**

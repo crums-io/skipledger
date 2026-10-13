@@ -3,6 +3,7 @@ module io.crums.sldg.base {
   requires io.crums.util.mrkl;
 
   requires transitive io.crums.util;
+  requires io.crums.util.io.buffer;
   requires transitive io.crums.jsonimple;
   
   exports io.crums.sldg;

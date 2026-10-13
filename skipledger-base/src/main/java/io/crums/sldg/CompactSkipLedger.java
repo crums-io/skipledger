@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.cache.RowCache;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Base implementation. This uses a pluggable storage abstraction

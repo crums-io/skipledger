@@ -6,7 +6,7 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.io.buffer.BufferUtils;
 
 /**
  * Speeds up look-ups in a {@code PathPack} by

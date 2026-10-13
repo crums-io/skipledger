@@ -13,11 +13,11 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.Partitioning;
-import io.crums.io.channels.ChannelUtils;
-import io.crums.util.Lists;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.Partitioning;
+import io.crums.util.io.channels.ChannelUtils;
+import io.crums.util.collections.Lists;
 
 /**
  * Bindles with a common serial format.

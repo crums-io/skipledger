@@ -13,10 +13,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.crums.io.Serial;
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.api.Serial;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.util.BigShort;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Supports mixed type, jagged ledgers. This is an all-sizes-fit-all

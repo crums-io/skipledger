@@ -13,7 +13,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import io.crums.testing.IoTestCase;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * 

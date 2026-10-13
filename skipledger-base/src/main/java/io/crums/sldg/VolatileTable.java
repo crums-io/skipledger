@@ -7,7 +7,7 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.util.ConcurrentModificationException;
 
-import io.crums.io.buffer.ReadWriteBuffer;
+import io.crums.util.io.buffer.ReadWriteBuffer;
 
 /**
  * In-memory storage for a {@linkplain CompactSkipLedger}.

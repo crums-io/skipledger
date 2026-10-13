@@ -7,8 +7,8 @@ import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
 
 /**
  * Specifies an row entry (cell) in one ledger referencing an entry in another

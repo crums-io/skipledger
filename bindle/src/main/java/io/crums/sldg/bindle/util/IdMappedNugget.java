@@ -16,7 +16,7 @@ import io.crums.sldg.bindle.MultiPath;
 import io.crums.sldg.bindle.Nugget;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.src.SourcePack;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * ID-mapped {@linkplain Nugget}. Used by {@linkplain BindleIdEditor}; seldom

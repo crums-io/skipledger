@@ -18,9 +18,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 
-import io.crums.io.FileUtils;
-import io.crums.io.Opening;
-import io.crums.io.sef.Alf;
+import io.crums.util.io.FileUtils;
+import io.crums.util.api.Opening;
+import io.crums.util.io.sef.Alf;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Path;
 import io.crums.sldg.SkipLedger;

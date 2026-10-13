@@ -18,10 +18,16 @@
   
     <dependency>
       <groupId>io.crums</groupId>
-      <artifactId>io-util</artifactId>
+      <artifactId>util-common</artifactId>
       <version>${crums.util}</version>
     </dependency>
-    
+
+    <dependency>
+      <groupId>io.crums</groupId>
+      <artifactId>util-buffer</artifactId>
+      <version>${crums.util}</version>
+    </dependency>
+
     <dependency>
       <groupId>io.crums</groupId>
       <artifactId>tablesalt</artifactId>

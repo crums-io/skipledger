@@ -11,9 +11,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.FileChannel;
 
-import io.crums.io.Opening;
-import io.crums.io.channels.ChannelUtils;
-import io.crums.io.sef.Alf;
+import io.crums.util.api.Opening;
+import io.crums.util.io.channels.ChannelUtils;
+import io.crums.util.io.sef.Alf;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 
@@ -26,7 +26,7 @@ import io.crums.util.TaskStack;
  * 
  * <h2>API Note</h2>
  * <p>
- * This class's only outside dependency is the {@code io.crums.io.sef.Alf}
+ * This class's only outside dependency is the {@code io.crums.util.io.sef.Alf}
  * package; Excepting the pseudo constructor, it has no dependencies on
  * <em>this</em> module. Since storing such offsets is a common use case of
  * {@linkplain Alf}, this class may move to a different package / module in

@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import io.crums.util.IntegralStrings;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A ledger row (at its source).

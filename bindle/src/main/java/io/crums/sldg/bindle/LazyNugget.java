@@ -15,15 +15,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.BufferUtils;
-import io.crums.io.buffer.NamedParts;
-import io.crums.io.buffer.Partitioning;
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.BufferUtils;
+import io.crums.util.io.buffer.NamedParts;
+import io.crums.util.io.buffer.Partitioning;
+import io.crums.util.io.channels.ChannelUtils;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.src.SourcePack;
-import io.crums.util.CachingList;
-import io.crums.util.Lists;
+import io.crums.util.collections.CachingList;
+import io.crums.util.collections.Lists;
 
 /**
  * A lazy-loading, serialized {@linkplain Nugget}. Since it's lazy-loading,

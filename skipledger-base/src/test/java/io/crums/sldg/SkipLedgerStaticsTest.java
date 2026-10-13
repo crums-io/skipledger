@@ -16,7 +16,7 @@ import java.util.TreeSet;
 
 import  org.junit.jupiter.api.Test;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * 

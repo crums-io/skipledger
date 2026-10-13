@@ -10,12 +10,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.crums.io.Serial;
-import io.crums.io.buffer.NamedParts;
-import io.crums.io.buffer.Partitioning;
+import io.crums.util.api.Serial;
+import io.crums.util.io.buffer.NamedParts;
+import io.crums.util.io.buffer.Partitioning;
 import io.crums.sldg.bindle.tc.NotaryPack;
 import io.crums.sldg.src.SourcePack;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Nuggets with a common serial format.

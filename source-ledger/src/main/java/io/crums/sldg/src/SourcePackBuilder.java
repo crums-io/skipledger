@@ -15,7 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 
-import io.crums.io.Serial;
+import io.crums.util.api.Serial;
 
 /**
  * 

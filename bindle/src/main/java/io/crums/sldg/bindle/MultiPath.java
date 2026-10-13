@@ -16,15 +16,15 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Path;
 import io.crums.sldg.Path.Comp;
 import io.crums.sldg.PathPack;
 import io.crums.sldg.Row;
 import io.crums.sldg.SldgConstants;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A collection of <em>intersecting</em> paths from the same

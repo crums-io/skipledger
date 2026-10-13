@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.salt.TableSalt;
 
 /**

@@ -10,9 +10,9 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.crums.io.Serial;
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.api.Serial;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.util.Strings;
 
 /**

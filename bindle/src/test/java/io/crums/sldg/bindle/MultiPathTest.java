@@ -21,7 +21,7 @@ import io.crums.sldg.VolatileTable;
 import io.crums.sldg.bindle.MultiPath;
 import io.crums.sldg.bindle.MultiPathBuilder;
 import io.crums.testing.SelfAwareTestCase;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * 

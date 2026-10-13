@@ -15,7 +15,7 @@ import io.crums.sldg.bindle.LedgerInfo;
 import io.crums.sldg.bindle.Bindle;
 import io.crums.sldg.bindle.Bundle;
 import io.crums.sldg.bindle.Nugget;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Edits the {@linkplain LedgerId}s of an exisiting {@linkplain Bindle}.

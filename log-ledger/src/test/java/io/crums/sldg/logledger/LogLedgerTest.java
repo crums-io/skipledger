@@ -17,9 +17,9 @@ import static io.crums.sldg.logledger.LineParserTest.*;
 
 import org.junit.jupiter.api.Test;
 
-import io.crums.io.FileUtils;
-import io.crums.io.Opening;
-import io.crums.io.channels.ChannelUtils;
+import io.crums.util.io.FileUtils;
+import io.crums.util.api.Opening;
+import io.crums.util.io.channels.ChannelUtils;
 import io.crums.sldg.Path;
 import io.crums.sldg.SkipLedger;
 import io.crums.sldg.logledger.LogLedger.Job;
@@ -27,7 +27,7 @@ import io.crums.sldg.logledger.LogLedger.JobResult;
 import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SourceRow;
 import io.crums.testing.IoTestCase;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 import io.crums.util.Strings;
 import io.crums.util.TaskStack;
 

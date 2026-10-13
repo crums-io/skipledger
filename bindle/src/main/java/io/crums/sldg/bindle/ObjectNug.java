@@ -14,8 +14,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import io.crums.io.SerialFormatException;
-import io.crums.io.buffer.NamedParts;
+import io.crums.util.api.SerialFormatException;
+import io.crums.util.io.buffer.NamedParts;
 import io.crums.sldg.HashConflictException;
 import io.crums.sldg.Row;
 import io.crums.sldg.bindle.tc.NotarizedRow;

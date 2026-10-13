@@ -7,8 +7,8 @@ package io.crums.sldg.logledger;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
-import io.crums.io.Serial;
-import io.crums.io.buffer.BufferUtils;
+import io.crums.util.api.Serial;
+import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.cache.HashFrontier;
 import io.crums.util.IntegralStrings;

@@ -21,8 +21,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.function.Function;
 
-import io.crums.util.Lists;
-import io.crums.util.Sets;
+import io.crums.util.collections.Lists;
+import io.crums.util.collections.Sets;
 
 /**
  * A list of connected rows in a {@linkplain SkipLedger} with strictly ascending row numbers.

@@ -7,7 +7,7 @@ package io.crums.sldg;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A row in a ledger. Concrete instances must have immutable state.

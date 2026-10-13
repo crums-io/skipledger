@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Implementation interface of {@linkplain RowBag#rowHash(long)}. This models

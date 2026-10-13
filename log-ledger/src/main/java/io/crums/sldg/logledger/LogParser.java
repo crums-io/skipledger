@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Parses a log, distinguishing ledgerable lines from the ones

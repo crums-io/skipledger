@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * A bag of {@linkplain SourceRow}s.

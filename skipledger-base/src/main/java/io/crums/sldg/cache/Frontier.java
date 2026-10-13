@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Objects;
 
 import io.crums.sldg.SkipLedger;
-import io.crums.util.Lists;
+import io.crums.util.collections.Lists;
 
 /**
  * Prototype class documenting the frontier rows in a {@linkplain SkipLedger}.

@@ -9,8 +9,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import io.crums.util.Lists;
-import io.crums.util.Sets;
+import io.crums.util.collections.Lists;
+import io.crums.util.collections.Sets;
 
 /**
  * <p>A bag of rows from a ledger. The general contract is that if a row's

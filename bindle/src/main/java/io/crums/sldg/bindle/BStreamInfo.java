@@ -7,7 +7,7 @@ import java.net.URI;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
-import io.crums.io.SerialFormatException;
+import io.crums.util.api.SerialFormatException;
 
 /**
  * Meta info about a {@linkplain LedgerType#BSTREAM BSTREAM} type ledger.

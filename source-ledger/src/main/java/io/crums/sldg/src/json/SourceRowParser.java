@@ -16,7 +16,7 @@ import io.crums.sldg.src.Cell;
 import io.crums.sldg.src.DataType;
 import io.crums.sldg.src.SharedConstants;
 import io.crums.sldg.src.SourceRow;
-import io.crums.util.Base64_32;
+import io.crums.util.api.Base64_32;
 import io.crums.util.IntegralStrings;
 import io.crums.util.json.JsonEntityParser;
 import io.crums.util.json.JsonParsingException;

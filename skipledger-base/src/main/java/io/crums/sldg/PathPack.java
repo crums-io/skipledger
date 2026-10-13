@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import io.crums.io.Serial;
-import io.crums.io.buffer.BufferUtils;
-import io.crums.util.Lists;
+import io.crums.util.api.Serial;
+import io.crums.util.io.buffer.BufferUtils;
+import io.crums.util.collections.Lists;
 
 /**
  * Base {@linkplain RowBag} implementation. Note this uses no caching/memo-ization.

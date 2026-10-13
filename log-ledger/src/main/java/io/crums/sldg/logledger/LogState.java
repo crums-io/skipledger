@@ -8,7 +8,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import io.crums.io.Serial;
+import io.crums.util.api.Serial;
 import io.crums.sldg.cache.HashFrontier;
 
 /**
