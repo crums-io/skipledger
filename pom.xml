@@ -86,7 +86,6 @@
     <module>tablesalt</module>
     <module>source-ledger</module>
     <module>log-ledger</module>
-    <module>bindle</module>
     <module>microchain</module>
     <module>sql-ledger</module>
   </modules>
