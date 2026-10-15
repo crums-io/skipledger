@@ -26,10 +26,10 @@ public interface SourceBag {
   
   
   /**
-   * Returns the salt scheme {@linkplain SourceRow}s used to
-   * compute each source-row's hash.
+   * Determines whether the {@linkplain SourceRow}s in this bag are salted.
+   * Either every cell in a row is salted, or none are.
    */
-  SaltScheme saltScheme();
+  boolean isSalted();
   
   /**
    * Returns the ordered list of row numbers.

@@ -43,38 +43,20 @@ public class SourcePack implements SourceBag, Serial {
     private SchemaFlag() {  } // nobody calls
     /** Mono cell count. Every row has the same no. of cells. */
     public final static long ISO_COUNT = 1L;
-    /** Array of salted cell indices. */
-    public final static long SALTED_IDX = 2L;
-    /** Array of unsalted cell indices. */
-    public final static long UNSALTED_IDX = 4L;
-    /** All cells salted (no indices). */
-    public final static long SALTED_ALL = SALTED_IDX + UNSALTED_IDX;
-    
+    /** All cells in every row are salted. */
+    public final static long SALTED_ALL = 2L;
+
     /** Exclusive max value for bit-field. */
-    private final static long MAX_CODE = 8L;
-    
+    private final static long MAX_CODE = 4L;
+
     public static boolean isoCount(long code) {
       return (code & ISO_COUNT) != 0L;
     }
-    
-    
-    
-    public static boolean saltedIndices(long code) {
-      return (code & SALTED_ALL) == SALTED_IDX;
-    }
-    
-    public static boolean unsaltedIndices(long code) {
-      return (code & SALTED_ALL) == UNSALTED_IDX;
-    }
-    
+
     public static boolean saltedAll(long code) {
-      return (code & SALTED_ALL) == SALTED_ALL;
+      return (code & SALTED_ALL) != 0L;
     }
-    
-    public static boolean noSalt(long code) {
-      return (code & SALTED_ALL) == 0L;
-    }
-    
+
   }
   
   /**
@@ -271,36 +253,16 @@ public class SourcePack implements SourceBag, Serial {
   
   
   
-  record SaltSchemeR(int[] cellIndices, boolean isPositive)
-      implements SaltScheme {
-    
-    
-    static SaltSchemeR saltOnlyInstance(int[] indices) {
-      return new SaltSchemeR(indices, true);
-    }
-    
-    static SaltSchemeR saltAllExceptInstance(int[] indices) {
-      return new SaltSchemeR(indices, false);
-    }
-    
-    SaltSchemeR {
-      Objects.requireNonNull(cellIndices);
-    }
-  }
-  
-  
-  
   private record Config(
       CellCountCodec ccReader,
       VarSizeCodec varSizeReader,
-      SaltScheme saltScheme) {
-    
+      boolean salted) {
+
     Config {
       Objects.requireNonNull(ccReader);
       Objects.requireNonNull(varSizeReader);
-      Objects.requireNonNull(saltScheme);
     }
-    
+
   }
   
   
@@ -344,34 +306,7 @@ public class SourcePack implements SourceBag, Serial {
           .formatted(schemaCode, Long.toHexString(schemaCode)));
     
     
-    final SaltScheme saltScheme;
-    
-    if (SchemaFlag.saltedAll(schemaCode)) {
-      saltScheme = SaltScheme.SALT_ALL;
-    } else if (SchemaFlag.noSalt(schemaCode)) {
-      saltScheme = SaltScheme.NO_SALT;
-    } else {
-      final int count = 0xff_ff & in.getShort();
-      if (count == 0)
-        throw new SourcePackException(
-            "array length zero on attempting to read [un]salted index array");
-      
-      int[] indices = new int[count];
-      
-      for (int i = 0, prev = -1; i < count; ++i) {
-        int next = 0xff_ff & in.getShort();
-        if (next <= prev)
-          throw new IllegalArgumentException(
-              "out-of-sequence indices: %d, %d".formatted(prev, next));
-        indices[i] = next;
-        prev = next;
-      }
-      
-      saltScheme =
-          SchemaFlag.saltedIndices(schemaCode) ?
-              SaltSchemeR.saltOnlyInstance(indices) :
-                SaltSchemeR.saltAllExceptInstance(indices);
-    }
+    final boolean saltedAll = SchemaFlag.saltedAll(schemaCode);
 
 
     final CellCountCodec ccReader;
@@ -409,7 +344,7 @@ public class SourcePack implements SourceBag, Serial {
       int minRowSize = 8;  // row no.
       minRowSize += ccReader.countSize;
       
-      if (saltScheme.saltAll())
+      if (saltedAll)
         minRowSize += Math.min(1, ccReader.fixed) * (HASH_WIDTH + 1);
       else
         minRowSize  += Math.min(1, ccReader.fixed);
@@ -426,7 +361,7 @@ public class SourcePack implements SourceBag, Serial {
         
     long prevNo = 0L;
     
-    Config config = new Config(ccReader, varSizeReader, saltScheme);
+    Config config = new Config(ccReader, varSizeReader, saltedAll);
     
     for (int index = 0; index < rowCount; ++index) {
       rowOffsets[index] = in.position() - initPos;
@@ -480,7 +415,7 @@ public class SourcePack implements SourceBag, Serial {
       final int cellCode = 0xff & in.get();
 //      debug.println("cellCode: " + Integer.toHexString(cellCode));
       if (CellFlag.redacted(cellCode)) {
-        if (hasRowSalt && config.saltScheme.isSalted(c))
+        if (hasRowSalt && config.salted())
           throw new IllegalStateException(
               "cell-code [%d] %s encodes redacted while row-status %s reveals row salt"
               .formatted(
@@ -495,7 +430,7 @@ public class SourcePack implements SourceBag, Serial {
       final var type = CellFlag.decodeType(cellCode);
       
       if (type.isNull()) {
-        if (config.saltScheme.isSalted(c)) {
+        if (config.salted()) {
           if (hasRowSalt)
             cells[c] = new Cell.RowSaltedNull(rowSalt, c);
           else
@@ -511,12 +446,12 @@ public class SourcePack implements SourceBag, Serial {
 
       if (type == DataType.BIG_DEC) {
         // Per-cell salted cells store [salt | data] in stream; skip salt to reach data bytes.
-        boolean saltInStream = config.saltScheme.isSalted(c) && !hasRowSalt;
+        boolean saltInStream = config.salted() && !hasRowSalt;
         int dataStart = in.position() + (saltInStream ? HASH_WIDTH : 0);
         type.toValue(in.slice(dataStart, dataSize));
       }
 
-      if (config.saltScheme.isSalted(c)) {
+      if (config.salted()) {
         if (hasRowSalt) {
           cells[c] = new Cell.RowSaltedCell(
               rowSalt, c, type, BufferUtils.slice(in, dataSize), false);
@@ -552,8 +487,8 @@ public class SourcePack implements SourceBag, Serial {
   }
   
   @Override
-  public SaltScheme saltScheme() {
-    return config.saltScheme();
+  public boolean isSalted() {
+    return config.salted();
   }
 
   @Override

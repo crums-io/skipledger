@@ -18,18 +18,8 @@ SCHEMA_FLAG     := LONG               // 8-byte bit field
                                       //
                                       //  bit 0 (0x01)  -- iso-count: all rows have same cell count
                                       //
-                                      //  bits 1-2 (0x06) encode the salt scheme:
-                                      //    0x00  -- not salted  (no index array)
-                                      //    0x02  -- salted cell indices present
-                                      //    0x04  -- unsalted exception indices present (all others salted)
-                                      //    0x06  -- all salted  (no index array)
-
-
-// present iff SCHEMA_FLAG & 6 == 2
-SALTED_CELLS    := array(SHORT)       // ascending cell indices that ARE salted
-
-// present iff SCHEMA_FLAG & 6 == 4
-UNSALTED_CELLS  := array(SHORT)       // ascending cell indices that are NOT salted
+                                      //  bit 1 (0x02)  -- salted-all: every cell in every row is salted
+                                      //                   (if clear, no cell is salted)
 
 
 // present iff SCHEMA_FLAG & 1 == 1 (iso-count)
@@ -45,7 +35,6 @@ VAR_SIZE_LEN    := BYTE               // no. of bytes used to encode the size of
 
 
 HEADER  := SCHEMA_FLAG
-           [SALTED_CELLS | UNSALTED_CELLS]
            <ISO_COUNT | CELL_COUNT_SIZE>
            VAR_SIZE_LEN
 
@@ -68,7 +57,7 @@ ROW_STATUS      := BYTE               // bit field
                                       //                      or no salt at all)
                                       //  bit 1 (0x02) -- reserved (whitespace-tokenized, TODO)
 
-// present iff ROW_STATUS & 1 == 1  AND  SCHEMA_FLAG & 6 != 0
+// present iff ROW_STATUS & 1 == 1  AND  SCHEMA_FLAG & 2 != 0
 ROW_SALT        := BYTE ^ 32          // 32-byte root salt; all cell salts are derived from this
 
 
@@ -94,7 +83,7 @@ CELL_CODE       := BYTE               // encodes cell type and whether the cell 
 CELL_DATA_SIZE  := BYTE ^ VAR_SIZE_LEN
                                       // unsigned big-endian integer; 2, 3, or 4 bytes wide
 
-// present iff ROW_STATUS & 1 == 0  AND  CELL_CODE != 0  AND  cell index is salted
+// present iff ROW_STATUS & 1 == 0  AND  CELL_CODE != 0  AND  SCHEMA_FLAG & 2 != 0
 // (when ROW_STATUS & 1 == 1, the cell salt is derived from ROW_SALT -- not stored inline)
 CELL_SALT       := BYTE ^ 32
 

@@ -63,7 +63,7 @@ public class SourceRowLogBuilder {
   public SourceRowLogBuilder(HashingRules rules) {
     this.rules = rules;
     this.builder = rules.hasSalt() ?
-        new SourceRowBuilder(rules.saltScheme(), rules.salter().get()) :
+        new SourceRowBuilder(rules.salter().get()) :
           new SourceRowBuilder();
   }
   

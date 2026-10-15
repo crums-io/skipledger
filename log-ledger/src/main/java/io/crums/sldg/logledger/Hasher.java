@@ -19,7 +19,6 @@ import io.crums.sldg.cache.HashFrontier;
 import io.crums.sldg.logledger.LogParser.Listener;
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.DataType;
-import io.crums.sldg.src.SaltScheme;
 import io.crums.util.collections.Lists;
 import io.crums.util.Strings;
 
@@ -46,16 +45,16 @@ public class Hasher implements Listener {
    * Creates and returns an instance, sans salt.
    */
   public static Hasher initNoSalt() {
-    return new Hasher(SaltScheme.NO_SALT, null, HashFrontier.SENTINEL);
+    return new Hasher(null, HashFrontier.SENTINEL);
   }
-  
+
   /**
    * Creates and returns a salted instance.
-   * 
+   *
    * @param salter the log's salt.
    */
   public static Hasher initInstance(TableSalt salter) {
-    return new Hasher(SaltScheme.SALT_ALL, salter, HashFrontier.SENTINEL);
+    return new Hasher(salter, HashFrontier.SENTINEL);
   }
   
   /**
@@ -180,7 +179,6 @@ public class Hasher implements Listener {
   
   private final MessageDigest rowDigester = DIGEST.newDigest();
   private final MessageDigest cellDigester = DIGEST.newDigest();
-  private final SaltScheme saltScheme;
   private final TableSalt salter;
   
   
@@ -203,67 +201,60 @@ public class Hasher implements Listener {
    * Constructs an instance initialized with the given {@linkplain Checkpoint}.
    * This is the preferred constructor as it "replays" and validates the last row
    * parsed.
-   * 
-   * @param saltScheme  not {@code null}
-   * @param salter      not {@code null}, if {@code saltScheme.hasSalt()}   
+   *
+   * @param salter      if {@code null}, rows are unsalted; otherwise every
+   *                    cell is salted
    * @param initState   initial parse state
    */
-  public Hasher(SaltScheme saltScheme, TableSalt salter, Checkpoint initState) {
-    this(saltScheme, salter, initState.frontier());
+  public Hasher(TableSalt salter, Checkpoint initState) {
+    this(salter, initState.frontier());
     this.inputHash = initState.inputHash();
     this.eol = initState.eol();
     this.prevFrontier = initState.preState().frontier();
     this.prevEol = initState.preState().eol();
-
-    if (saltScheme.hasSalt() && salter == null)
-      throw new NullPointerException("null salter: saltScheme uses salt");
-    
   }
-  
-  
+
+
   /**
    * Constructs an instance initialized with the given {@linkplain Checkpoint}.
    * This is the preferred constructor as it "replays" and validates the last row
    * parsed.
-   * 
+   *
    * @param rules
    * @param initState
    */
   public Hasher(HashingRules rules, Checkpoint initState) {
     this(
-        rules.saltScheme(),
         rules.salter().orElse(null),
         initState.frontier());
-    
+
     this.inputHash = initState.inputHash();
     this.eol = initState.eol();
     this.prevFrontier = initState.preState().frontier();
     this.prevEol = initState.preState().eol();
   }
-  
-  
+
+
   /**
    * Constructs an instance for parsing a log from the beginning.
    */
   public Hasher(HashingRules rules) {
     this(
-        rules.saltScheme(),
         rules.salter().orElse(null),
         HashFrontier.SENTINEL);
   }
-  
+
 
   /**
-   * 
-   * @param saltScheme  not {@code null}
-   * @param salter      not {@code null}, if {@code saltScheme.hasSalt()}
+   *
+   * @param salter      if {@code null}, rows are unsalted; otherwise every
+   *                    cell is salted
    * @param frontier    not {@code null}
    */
-  private Hasher(SaltScheme saltScheme, TableSalt salter, HashFrontier frontier) {
-    this.saltScheme = saltScheme;
+  private Hasher(TableSalt salter, HashFrontier frontier) {
     this.salter = salter;
     this.frontier = frontier;
-    
+
   }
   
   
@@ -378,19 +369,21 @@ public class Hasher implements Listener {
     
     rowDigester.reset();
     
+    final boolean salted = salter != null;
+
     if (cc == 0) {
-      
+
       return DIGEST.sentinelHash();
-    
+
     } else if (cc == 1) {
-      
-      if (saltScheme.isSalted(0))
+
+      if (salted)
         rowDigester.update(salter.cellSalt(rowNo, 0, cellDigester));
       rowDigester.update(TT);
       rowDigester.update(tokenBytes.get(0));
-      
-    } else if (saltScheme.saltAll()) {
-      
+
+    } else if (salted) {
+
       byte[] rowSalt = salter.rowSalt(rowNo, cellDigester);
       for (int index = 0; index < cc; ++index) {
         var cellSalt = TableSalt.cellSalt(rowSalt, index, cellDigester);
@@ -400,28 +393,9 @@ public class Hasher implements Listener {
         cellDigester.update(tokenBytes.get(index));
         rowDigester.update(cellDigester.digest());
       }
-      
-    } else if (saltScheme.hasSalt()) {
-      // NOTE: this deals w/ custom salt schemes
-      // (where *some cells/tokens are *not salted);
-      // however, this is not presently modeled for logs
-      // (because it is a likely useless feature). So this is
-      // DEAD CODE..
-      byte[] rowSalt = salter.rowSalt(rowNo, cellDigester);
-      for (int index = 0; index < cc; ++index) {
-        if (saltScheme.isSalted(index)) {
-          var cellSalt = TableSalt.cellSalt(rowSalt, index, cellDigester);
-          cellDigester.reset();
-          cellDigester.update(cellSalt);
-        } else
-          cellDigester.reset();
-        cellDigester.update(TT);
-        cellDigester.update(tokenBytes.get(index));
-        rowDigester.update(cellDigester.digest());
-      }
-      
+
     } else {  // not salted
-      
+
       for (int index = 0; index < cc; ++index) {
         cellDigester.reset();
         cellDigester.update(TT);

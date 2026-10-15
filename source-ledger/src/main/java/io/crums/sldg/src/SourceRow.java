@@ -109,8 +109,18 @@ public abstract class SourceRow {
   public Optional<ByteBuffer> rowSalt() {
     return Optional.empty();
   }
-  
-  
+
+
+  /**
+   * Determines whether this row is salted. A salted row either exposes
+   * its {@linkplain #rowSalt() row-salt}, or every un-redacted cell carries
+   * its own explicit {@linkplain Cell#salt() salt}.
+   */
+  public boolean isSalted() {
+    return rowSalt().isPresent() || cells().stream().anyMatch(Cell::hasSalt);
+  }
+
+
   /**
    * Instances are equal if they have the same {@linkplain #no()} and
    * equal {@linkplain #cells()}.

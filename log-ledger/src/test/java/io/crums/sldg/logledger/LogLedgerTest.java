@@ -51,8 +51,8 @@ public class LogLedgerTest extends IoTestCase {
     File log = lgl.getLogFile();
     File dir = lgl.lglDir();
     var reloaded = new LogLedger(log, dir, grammar);
-    assertEquals(lgl.rules().saltScheme(), reloaded.rules().saltScheme());
-    if (lgl.rules().saltScheme().hasSalt()) {
+    assertEquals(lgl.rules().hasSalt(), reloaded.rules().hasSalt());
+    if (lgl.rules().hasSalt()) {
       var salter = lgl.rules().salter().get();
       assertTrue(reloaded.rules().salter().get().sameSeed(salter));
     }
@@ -70,7 +70,7 @@ public class LogLedgerTest extends IoTestCase {
     
     var lgl = LogLedger.initSalt(log, null);
     assertEquals(Grammar.DEFAULT, lgl.rules().grammar());
-    assertTrue(lgl.rules().saltScheme().saltAll());
+    assertTrue(lgl.rules().hasSalt());
     assertEquals(new File(dir, Files.EXT_ROOT), lgl.lglDir());
     assertEquals(log, lgl.getLogFile());
     
@@ -112,7 +112,7 @@ public class LogLedgerTest extends IoTestCase {
         commentPrefix,
         true);
 
-    assertTrue(lgl.rules().saltScheme().saltAll());
+    assertTrue(lgl.rules().hasSalt());
     assertEquals(dir, lgl.lglDir());
     
     lgl = reload(lgl, null);

@@ -32,7 +32,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     
     var builder = new SourceRowBuilder();
     
-    assertFalse(builder.saltScheme().hasSalt());
+    assertFalse(builder.isSalted());
     
     final long no = 1L;
     
@@ -53,10 +53,10 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
 
     
-    assertTrue(builder.saltScheme().hasSalt());
+    assertTrue(builder.isSalted());
     
     final long no = 2L;
     
@@ -89,7 +89,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     final long no = 4L;
     final String value = "untokenized string value";
     var row = builder.buildRow(no, value);
@@ -120,7 +120,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 6L;
     final long value = 42L;
@@ -138,7 +138,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 7L;
     final int value = 42;
@@ -158,7 +158,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 8L;
     
@@ -182,7 +182,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 9L;
     
@@ -205,7 +205,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 10L;
     final double value = 42.3;
@@ -225,7 +225,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
     final Object label = new Object() {  };
     
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     
     final long no = 11L;
     
@@ -366,7 +366,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
   public void testSaltedSingleBigInt() {
     final Object label = new Object() {  };
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     final long no = 21L;
     BigInteger value = BigInteger.valueOf(9_876_543_210L);
     var row = builder.buildRow(no, value);
@@ -396,7 +396,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
   public void testSaltedSingleBigDec() {
     final Object label = new Object() {  };
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     final long no = 23L;
     BigDecimal value = new BigDecimal("12345.67");
     var row = builder.buildRow(no, value);
@@ -413,7 +413,7 @@ public class SourceRowBuilderTest extends SelfAwareTestCase {
   public void testMixedNumericRow() {
     final Object label = new Object() {  };
     var tableSalt = testShaker(label);
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt);
+    var builder = new SourceRowBuilder(tableSalt);
     final long no = 24L;
 
     final long longVal = 42L;

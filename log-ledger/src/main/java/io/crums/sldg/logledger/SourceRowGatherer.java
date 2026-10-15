@@ -19,7 +19,6 @@ import java.util.function.Predicate;
 import io.crums.sldg.SldgConstants;
 import io.crums.sldg.logledger.LogParser.Listener;
 import io.crums.sldg.salt.TableSalt;
-import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.SourceRowBuilder;
 
@@ -126,28 +125,13 @@ public class SourceRowGatherer implements Listener {
   
   /**
    * Salt-all constructor. Invokes {@code
-   * this(rowSelector, new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt)) }
-   * 
+   * this(rowSelector, new SourceRowBuilder(tableSalt)) }
+   *
    * @param rowSelector not {@code null}
    * @param tableSalt   not {@code null}
    */
   public SourceRowGatherer(Predicate<Long> rowSelector, TableSalt tableSalt) {
-    this(rowSelector, new SourceRowBuilder(SaltScheme.SALT_ALL, tableSalt));
-  }
-  
-  
-  /**
-   * Full constructor. Invokes {@code
-   * this(rowSelector, new SourceRowBuilder(saltScheme, tableSalt)) }
-   * 
-   * @param rowSelector not {@code null}
-   * @param saltScheme  not {@code null}
-   * @param tableSalt   not {@code null}, if {@code saltScheme.hasSalt()}
-   */
-  public SourceRowGatherer(
-      Predicate<Long> rowSelector, SaltScheme saltScheme, TableSalt tableSalt) {
-    
-    this(rowSelector, new SourceRowBuilder(saltScheme, tableSalt));
+    this(rowSelector, new SourceRowBuilder(tableSalt));
   }
 
   /**

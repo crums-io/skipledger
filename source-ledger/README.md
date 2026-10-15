@@ -90,16 +90,14 @@ its redacted form; the row hash is unchanged.
 
 ---
 
-## Salting (`SaltScheme`)
+## Salting
 
-`SaltScheme` controls which cells within a row are salted.
-
-| Constant / factory | Effect |
-|--------------------|--------|
-| `SaltScheme.NO_SALT` | No cells are salted |
-| `SaltScheme.SALT_ALL` | Every cell is salted |
-| `SaltScheme.of(int... indices)` | Only the listed column indices are salted |
-| `SaltScheme.ofAllExcept(int... indices)` | All columns salted except the listed ones |
+A row is either entirely salted or entirely unsalted — `SourceRow.isSalted()`
+reports which. There is no per-column salting: salting a subset of a row's
+cells buys no extra hash-proof simplicity over salting them all, so the
+all-or-nothing rule keeps things simple. A `SourceRowBuilder` built with a
+`TableSalt` produces salted rows; built with no `TableSalt` (or `null`), it
+produces unsalted rows.
 
 Cell salts are derived **deterministically** from a per-table `TableSalt` root
 value and the `(row-number, cell-index)` pair via `TableSalt.cellSalt()`.

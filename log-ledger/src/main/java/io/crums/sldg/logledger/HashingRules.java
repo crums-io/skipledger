@@ -11,7 +11,6 @@ import java.util.Optional;
 import io.crums.util.api.SerialFormatException;
 import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.salt.TableSalt;
-import io.crums.sldg.src.SaltScheme;
 
 /**
  * Parsing grammar and (optional, but recommended) salt, governing how
@@ -51,17 +50,9 @@ public final class HashingRules {
   }
   
   
-  /**
-   * Returns the salt scheme. Either all cells are salted, or none are.
-   */
-  public SaltScheme saltScheme() {
-    return salter == null ? SaltScheme.NO_SALT : SaltScheme.SALT_ALL;
-  }
-  
-  
   /** Returns {@code true} if salt is used. */
   public boolean hasSalt() {
-    return saltScheme().hasSalt();
+    return salter != null;
   }
   
   

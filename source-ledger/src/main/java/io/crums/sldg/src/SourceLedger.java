@@ -29,23 +29,21 @@ public interface SourceLedger {
 
   /**
    * Returns the source-row at the given 1-based row-number.
-   * 
+   *
    * @param rn &ge; 1, &le; {@linkplain #size()}
-   * 
+   *
    * @return non-null
-   * 
-   * @see #saltScheme()
+   *
+   * @see #isSalted()
    */
   SourceRow getSourceRow(long rn) throws IndexOutOfBoundsException;
-  
-  
+
+
   /**
-   * Returns the salt scheme. Determines which cell/column indices are salted,
-   * which are not.
-   * 
-   * @return non-null
+   * Determines whether source rows are salted. Either every cell in a row
+   * is salted, or none are.
    */
-  SaltScheme saltScheme();
-  
+  boolean isSalted();
+
 
 }

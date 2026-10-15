@@ -32,43 +32,40 @@ import io.crums.util.SuppliedValue;
  * </ul>
  */
 public class SourceRowBuilder {
-  
-  private final SaltScheme saltScheme;
+
   private final TableSalt shaker;
-  
-  
-  
+
+
+
   /**
    * No salt constructor.
    */
   public SourceRowBuilder() {
-    this(SaltScheme.NO_SALT, null);
+    this(null);
   }
-  
-  
+
+
   /**
    * Full constructor.
-   * 
-   * @param saltScheme not {@code null}
-   * @param tableSalt not {@code null} if {@linkplain SaltScheme#hasSalt() saltScheme.hasSalt()}
+   *
+   * @param tableSalt if {@code null}, built rows are unsalted; otherwise every
+   *                  cell in a built row is salted.
    */
-  public SourceRowBuilder(SaltScheme saltScheme, TableSalt tableSalt) {
-    this.saltScheme = saltScheme;
+  public SourceRowBuilder(TableSalt tableSalt) {
     this.shaker = tableSalt;
-    if (saltScheme.hasSalt() && shaker == null)
-      throw new IllegalArgumentException(
-          "saltScheme requires non-null TableSalt");
   }
-  
-  
+
+
   /**
-   * Returns the saltScheme.
+   * Determines whether built rows are salted.
+   *
+   * @return {@code true} iff a non-null {@code TableSalt} was given at construction
    */
-  public SaltScheme saltScheme() {
-    return saltScheme;
+  public boolean isSalted() {
+    return shaker != null;
   }
-  
-  
+
+
 
   /**
    * Builds and returns a row using the given cell values. Cell
@@ -103,7 +100,7 @@ public class SourceRowBuilder {
         buildRowImpl(
             no,
             values,
-            saltScheme.hasSalt() ? DIGEST.newDigest() : null);
+            isSalted() ? DIGEST.newDigest() : null);
   }
   
   
@@ -114,7 +111,7 @@ public class SourceRowBuilder {
    * it allows the caller to reuse the digester.
    * 
    * @param no          &ge; 1
-   * @param digest      not {@code null}, if salt scheme has salt
+   * @param digest      not {@code null}, if this builder {@linkplain #isSalted() is salted}
    * @param values      one or more values of the supported types.
    * 
    * @see #buildRow(long, Object...)
@@ -133,38 +130,30 @@ public class SourceRowBuilder {
     assert cc > 0;
     
     Cell[] cells = new Cell[cc];
-    
-    // if we might need salt the cells create the row salt
-    // (slightly more complicated design option commented out below)
-    final var rowSalt = saltScheme.hasSalt() ?
+
+    final boolean salted = isSalted();
+    final var rowSalt = salted ?
         ByteBuffer.wrap(shaker.rowSalt(no, digest)) : null;
-    
-//    final var rowSalt = SuppliedValue.of(
-//        () -> ByteBuffer.wrap(shaker.rowSalt(no, digest)).asReadOnlyBuffer());
-    
-    boolean hasSalt = false;
-    
+
     for (int index = 0; index < cc; ++index) {
       Object value = values[index];
-      final boolean salt = saltScheme.isSalted(index);
-      hasSalt |= salt;
-      
+
       if (value == null) {
-        cells[index] = salt ?
+        cells[index] = salted ?
             new Cell.RowSaltedNull(rowSalt, index) : Cell.UNSALTED_NULL;
         continue;
       }
 
       DataType type = DataType.guessType(value);
       ByteBuffer valBuf = type.toByteBuffer(value);
-      
-      cells[index] = salt ?
+
+      cells[index] = salted ?
           new Cell.RowSaltedCell(rowSalt, index, type, valBuf) :
             new Cell.UnsaltedReveal(type, valBuf, false);
     }
-    
-    return new RevealedRow(no, cells, hasSalt ? rowSalt : null);
-   
+
+    return new RevealedRow(no, cells, salted ? rowSalt : null);
+
   }
 
   
@@ -181,9 +170,8 @@ public class SourceRowBuilder {
   
   /**
    * Creates and returns and new {@code SourceRow} instance using the given
-   * typed values. If any cells are salted (per the instance's
-   * {@linkplain #saltScheme}), then the returned instance's
-   * {@linkplain SourceRow#rowSalt()} will be present.
+   * typed values. If this builder {@linkplain #isSalted() is salted}, then
+   * the returned instance's {@linkplain SourceRow#rowSalt()} will be present.
    * 
    * @param no          row number &ge; 1
    * @param types       list of data types corresponding 
@@ -216,32 +204,31 @@ public class SourceRowBuilder {
           .formatted(typesLen, cc));
     
     
+    final boolean salted = isSalted();
     final var rowSalt = SuppliedValue.of(
         () -> ByteBuffer.wrap(shaker.rowSalt(no, digest)).asReadOnlyBuffer());
-    
+
     final Cell[] cells = new Cell[cc];
-    
+
     for (int index = 0; index < cc; ++index) {
-      
-      final boolean isSalted = saltScheme.isSalted(index);
-      
+
       var type = types.get(index);
-      
+
       var value = cellValues.get(index);
-      
+
       if (value == null) {
-        cells[index] = isSalted ?
+        cells[index] = salted ?
             new Cell.RowSaltedNull(rowSalt.get(), index) :
               Cell.UNSALTED_NULL;
         continue;
       }
-      
+
       ByteBuffer rawValue = type.toByteBuffer(value);
-      
-      cells[index] = isSalted ?
+
+      cells[index] = salted ?
           new Cell.RowSaltedCell(rowSalt.get(), index, type, rawValue) :
             new Cell.UnsaltedReveal(type, rawValue);
-      
+
     }
     
     

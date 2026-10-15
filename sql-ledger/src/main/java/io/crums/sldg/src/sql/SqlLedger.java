@@ -18,7 +18,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.SourceLedger;
-import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.SourceRowBuilder;
 import io.crums.util.TaskStack;
@@ -40,18 +39,17 @@ public class SqlLedger implements SourceLedger, Channel {
   public record Config(
       PreparedStatement sizeQuery,
       PreparedStatement rowByNoQuery,
-      SaltScheme saltScheme,
       TableSalt shaker,
       int maxBlobSize) implements Channel {
-    
-    
+
+
     /**
      * Full constructor.
-     * 
+     *
      * @param sizeQuery       size-query takes no arguments
      * @param rowByNoQuery    row-by-no query takes single row-no. argument
-     * @param saltScheme      not {@code null}
-     * @param shaker          not {@code null}, if {@code saltScheme.hasSalt()}
+     * @param shaker          if {@code null}, rows are unsalted; otherwise
+     *                        every cell is salted
      * @param maxBlobSize     maximum length of SQL BLOBs (defaults to
      *                        {@linkplain SqlLedger#DEFAULT_MAX_BLOB_SIZE})
      */
@@ -59,53 +57,48 @@ public class SqlLedger implements SourceLedger, Channel {
       if (!isOpen(sizeQuery, rowByNoQuery, shaker))
         throw new IllegalArgumentException(
             "one or both prepared statements closed");
-      if (saltScheme.hasSalt() && shaker == null)
-        throw new IllegalArgumentException(
-            "null shaker with salted scheme (%s)".formatted(saltScheme));
       if (maxBlobSize < 0)
         throw new IllegalArgumentException(
             "negative maxBlobSize: " + maxBlobSize);
     }
-    
-    
+
+
     /**
      * Constructs an instance with {@linkplain SqlLedger#DEFAULT_MAX_BLOB_SIZE}.
-     * 
+     *
      * @param sizeQuery         size-query takes no arguments
      * @param rowByNoQuery      row-by-no query takes single row-no. argument
-     * @param saltScheme        not {@code null}
-     * @param shaker            not {@code null}, if {@code saltScheme.hasSalt()}
+     * @param shaker            if {@code null}, rows are unsalted; otherwise
+     *                          every cell is salted
      */
     public Config(
         PreparedStatement sizeQuery,
         PreparedStatement rowByNoQuery,
-        SaltScheme saltScheme,
         TableSalt shaker) {
-      
-      this(sizeQuery, rowByNoQuery, saltScheme, shaker, DEFAULT_MAX_BLOB_SIZE);
+
+      this(sizeQuery, rowByNoQuery, shaker, DEFAULT_MAX_BLOB_SIZE);
     }
-    
+
     public Config(
         PreparedStatement sizeQuery,
         PreparedStatement rowByNoQuery,
-        SaltScheme saltScheme,
         TableSalt shaker,
         Optional<Integer> maxBlobSize) {
-      
-      this(sizeQuery, rowByNoQuery, saltScheme, shaker,
+
+      this(sizeQuery, rowByNoQuery, shaker,
           maxBlobSize.orElse(DEFAULT_MAX_BLOB_SIZE));
     }
-    
+
     /**
-     * Returns {@code true} is salt is used.
-     * 
-     * @return {@code saltScheme().hasSalt()}
+     * Returns {@code true} iff salt is used.
+     *
+     * @return {@code shaker() != null}
      */
     public boolean isSalted() {
-      return saltScheme.hasSalt();
+      return shaker != null;
     }
-    
-    
+
+
     private static boolean isOpen(
         PreparedStatement sizeQuery, PreparedStatement rowQuery, TableSalt shaker) {
       try {
@@ -153,22 +146,20 @@ public class SqlLedger implements SourceLedger, Channel {
    * @param connection    open JDBC connection (should be read-only)
    * @param sizeQuery     parameter-free SQL returning the row count
    * @param rowByNoQuery  single-parameter SQL returning one row by 1-based number
-   * @param saltScheme    not {@code null}
-   * @param shaker        required when {@code saltScheme.hasSalt()}; may be
-   *                      {@code null} otherwise
+   * @param shaker        if {@code null}, rows are unsalted; otherwise every
+   *                      cell is salted
    */
   public static SqlLedger open(
       Connection connection,
       String sizeQuery,
       String rowByNoQuery,
-      SaltScheme saltScheme,
       TableSalt shaker) throws SQLException {
     try (var closeOnFail = new TaskStack()) {
       PreparedStatement sizeStmt = connection.prepareStatement(sizeQuery);
       closeOnFail.pushClose(sizeStmt);
       PreparedStatement rowStmt = connection.prepareStatement(rowByNoQuery);
       closeOnFail.pushClose(rowStmt);
-      var ledger = new SqlLedger(new Config(sizeStmt, rowStmt, saltScheme, shaker));
+      var ledger = new SqlLedger(new Config(sizeStmt, rowStmt, shaker));
       closeOnFail.clear();
       return ledger;
     }
@@ -177,7 +168,7 @@ public class SqlLedger implements SourceLedger, Channel {
 
   public SqlLedger(Config config) {
     this.config = config;
-    builder = new SourceRowBuilder(config.saltScheme, config.shaker);
+    builder = new SourceRowBuilder(config.shaker);
     sizeSnapshot.set(liveSize());
   }
 
@@ -185,7 +176,7 @@ public class SqlLedger implements SourceLedger, Channel {
    *
    */
   SqlLedger(Config config, long size) {
-    builder = new SourceRowBuilder(config.saltScheme, config.shaker);
+    builder = new SourceRowBuilder(config.shaker);
     this.config = config;
     setSize(size);
   }
@@ -277,8 +268,8 @@ public class SqlLedger implements SourceLedger, Channel {
   }
 
   @Override
-  public SaltScheme saltScheme() {
-    return config.saltScheme();
+  public boolean isSalted() {
+    return config.isSalted();
   }
 
   @Override

@@ -58,20 +58,15 @@ offending type by name and code, along with the `[row:col]` coordinates of the c
 
 ## Salting
 
-Each cell in a row may be salted — a 32-byte random value that is hashed together with
-the cell's type byte and data, making the cell hash unlinkable without knowledge of the
-salt. Whether a cell is salted is determined by the `SaltScheme`:
+A ledger's rows are either entirely salted or entirely unsalted — there is no
+per-column salting. Salting is enabled by supplying a `TableSalt` instance (from the
+`tablesalt` module) to `SqlLedger.Config`; leaving it `null` produces unsalted rows.
 
-- `SaltScheme.of()` — no cells salted
-- `SaltScheme.ofAll()` — all cells salted
-- `SaltScheme.ofAllExcept(int...)` — all cells salted except specific column indices
-- `SaltScheme.of(int...)` — only the specified column indices are salted
-
-When any cells are salted, a `TableSalt` instance (from the `tablesalt` module) must
-also be supplied. `TableSalt` deterministically derives a per-cell salt from a 32-byte
-secret seed, the row number, and the column index. The seed must be kept secret and
-**cannot be changed** after the ledger has been created — losing it makes it impossible
-to regenerate proofs for existing rows.
+`TableSalt` deterministically derives a per-cell salt from a 32-byte secret seed, the
+row number, and the column index, making each salted cell's hash unlinkable without
+knowledge of the salt. The seed must be kept secret and **cannot be changed** after
+the ledger has been created — losing it makes it impossible to regenerate proofs for
+existing rows.
 
 ---
 
@@ -83,7 +78,7 @@ The central class. Implements `SourceLedger` and `java.nio.channels.Channel`.
 
 ```java
 // Build the two prepared statements however you like, then:
-var config = new SqlLedger.Config(sizeQuery, rowQuery, saltScheme, shaker);
+var config = new SqlLedger.Config(sizeQuery, rowQuery, shaker);
 try (var ledger = new SqlLedger(config)) {
     long n = ledger.updateSize();   // snapshot the current row count
     SourceRow row = ledger.getSourceRow(42L);
@@ -96,8 +91,7 @@ try (var ledger = new SqlLedger(config)) {
 |-------|------|-------|
 | `sizeQuery` | `PreparedStatement` | Parameterless; must return a single `LONG` |
 | `rowByNoQuery` | `PreparedStatement` | One `LONG` param (row number) |
-| `saltScheme` | `SaltScheme` | Required; use `SaltScheme.of()` for no salting |
-| `shaker` | `TableSalt` | Required when `saltScheme.hasSalt()` is `true` |
+| `shaker` | `TableSalt` | `null` for unsalted rows; otherwise every cell is salted |
 | `maxBlobSize` | `int` | Default `67_108_864` (64 MB) |
 
 ### `DbSession`
@@ -107,7 +101,7 @@ construction from `config` package objects:
 
 ```java
 try (var session = DbSession.newInstance(dbConnection)) {
-    try (var ledger = session.openLedger(ledgerDef, saltScheme, saltSeed)) {
+    try (var ledger = session.openLedger(ledgerDef, saltSeed)) {
         // ...
     }
 }
@@ -126,7 +120,6 @@ database-driven configuration:
 | `DbConnection` | `url`, `driver_class`?, `username`?, `password`? | JDBC connection settings |
 | `DbCredentials` | `username`, `password` | Standalone credential fragment |
 | `SaltSeed` | `salt_seed` | 32-byte secret; base64-32 or 64-char hex |
-| `SaltSchemeParser` | `ssip`, `ssi` | JSON parser for `SaltScheme` |
 
 ### Secrets handling
 
@@ -147,7 +140,7 @@ world-readable config file.
 
 | Module | Role |
 |--------|------|
-| `source-ledger` | Defines `SourceLedger`, `SourceRow`, `Cell`, `DataType`, `SaltScheme` |
+| `source-ledger` | Defines `SourceLedger`, `SourceRow`, `Cell`, `DataType` |
 | `tablesalt` | Provides `TableSalt` for deterministic cell-salt derivation |
 | `jsonimple` | Lightweight JSON parsing for the `config` package |
 | JDBC driver | Supplied at runtime by the caller; not bundled |

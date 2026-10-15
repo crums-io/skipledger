@@ -299,7 +299,7 @@ public class LogLedger {
    * Returns {@code true} if salt is used to determine the row hash.
    */
   public final boolean isSalted() {
-    return rules.saltScheme().hasSalt();
+    return rules.hasSalt();
   }
   
   
@@ -716,7 +716,7 @@ public class LogLedger {
       final Optional<SourceRowGatherer> srcGatherer;
       
       if (job.sourcesRequested()) {
-        var gatherer = rules.saltScheme().hasSalt() ?
+        var gatherer = rules.hasSalt() ?
             new SourceRowGatherer(
                 job.srcNos::contains,
                 rules.salter().get()) :

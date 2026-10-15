@@ -11,7 +11,6 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 
@@ -25,26 +24,22 @@ public class SourcePackBuilder implements SourceBag, Serial {
   private final static int HEADER_SIZE_EST = 32;
   
   private final TreeMap<Long, SourceRow> rows = new TreeMap<>();
-  private final SaltScheme saltScheme;
-  
+  private final boolean salted;
+
   private boolean fixedCellCount;
   private int maxCellCount;
   private int maxVarSize;
   private int sizeEstimate = HEADER_SIZE_EST;
-  
-  
-  public SourcePackBuilder(SaltScheme saltScheme) {
-    this.saltScheme = Objects.requireNonNull(saltScheme);
+
+
+  public SourcePackBuilder(boolean salted) {
+    this.salted = salted;
   }
-  
-  
-  /**
-   * Returns the salt scheme. Note this property is not defined in the
-   * {@linkplain SourceBag} interface: it's an artifact of the binary format of
-   * {@linkplain SourcePack}s.
-   */
-  public SaltScheme saltScheme() {
-    return saltScheme;
+
+
+  @Override
+  public boolean isSalted() {
+    return salted;
   }
   
   
@@ -89,8 +84,8 @@ public class SourcePackBuilder implements SourceBag, Serial {
    * Although this builder doesn't check the hash of the added row,
    * the following checks are performed:
    * <ol>
-   * <li>That the salting of the row's cells is consistent with the
-   * {@linkplain #saltScheme() salt scheme}.
+   * <li>That the salting of the row's cells is consistent with
+   * {@linkplain #isSalted()}.
    * <li>That if a cell is redacted, then so is the row-salt.</li>
    * <li>That a cell's data size is consistent with its declared type.</li>
    * </ol>
@@ -135,7 +130,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
         sizeEstimate += 1 + HASH_WIDTH;
         continue;
       }
-      if (cell.hasSalt() != saltScheme.isSalted(index))
+      if (cell.hasSalt() != salted)
         throw new IllegalArgumentException(
             "cell [%d] must be %s: %s"
             .formatted(index, cell.hasSalt() ? "unsalted" : "salted", row));
@@ -238,40 +233,12 @@ public class SourcePackBuilder implements SourceBag, Serial {
     long schemaFlag = 0L;
     if (fixedCellCount)
       schemaFlag |= SchemaFlag.ISO_COUNT;
-    
-    if (saltScheme.cellIndices().length == 0) {
-      
-      if (!saltScheme.isPositive())
-        schemaFlag |= SchemaFlag.SALTED_ALL;
-    
-    } else {
-      
-      if (saltScheme.isPositive())
-        schemaFlag |= SchemaFlag.SALTED_IDX;
-      else
-        schemaFlag |= SchemaFlag.UNSALTED_IDX;
-    }
-    
+
+    if (salted)
+      schemaFlag |= SchemaFlag.SALTED_ALL;
+
     out.putLong(schemaFlag);
-    
-    // write the cell [un]salt indices, if any
-    {
-      final int count = saltScheme.cellIndices().length;
-      if (count > 0) {
-        assert count <= 0xff_ff;
-        out.putShort((short) count);
-        int[] si = saltScheme.cellIndices();
-        int prev = -1;
-        for (int i = 0; i < count; ++i) {
-          int next = si[i];
-          assert next <= 0xff_ff;
-          assert next > prev;
-          prev = next;
-          out.putShort((short) next);
-        }
-      }
-    }
-    
+
     if (ccWriter.isFixed())
       out.put((byte) ccWriter.fixed);
     else
@@ -314,7 +281,7 @@ public class SourcePackBuilder implements SourceBag, Serial {
         var type = cell.dataType();
         out.put(CellFlag.encodeUnredacted(type));
         
-        assert cell.hasSalt() == saltScheme.isSalted(index);
+        assert cell.hasSalt() == salted;
         if (!hasRowSalt && cell.hasSalt())
           out.put(cell.salt());
         

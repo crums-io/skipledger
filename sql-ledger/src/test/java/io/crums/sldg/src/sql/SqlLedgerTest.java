@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.Cell;
 import io.crums.sldg.src.DataType;
-import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SharedConstants;
 import io.crums.sldg.src.SourceRow;
 import io.crums.testing.IoTestCase;
@@ -199,22 +198,22 @@ public class SqlLedgerTest extends IoTestCase {
   
   
   static SqlLedger inventoryLogSource(
-      Connection con, SaltScheme saltScheme, TableSalt shaker)
+      Connection con, TableSalt shaker)
       throws SQLException {
     PreparedStatement sizeQuery = prepareInventoryLogSizeQuery(con);
     assertNotNull(sizeQuery);
     PreparedStatement rowQuery = prepareInventoryLogRowQuery(con);
     assertNotNull(rowQuery);
-    var config = new SqlLedger.Config(sizeQuery, rowQuery, saltScheme, shaker);
+    var config = new SqlLedger.Config(sizeQuery, rowQuery, shaker);
     return new SqlLedger(config);
   }
-  
-  
+
+
   @SuppressWarnings("deprecation")
   static void assertExpected(InventoryLogRow expected, SqlLedger source) {
     SourceRow srcRow = source.getSourceRow(expected.entryNo());
     assertEquals(expected.entryNo(), srcRow.no());
-    var saltScheme = source.saltScheme();
+    boolean salted = source.isSalted();
     {
       // The java.sql.Date type, as implemented by h2 is a mess
       // .. the Date type should be avoided, generally: use UTC millis/seconds
@@ -222,7 +221,7 @@ public class SqlLedgerTest extends IoTestCase {
       final int index = 0;
       assertEquals(DataType.DATE, srcRow.cellTypes().get(index));
       Cell dateCell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), dateCell.hasSalt());
+      assertEquals(salted, dateCell.hasSalt());
       assertCellSize(DataType.DATE, dateCell);
       Date expectedDate = expected.entryDate();
       Date actual = new Date(dateCell.data().getLong());
@@ -231,12 +230,12 @@ public class SqlLedgerTest extends IoTestCase {
       assertEquals(expectedDate.getDate(), actual.getDate());
       assertCellSize(DataType.DATE, dateCell);
     }
-    
+
     {
       final int index = 1;
       assertEquals(DataType.LONG, srcRow.cellTypes().get(index));
       Cell entryType = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), entryType.hasSalt());
+      assertEquals(salted, entryType.hasSalt());
       assertCellSize(DataType.LONG, entryType);
       assertEquals(expected.entryType(), entryType.data().getLong());
       assertCellSize(DataType.LONG, entryType);
@@ -294,31 +293,31 @@ public class SqlLedgerTest extends IoTestCase {
   @Test
   public void testOneNoSalt() throws Exception {
     final Object label = new Object() {  };
-    testOneImpl(label, SaltScheme.of());
+    testOneImpl(label, false);
   }
 
   @Test
   public void testOneSaltAll() throws Exception {
     final Object label = new Object() {  };
-    testOneImpl(label, SaltScheme.ofAll());
+    testOneImpl(label, true);
   }
-  
-  
-  private void testOneImpl(Object label, SaltScheme saltScheme)
+
+
+  private void testOneImpl(Object label, boolean salted)
       throws ClassNotFoundException, SQLException {
-    
-  
+
+
     File dir = getMethodOutputFilepath(label);
     try (var closer = new TaskStack()) {
-      
+
       var con = newDatabase(dir);
       closer.pushClose(con);
-      
+
       createInventoryLog(con);
-      
-      TableSalt shaker = saltScheme.hasSalt() ? makeTableSalt(label) : null;
-      
-      SqlLedger source = inventoryLogSource(con, saltScheme, shaker);
+
+      TableSalt shaker = salted ? makeTableSalt(label) : null;
+
+      SqlLedger source = inventoryLogSource(con, shaker);
       closer.pushClose(source);
       
       assertEquals(0L, source.size());
@@ -351,10 +350,10 @@ public class SqlLedgerTest extends IoTestCase {
   @Test
   public void testTwo() throws Exception {
     Object label = new Object() { };
-    testTwoImpl(label, SaltScheme.ofAllExcept(0, 1));
+    testTwoImpl(label, true);
   }
-  
-  private void testTwoImpl(Object label, SaltScheme saltScheme)
+
+  private void testTwoImpl(Object label, boolean salted)
       throws ClassNotFoundException, SQLException {
     
   
@@ -387,8 +386,8 @@ public class SqlLedgerTest extends IoTestCase {
 
       insert(insertStmt, row2);
 
-      TableSalt shaker = saltScheme.hasSalt() ? makeTableSalt(label) : null;
-      SqlLedger source = inventoryLogSource(con, saltScheme, shaker);
+      TableSalt shaker = salted ? makeTableSalt(label) : null;
+      SqlLedger source = inventoryLogSource(con, shaker);
       closer.pushClose(source);
 
       assertEquals(2L, source.size());
@@ -401,10 +400,10 @@ public class SqlLedgerTest extends IoTestCase {
   @Test
   public void testThreeWithGap() throws Exception {
     Object label = new Object() { };
-    testThreeWithGapImpl(label, SaltScheme.ofAll());
+    testThreeWithGapImpl(label, true);
   }
-  
-  private void testThreeWithGapImpl(Object label, SaltScheme saltScheme)
+
+  private void testThreeWithGapImpl(Object label, boolean salted)
       throws ClassNotFoundException, SQLException {
     
   
@@ -442,8 +441,8 @@ public class SqlLedgerTest extends IoTestCase {
       drop.execute("DELETE FROM inventory_log WHERE entry_no = 2");
       
 
-      TableSalt shaker = saltScheme.hasSalt() ? makeTableSalt(label) : null;
-      SqlLedger source = inventoryLogSource(con, saltScheme, shaker);
+      TableSalt shaker = salted ? makeTableSalt(label) : null;
+      SqlLedger source = inventoryLogSource(con, shaker);
       closer.pushClose(source);
 
       assertEquals(3L, source.size());
@@ -559,13 +558,13 @@ public class SqlLedgerTest extends IoTestCase {
 
 
   static SqlLedger financialLedgerSource(
-      Connection con, SaltScheme saltScheme, TableSalt shaker)
+      Connection con, TableSalt shaker)
       throws SQLException {
     PreparedStatement sizeQuery = prepareFinancialLedgerSizeQuery(con);
     assertNotNull(sizeQuery);
     PreparedStatement rowQuery = prepareFinancialLedgerRowQuery(con);
     assertNotNull(rowQuery);
-    var config = new SqlLedger.Config(sizeQuery, rowQuery, saltScheme, shaker);
+    var config = new SqlLedger.Config(sizeQuery, rowQuery, shaker);
     return new SqlLedger(config);
   }
 
@@ -574,14 +573,14 @@ public class SqlLedgerTest extends IoTestCase {
   static void assertFinancialExpected(FinancialRow expected, SqlLedger source) {
     SourceRow srcRow = source.getSourceRow(expected.txnNo());
     assertEquals(expected.txnNo(), srcRow.no());
-    var saltScheme = source.saltScheme();
+    boolean salted = source.isSalted();
 
     // col 0: txn_date — DATE
     {
       final int index = 0;
       assertEquals(DataType.DATE, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       Date expectedDate = expected.txnDate();
       Date actual = new Date(cell.data().getLong());
       assertEquals(expectedDate.getYear(), actual.getYear());
@@ -594,7 +593,7 @@ public class SqlLedgerTest extends IoTestCase {
       final int index = 1;
       assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       assertEquals(0, expected.amount().compareTo((BigDecimal) cell.value()));
     }
 
@@ -605,7 +604,7 @@ public class SqlLedgerTest extends IoTestCase {
           expected.fee().isEmpty() ? DataType.NULL : DataType.BIG_DEC;
       assertEquals(expectedType, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       if (!expectedType.isNull())
         assertEquals(0, expected.fee().get().compareTo((BigDecimal) cell.value()));
     }
@@ -615,7 +614,7 @@ public class SqlLedgerTest extends IoTestCase {
       final int index = 3;
       assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       assertEquals(0, expected.balance().compareTo((BigDecimal) cell.value()));
     }
 
@@ -626,7 +625,7 @@ public class SqlLedgerTest extends IoTestCase {
           expected.memo().isEmpty() ? DataType.NULL : DataType.STRING;
       assertEquals(expectedType, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       if (!expectedType.isNull())
         assertEquals(expected.memo().get(), Strings.utf8String(cell.data()));
     }
@@ -636,7 +635,7 @@ public class SqlLedgerTest extends IoTestCase {
       final int index = 5;
       assertEquals(DataType.BOOL, srcRow.cellTypes().get(index));
       Cell cell = srcRow.cells().get(index);
-      assertEquals(saltScheme.isSalted(index), cell.hasSalt());
+      assertEquals(salted, cell.hasSalt());
       assertEquals(expected.isCredit(), cell.value());
     }
   }
@@ -651,7 +650,7 @@ public class SqlLedgerTest extends IoTestCase {
 
       createFinancialLedger(con);
 
-      SqlLedger source = financialLedgerSource(con, SaltScheme.of(), null);
+      SqlLedger source = financialLedgerSource(con, null);
       closer.pushClose(source);
 
       assertEquals(0L, source.size());
@@ -684,7 +683,7 @@ public class SqlLedgerTest extends IoTestCase {
       createFinancialLedger(con);
 
       TableSalt shaker = makeTableSalt(label);
-      SqlLedger source = financialLedgerSource(con, SaltScheme.ofAll(), shaker);
+      SqlLedger source = financialLedgerSource(con, shaker);
       closer.pushClose(source);
 
       PreparedStatement insertStmt = prepareFinancialLedgerInsert(con);
@@ -708,7 +707,7 @@ public class SqlLedgerTest extends IoTestCase {
 
 
   @Test
-  public void testDecimalTwoRowsMixedSalt() throws Exception {
+  public void testDecimalTwoRowsSaltAll() throws Exception {
     Object label = new Object() { };
     try (var closer = new TaskStack()) {
       var con = newDatabase(label);
@@ -716,10 +715,8 @@ public class SqlLedgerTest extends IoTestCase {
 
       createFinancialLedger(con);
 
-      // salt all except txn_date (0) and memo (4)
-      SaltScheme saltScheme = SaltScheme.ofAllExcept(0, 4);
       TableSalt shaker = makeTableSalt(label);
-      SqlLedger source = financialLedgerSource(con, saltScheme, shaker);
+      SqlLedger source = financialLedgerSource(con, shaker);
       closer.pushClose(source);
 
       PreparedStatement insertStmt = prepareFinancialLedgerInsert(con);
@@ -784,7 +781,7 @@ public class SqlLedgerTest extends IoTestCase {
           "SELECT amount FROM big_amount_test WHERE row_no = ?");
       closer.pushClose(rowQuery);
 
-      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, null);
       SqlLedger source = new SqlLedger(config);
       closer.pushClose(source);
 
@@ -829,7 +826,7 @@ public class SqlLedgerTest extends IoTestCase {
           "SELECT payload FROM binary_test WHERE row_no = ?");
       closer.pushClose(rowQuery);
 
-      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, null);
       SqlLedger source = new SqlLedger(config);
       closer.pushClose(source);
 
@@ -874,7 +871,7 @@ public class SqlLedgerTest extends IoTestCase {
           "SELECT tags FROM array_test WHERE row_no = ?");
       closer.pushClose(rowQuery);
 
-      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, null);
       SqlLedger source = new SqlLedger(config);
       closer.pushClose(source);
 
@@ -911,7 +908,7 @@ public class SqlLedgerTest extends IoTestCase {
           "SELECT val FROM numeric_test WHERE row_no = ?");
       closer.pushClose(rowQuery);
 
-      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, null);
       SqlLedger source = new SqlLedger(config);
       closer.pushClose(source);
 
@@ -950,7 +947,7 @@ public class SqlLedgerTest extends IoTestCase {
           "SELECT val FROM float_test WHERE row_no = ?");
       closer.pushClose(rowQuery);
 
-      var config = new SqlLedger.Config(sizeQuery, rowQuery, SaltScheme.of(), null);
+      var config = new SqlLedger.Config(sizeQuery, rowQuery, null);
       SqlLedger source = new SqlLedger(config);
       closer.pushClose(source);
 

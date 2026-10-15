@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 
 import io.crums.sldg.salt.TableSalt;
 import io.crums.sldg.src.DataType;
-import io.crums.sldg.src.SaltScheme;
 import io.crums.sldg.src.SourceRow;
 import io.crums.sldg.src.SourceRowBuilder;
 import io.crums.testing.SelfAwareTestCase;
@@ -131,7 +130,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   @Test
   public void testRowSaltedMixedTypes() {
     Object label = new Object() { };
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, testShaker(label));
+    var builder = new SourceRowBuilder(testShaker(label));
     SourceRow row = builder.buildRow(10L, (Object) null, true, 99L, "world");
     assertTrue(row.rowSalt().isPresent());
     assertRoundtrip(row);
@@ -153,7 +152,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   @Test
   public void testRowSaltedNullAndDate() {
     Object label = new Object() { };
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, testShaker(label));
+    var builder = new SourceRowBuilder(testShaker(label));
     long utc = System.currentTimeMillis();
     SourceRow row = builder.buildRow(
         11L,
@@ -174,7 +173,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
     // Redaction hides the row-level salt, so the surviving revealed cell
     // must carry its own salt in JSON — that is the "individually salted cell" case.
     Object label = new Object() { };
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, testShaker(label));
+    var builder = new SourceRowBuilder(testShaker(label));
     SourceRow full = builder.buildRow(20L, "redact me", "salted");
     SourceRow row = full.redact(0);
 
@@ -205,7 +204,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   @Test
   public void testRedactedCell() {
     Object label = new Object() { };
-    var builder = new SourceRowBuilder(SaltScheme.SALT_ALL, testShaker(label));
+    var builder = new SourceRowBuilder(testShaker(label));
     SourceRow full = builder.buildRow(30L, "keep", "redact me");
     SourceRow redacted = full.redact(1);
 

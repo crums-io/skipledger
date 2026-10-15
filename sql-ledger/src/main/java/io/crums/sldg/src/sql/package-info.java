@@ -63,12 +63,13 @@
  *
  * <h2>Salting</h2>
  * <p>
- * Each cell in a row may be salted — a 32-byte value hashed together with the cell's
- * type byte and data, making the cell hash unlinkable without knowledge of the salt.
- * The {@link io.crums.sldg.src.SaltScheme SaltScheme} controls which columns are salted.
- * When any cells are salted, a {@code TableSalt} instance must also be supplied;
- * it deterministically derives a per-cell salt from a 32-byte secret seed, the row
- * number, and the column index.
+ * Rows are either entirely salted or entirely unsalted: every cell's value is hashed
+ * together with a 32-byte salt, a cell type byte, and the cell's data, making the
+ * cell hash unlinkable without knowledge of the salt. Salting is enabled by supplying
+ * a non-{@code null} {@code TableSalt} instance to {@link
+ * io.crums.sldg.src.sql.SqlLedger.Config SqlLedger.Config}; it deterministically
+ * derives a per-cell salt from a 32-byte secret seed, the row number, and the column
+ * index.
  * </p>
  * <p>
  * The salt seed must be kept secret and <em>cannot be changed</em> after a ledger has
@@ -82,7 +83,7 @@
  * {@link io.crums.sldg.src.sql.SqlLedger.Config SqlLedger.Config}:
  * </p>
  * <pre>{@code
- * var config = new SqlLedger.Config(sizeQuery, rowQuery, saltScheme, shaker);
+ * var config = new SqlLedger.Config(sizeQuery, rowQuery, shaker);
  * try (var ledger = new SqlLedger(config)) {
  *     long n = ledger.updateSize();
  *     SourceRow row = ledger.getSourceRow(42L);
