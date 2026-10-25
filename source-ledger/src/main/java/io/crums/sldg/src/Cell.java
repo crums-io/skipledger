@@ -19,8 +19,8 @@ import io.crums.sldg.salt.TableSalt;
  */
 public abstract class Cell {
   
-  /** No implementations outside this file. */
-  private Cell() {  }
+  /** No implementations outside this package. */
+  Cell() {  }
   
   /**
    * Returns the cell hash.
