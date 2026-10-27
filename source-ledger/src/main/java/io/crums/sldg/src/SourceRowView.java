@@ -13,8 +13,8 @@ import io.crums.util.collections.Lists;
 
 
 /**
- * A view of a {@code SourceRow}. 
- * 
+ * A view of a {@code SourceRow}.
+ *
  * <h2>Motivation (what problem it solves)</h2>
  * <p>
  * This class exists in order to support external tools (such as Qute) where
@@ -24,19 +24,42 @@ import io.crums.util.collections.Lists;
  * By design, {@linkplain SourceRow} is an abstract type. So is {@linkplain Cell}.
  * This class uses a lazy decorator pattern to provide fix the problem.
  * </p>
- * 
- * 
+ *
+ *
  */
 public final class SourceRowView extends SourceRow {
 
   /**
+   * An optional callback, invoked once per {@code Cell} actually
+   * constructed from {@linkplain #cells()}'s lazily-mapped list (i.e. once
+   * per element access, not once per {@code cells()} call) -- a generic
+   * access hook with no opinion on what a caller does with it. See
+   * {@link #map(SourceRow, AccessListener)}.
+   */
+  @FunctionalInterface
+  public interface AccessListener {
+    void onAccess();
+  }
+
+  /**
    * Returns a view of the given {@code row}. If the given argument is
    * already a view, then the argument is returned as-is.
-   * 
+   *
    * @see #mapUnchecked(SourceRow)
    */
   public static SourceRowView map(SourceRow row) {
-    return row instanceof SourceRowView view ? view : new SourceRowView(row);
+    return row instanceof SourceRowView view ? view : new SourceRowView(row, null);
+  }
+
+  /**
+   * Returns an access-monitored view of the given {@code row}: {@code
+   * listener} is invoked once per {@code Cell} element actually accessed
+   * off {@link #cells()}'s returned list. Unlike {@link #map(SourceRow)},
+   * always wraps fresh (no identity shortcut for an already-wrapped {@code
+   * row}), so the listener is never silently dropped.
+   */
+  public static SourceRowView map(SourceRow row, AccessListener listener) {
+    return new SourceRowView(row, Objects.requireNonNull(listener, "listener"));
   }
 
 
@@ -48,7 +71,7 @@ public final class SourceRowView extends SourceRow {
    * @see #map(SourceRow)
    */
   public static SourceRowView mapUnchecked(SourceRow row) {
-    return new SourceRowView(row);
+    return new SourceRowView(row, null);
   }
 
 
@@ -105,10 +128,12 @@ public final class SourceRowView extends SourceRow {
 
 
   private final SourceRow baseRow;
+  private final AccessListener listener;
 
 
-  private SourceRowView(SourceRow baseRow) {
+  private SourceRowView(SourceRow baseRow, AccessListener listener) {
     this.baseRow = Objects.requireNonNull(baseRow);
+    this.listener = listener;
   }
 
   @Override
@@ -118,12 +143,19 @@ public final class SourceRowView extends SourceRow {
 
 
   /**
-   * 
+   *
    * @return a list of {@linkplain CellView}s.
    */
   @Override
   public List<Cell> cells() {
-    return Lists.map(baseRow.cells(), CellView::new);
+    return listener == null ?
+        Lists.map(baseRow.cells(), CellView::new) :
+          Lists.map(baseRow.cells(), this::accessedView);
+  }
+
+  private CellView accessedView(Cell cell) {
+    listener.onAccess();
+    return new CellView(cell);
   }
 
     
