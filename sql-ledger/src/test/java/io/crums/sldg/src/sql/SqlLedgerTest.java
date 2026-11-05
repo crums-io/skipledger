@@ -575,7 +575,7 @@ public class SqlLedgerTest extends IoTestCase {
     assertEquals(expected.txnNo(), srcRow.no());
     boolean salted = source.isSalted();
 
-    // col 0: txn_date — DATE
+    // col 0: txn_date -- DATE
     {
       final int index = 0;
       assertEquals(DataType.DATE, srcRow.cellTypes().get(index));
@@ -588,7 +588,7 @@ public class SqlLedgerTest extends IoTestCase {
       assertEquals(expectedDate.getDate(), actual.getDate());
     }
 
-    // col 1: amount — BIG_DEC (non-null)
+    // col 1: amount -- BIG_DEC (non-null)
     {
       final int index = 1;
       assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
@@ -597,7 +597,7 @@ public class SqlLedgerTest extends IoTestCase {
       assertEquals(0, expected.amount().compareTo((BigDecimal) cell.value()));
     }
 
-    // col 2: fee — BIG_DEC or NULL
+    // col 2: fee -- BIG_DEC or NULL
     {
       final int index = 2;
       DataType expectedType =
@@ -609,7 +609,7 @@ public class SqlLedgerTest extends IoTestCase {
         assertEquals(0, expected.fee().get().compareTo((BigDecimal) cell.value()));
     }
 
-    // col 3: balance — BIG_DEC (non-null)
+    // col 3: balance -- BIG_DEC (non-null)
     {
       final int index = 3;
       assertEquals(DataType.BIG_DEC, srcRow.cellTypes().get(index));
@@ -618,7 +618,7 @@ public class SqlLedgerTest extends IoTestCase {
       assertEquals(0, expected.balance().compareTo((BigDecimal) cell.value()));
     }
 
-    // col 4: memo — STRING or NULL
+    // col 4: memo -- STRING or NULL
     {
       final int index = 4;
       DataType expectedType =
@@ -630,7 +630,7 @@ public class SqlLedgerTest extends IoTestCase {
         assertEquals(expected.memo().get(), Strings.utf8String(cell.data()));
     }
 
-    // col 5: is_credit — BOOL
+    // col 5: is_credit -- BOOL
     {
       final int index = 5;
       assertEquals(DataType.BOOL, srcRow.cellTypes().get(index));
@@ -883,7 +883,7 @@ public class SqlLedgerTest extends IoTestCase {
 
   @Test
   public void testNumericColumn() throws Exception {
-    // Types.NUMERIC is semantically identical to Types.DECIMAL — both map to BIG_DEC.
+    // Types.NUMERIC is semantically identical to Types.DECIMAL -- both map to BIG_DEC.
     Object label = new Object() { };
     try (var closer = new TaskStack()) {
       var con = newDatabase(label);

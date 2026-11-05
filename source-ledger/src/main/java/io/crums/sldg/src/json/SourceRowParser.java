@@ -43,10 +43,10 @@ import io.crums.util.json.simple.JSONObject;
  * salt is needed and the type is unambiguously inferrable from the JSON type:
  * </p>
  * <ul>
- *   <li>{@code null} → {@code NULL}</li>
- *   <li>{@code true} / {@code false} → {@code BOOL}</li>
- *   <li>JSON integer → {@code LONG}</li>
- *   <li>JSON string → {@code STRING}</li>
+ *   <li>{@code null} -> {@code NULL}</li>
+ *   <li>{@code true} / {@code false} -> {@code BOOL}</li>
+ *   <li>JSON integer -> {@code LONG}</li>
+ *   <li>JSON string -> {@code STRING}</li>
  * </ul>
  * <p>
  * All other types, and any cell with an individual salt, use the object form:
@@ -63,7 +63,7 @@ import io.crums.util.json.simple.JSONObject;
  *
  * <h2>Type names</h2>
  * <table border="1">
- *   <caption>DataType → JSON type string</caption>
+ *   <caption>DataType -> JSON type string</caption>
  *   <tr><th>JSON {@code "type"}</th><th>DataType</th></tr>
  *   <tr><td>{@code "STR"}</td><td>{@link DataType#STRING}</td></tr>
  *   <tr><td>{@code "LONG"}</td><td>{@link DataType#LONG}</td></tr>
@@ -111,7 +111,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
 
 
   // ========================================================================
-  //  Write path: SourceRow → JSONObject
+  //  Write path: SourceRow -> JSONObject
   // ========================================================================
 
   @Override
@@ -142,7 +142,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
     // hasCellSalt: cell has an individual salt not covered by the row-level salt
     boolean writeCellSalt = !hasRowSalt && cell.hasSalt();
 
-    // Compact bare form — only when no individual cell salt needed
+    // Compact bare form -- only when no individual cell salt needed
     if (!writeCellSalt) {
       if (type == DataType.NULL)   return null;
       if (type == DataType.BOOL)   return cell.value();
@@ -210,7 +210,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
 
 
   // ========================================================================
-  //  Read path: JSONObject → SourceRow
+  //  Read path: JSONObject -> SourceRow
   // ========================================================================
 
   @Override
@@ -274,7 +274,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
     if (cellJson instanceof JSONObject obj)
       return parseCellObject(obj, rowSalt, index, workDigest);
 
-    // Bare Double: jsonimple parses decimal literals as Double — not supported
+    // Bare Double: jsonimple parses decimal literals as Double -- not supported
     if (cellJson instanceof Number)
       throw new JsonParsingException(
           "bare decimal numbers are not supported as cell values; " +
@@ -327,7 +327,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
 
   /**
    * Builds a null cell, choosing the appropriate implementation in order:
-   * explicit cell salt → row salt (derive cell salt) → unsalted.
+   * explicit cell salt -> row salt (derive cell salt) -> unsalted.
    */
   private static Cell buildNullCell(
       ByteBuffer cellSalt, ByteBuffer rowSalt, int index, MessageDigest workDigest) {
@@ -347,7 +347,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
 
   /**
    * Builds a revealed (non-null) cell, choosing the appropriate implementation
-   * in order: explicit cell salt → row salt → unsalted.
+   * in order: explicit cell salt -> row salt -> unsalted.
    */
   private static Cell buildRevealedCell(
       ByteBuffer cellSalt, ByteBuffer rowSalt, int index, DataType type, ByteBuffer data) {
@@ -401,7 +401,7 @@ public class SourceRowParser implements JsonEntityParser<SourceRow> {
       return switch (type) {
         case STRING  -> (String) rawValue;
         case LONG    -> ((Number) rawValue).longValue();
-        case DATE    -> ((Number) rawValue).longValue();   // Long → accepted by toDateBuffer
+        case DATE    -> ((Number) rawValue).longValue();   // Long -> accepted by toDateBuffer
         case BIG_INT -> new BigInteger((String) rawValue);
         case BIG_DEC -> new BigDecimal((String) rawValue);
         case BOOL    -> (Boolean) rawValue;

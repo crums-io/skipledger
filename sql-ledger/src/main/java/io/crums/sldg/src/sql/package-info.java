@@ -9,9 +9,9 @@
  * A ledger is defined by exactly two prepared statements:
  * </p>
  * <ul>
- *   <li><b>Size query</b> — parameterless; returns a single row with a single {@code LONG}
+ *   <li><b>Size query</b> -- parameterless; returns a single row with a single {@code LONG}
  *       value representing the current row count.</li>
- *   <li><b>Row query</b> — takes one {@code LONG} parameter (the 1-based row number);
+ *   <li><b>Row query</b> -- takes one {@code LONG} parameter (the 1-based row number);
  *       returns the column values for that row.</li>
  * </ul>
  * <p>
@@ -40,7 +40,7 @@
  * <p>
  * {@code FLOAT}, {@code DOUBLE}, and {@code REAL} columns are explicitly rejected with a
  * {@link io.crums.sldg.src.sql.SqlLedgerException SqlLedgerException}. IEEE-754 has
- * multiple bit representations of the same logical value (e.g. {@code +0} vs {@code −0},
+ * multiple bit representations of the same logical value (e.g. {@code +0} vs {@code -0},
  * {@code NaN} variants), making cross-platform hash reproducibility impossible. Use
  * {@code DECIMAL}/{@code NUMERIC} for any value that must appear in a ledger.
  * </p>
@@ -73,7 +73,7 @@
  * </p>
  * <p>
  * The salt seed must be kept secret and <em>cannot be changed</em> after a ledger has
- * been created — losing it makes it impossible to regenerate proofs for existing rows.
+ * been created -- losing it makes it impossible to regenerate proofs for existing rows.
  * </p>
  *
  * <h2>Core API</h2>

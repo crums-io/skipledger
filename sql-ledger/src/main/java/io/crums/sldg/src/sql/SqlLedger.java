@@ -326,7 +326,7 @@ public class SqlLedger implements SourceLedger, Channel {
    * the columns to be read have been determined but before any values are
    * extracted. No-op by default.
    *
-   * <p>Subclasses may override this to inspect {@code meta} — e.g. to
+   * <p>Subclasses may override this to inspect {@code meta} -- e.g. to
    * capture {@code getColumnLabel(int)} as a naming fallback for consumers
    * that want a column name when no other column metadata is configured.
    * Note the off-by-one: JDBC column numbers are 1-based, so a row's
@@ -416,11 +416,11 @@ public class SqlLedger implements SourceLedger, Channel {
       return rs.getString(col);
 
     // single-bit type: common alias for BOOLEAN in MySQL/MariaDB
-    // (H2 maps BOOLEAN → Types.BOOLEAN, so this branch is not exercised by the H2 test suite)
+    // (H2 maps BOOLEAN -> Types.BOOLEAN, so this branch is not exercised by the H2 test suite)
     case Types.BIT:
-      return rs.getBoolean(col);   // → DataType.BOOL, consistent with Types.BOOLEAN
+      return rs.getBoolean(col);   // -> DataType.BOOL, consistent with Types.BOOLEAN
 
-    // fixed / variable binary — treat like BLOB with the same size guard
+    // fixed / variable binary -- treat like BLOB with the same size guard
     case Types.BINARY:
     case Types.VARBINARY:
     case Types.LONGVARBINARY:
@@ -431,7 +431,7 @@ public class SqlLedger implements SourceLedger, Channel {
           throw new SqlLedgerException(
               "BINARY/VARBINARY length %d > max blob size (%d bytes); cell [%d:%d]"
               .formatted(bytes.length, config.maxBlobSize, row, col));
-        return bytes;   // → DataType.BYTES
+        return bytes;   // -> DataType.BYTES
       }
 
     // anything else is not supported

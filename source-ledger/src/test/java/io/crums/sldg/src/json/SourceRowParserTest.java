@@ -41,7 +41,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
     return new TableSalt(salt);
   }
 
-  /** Roundtrip: row → JSON → row2; assert equal hashes. */
+  /** Roundtrip: row -> JSON -> row2; assert equal hashes. */
   private static void assertRoundtrip(SourceRow row) {
     JSONObject jObj = PARSER.toJsonObject(row);
     SourceRow row2 = PARSER.toEntity(jObj);
@@ -57,7 +57,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   public void testUnsaltedInferrableTypes() {
     final Object label = new Object() { };
     
-    // null, boolean, long, string — written as bare JSON values
+    // null, boolean, long, string -- written as bare JSON values
     var builder = new SourceRowBuilder();
     SourceRow row = builder.buildRow(1L, (Object) null, true, 42L, "hello");
     assertRoundtrip(row);
@@ -66,10 +66,10 @@ public class SourceRowParserTest extends SelfAwareTestCase {
     System.out.println("=== " + method(label) + " ===");
     JsonPrinter.println(jObj);
     JSONArray cells = (JSONArray) jObj.get(SourceRowParser.CELLS_KEY);
-    assertNull(cells.get(0),              "null → bare null");
-    assertEquals(Boolean.TRUE, cells.get(1), "bool → bare boolean");
-    assertEquals(42L, cells.get(2),       "long → bare long");
-    assertEquals("hello", cells.get(3),   "string → bare string");
+    assertNull(cells.get(0),              "null -> bare null");
+    assertEquals(Boolean.TRUE, cells.get(1), "bool -> bare boolean");
+    assertEquals(42L, cells.get(2),       "long -> bare long");
+    assertEquals("hello", cells.get(3),   "string -> bare string");
     assertNull(jObj.get(SourceRowParser.SALT_KEY), "no row salt key");
   }
 
@@ -77,7 +77,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   @Test
   public void testUnsaltedNonInferrableTypes() {
     final Object label = new Object() { };
-    // DATE, BIG_DEC, BIG_INT, BYTES, HASH — require object form with "type" key
+    // DATE, BIG_DEC, BIG_INT, BYTES, HASH -- require object form with "type" key
     var builder = new SourceRowBuilder();
     long utcMillis = new Date(2025, 0, 15).getTime(); // Jan 2025
     BigDecimal dec = new BigDecimal("99.9500");
@@ -171,7 +171,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
   public void testIndividuallySaltedCells() {
     // Build a SALT_ALL row, then redact cell 0.
     // Redaction hides the row-level salt, so the surviving revealed cell
-    // must carry its own salt in JSON — that is the "individually salted cell" case.
+    // must carry its own salt in JSON -- that is the "individually salted cell" case.
     Object label = new Object() { };
     var builder = new SourceRowBuilder(testShaker(label));
     SourceRow full = builder.buildRow(20L, "redact me", "salted");
@@ -258,7 +258,7 @@ public class SourceRowParserTest extends SelfAwareTestCase {
     JSONObject jObj = new JSONObject();
     jObj.put(SourceRowParser.ROW_KEY, 1L);
     JSONArray cells = new JSONArray();
-    cells.add(3.14);   // Double — not supported as bare value
+    cells.add(3.14);   // Double -- not supported as bare value
     jObj.put(SourceRowParser.CELLS_KEY, cells);
 
     assertThrows(JsonParsingException.class, () -> PARSER.toEntity(jObj));

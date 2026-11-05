@@ -43,7 +43,7 @@ ROW_COUNT       := INT                // big-endian 4-byte value; max 0x7f_ff_ff
 
 
 
-// ── Per-row fields, in ascending order of row number ──────────────────────────
+// -- Per-row fields, in ascending order of row number --------------------------
 
 NO              := LONG               // 1-based row number
 
@@ -62,7 +62,7 @@ ROW_SALT        := BYTE ^ 32          // 32-byte root salt; all cell salts are d
 
 
 
-// ── Per-cell fields ────────────────────────────────────────────────────────────
+// -- Per-cell fields ------------------------------------------------------------
 
 CELL_CODE       := BYTE               // encodes cell type and whether the cell is redacted
                                       //  0  -- redacted  (only the cell hash is stored)

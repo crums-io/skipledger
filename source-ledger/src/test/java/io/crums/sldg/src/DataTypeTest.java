@@ -305,7 +305,7 @@ public class DataTypeTest {
     BigInteger largeUnscaled = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE);
     assertRoundtrip(BIG_DEC, new BigDecimal(largeUnscaled, 5));
 
-    // verify byte layout: unscaled=1234567, scale=2 →
+    // verify byte layout: unscaled=1234567, scale=2 ->
     //   byte[0] == 2, bytes[1..] == BigInteger.valueOf(1234567).toByteArray()
     BigDecimal known = new BigDecimal(BigInteger.valueOf(1234567), 2);
     ByteBuffer buf = BIG_DEC.toByteBuffer(known);

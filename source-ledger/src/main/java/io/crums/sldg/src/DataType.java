@@ -79,7 +79,7 @@ public enum DataType {
    * Guesses and returns the enum instance corresponding to the given value.
    *
    * <table border="1">
-   *   <caption>Java type → DataType mapping</caption>
+   *   <caption>Java type -> DataType mapping</caption>
    *   <tr><th>Java type</th><th>Returns</th><th>Notes</th></tr>
    *   <tr><td>{@code null}</td><td>{@link #NULL}</td><td></td></tr>
    *   <tr><td>{@link CharSequence} (incl. {@code String})</td><td>{@link #STRING}</td><td></td></tr>

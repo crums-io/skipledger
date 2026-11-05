@@ -74,7 +74,7 @@ public class CellTest {
     var cell2 = new Cell.UnsaltedReveal(DataType.BIG_INT, data.slice());
     assertEquals(cell1, cell2);
 
-    // Same raw bytes but different types → different type byte in hash → not equal
+    // Same raw bytes but different types -> different type byte in hash -> not equal
     var rawBytes = ByteBuffer.wrap(new byte[] { 65, 66, 67 });
     var bigIntCell = new Cell.UnsaltedReveal(DataType.BIG_INT, rawBytes.slice());
     var stringCell = new Cell.UnsaltedReveal(DataType.STRING, rawBytes.slice());

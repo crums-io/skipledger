@@ -91,7 +91,7 @@ public class EpochSeedParserTest extends SelfAwareTestCase {
 
   @Test
   public void testHexSeedRejected() {
-    // 64-char hex is NOT accepted — only Base64_32 (43 chars) is supported
+    // 64-char hex is NOT accepted -- only Base64_32 (43 chars) is supported
     JSONObject jObj = new JSONObject();
     jObj.put(EpochSeedParser.SEED_START_KEY, 1L);
     jObj.put(EpochSeedParser.SEED_KEY, "a".repeat(64));
