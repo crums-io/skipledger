@@ -246,9 +246,9 @@ public class DataTypeTest {
     assertEquals(2, BIG_DEC.minimumSize());
 
     // isNumber
-    for (DataType t : new DataType[]{ LONG, DATE, BIG_INT, BIG_DEC })
+    for (DataType t : new DataType[]{ LONG, BIG_INT, BIG_DEC })
       assertTrue(t.isNumber(),  t + " should be a number");
-    for (DataType t : new DataType[]{ NULL, STRING, BOOL, BYTES, HASH })
+    for (DataType t : new DataType[]{ NULL, DATE, STRING, BOOL, BYTES, HASH })
       assertFalse(t.isNumber(), t + " should not be a number");
 
     // singleton predicate methods

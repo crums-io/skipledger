@@ -6,6 +6,8 @@ package io.crums.sldg.src;
 
 import static io.crums.sldg.src.SharedConstants.*;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.NoSuchElementException;
@@ -133,6 +135,100 @@ public abstract class Cell {
    */
   public Optional<ByteBuffer> getData() {
     return hasData() ? Optional.of(data()) : Optional.empty();
+  }
+
+  /**
+   * Returns {@code true} if the value in the {@code other} is
+   * <em>determined</em> to be equal to this one. As a rule of thumb,
+   * this means {@code this} and the {@code other} cell have the
+   * same {@linkplain #data()} and the same {@linkplain #dataType()}s.
+   * 
+   * <p>
+   * The exception to the above rule is when either {@code this} or
+   * the {@code other} cell is redacted. In that event, they are compared
+   * by {@linkplain #hash()}. Since hash of 2 cells are equal
+   * <strong>iff</strong> one is a redacted version of the other, two
+   * cells with the same value but different [or no] {@linkplain #salt()}
+   * will evaluate to {@code false}.
+   * </p><p>
+   * Mixed numeric data types are compared arithmetically. The numeric
+   * types are:
+   * {@linkplain DataType#LONG}, {@linkplain DataType#BIG_INT}, and
+   * {@linkplain DataType#BIG_DEC}.
+   * </p><p>
+   * <em>This property is symmetric.</em> I.e. for any two instances
+   * {@code a} and {@code b}, the expression<br/>
+   * {@code a.equalValue(b) == b.equalValue(a)}
+   * always evaluates {@code true}.
+   * </p>
+   * 
+   * @return {@code true}, if the 2 cells' values can be determined to be equal
+   */
+  public final boolean equalValue(Cell other) {
+    return equalValue(other, true);
+  }
+
+  /**
+   * Returns {@code true} if the value in the {@code other} is
+   * <em>determined</em> to be equal to this one. As a rule of thumb,
+   * this means {@code this} and the {@code other} cell have the
+   * same {@linkplain #data()} and the same {@linkplain #dataType()}s.
+   * 
+   * <p>
+   * The exception to the above rule is when either {@code this} or
+   * the {@code other} cell is redacted. In that event, they are compared
+   * by {@linkplain #hash()}. Since hash of 2 cells are equal
+   * <strong>iff</strong> one is a redacted version of the other, two
+   * cells with the same value but different [or no] {@linkplain #salt()}
+   * will evaluate to {@code false}.
+   * </p><p>
+   * The {@code coerceNumbers} flag, allows mixed, arithmetic comparison
+   * for the numeric data types
+   * {@linkplain DataType#LONG}, {@linkplain DataType#BIG_INT}, and
+   * {@linkplain DataType#BIG_DEC}.
+   * </p><p>
+   * <em>This property is symmetric.</em> I.e. for any two instances
+   * {@code a} and {@code b}, and coerce-param {@code co}, the expression<br/>
+   * {@code a.equalValue(b, co) == b.equalValue(a, co)} always
+   * evaluates {@code true}.
+   * </p>
+   * 
+   * @param coerceNumbers if {@code true}, and both types are numeric,
+   *                      then equality is determined by a widening
+   *                      conversion to {@code BigDecimal}.
+   * 
+   * @return {@code true}, if the 2 cells' values can be determined to be equal
+   */
+  public final boolean equalValue(Cell other, boolean coerceNumbers) {
+    if (isRedacted() || other.isRedacted())
+      // below also takes care of identity
+      return hash().equals(other.hash());
+    
+    DataType type = dataType();
+    DataType oType = other.dataType();
+    if (type == oType)
+      return data().equals(other.data());
+    
+    return
+        coerceNumbers &&
+        type.isNumber() && oType.isNumber() &&
+        other.decimalValue().equals(decimalValue());
+  }
+
+
+  private BigDecimal decimalValue() {
+    DataType type = dataType();
+    assert type.isNumber();
+    Object value = value();
+    return switch (type) {
+      case LONG    -> new BigDecimal((Long) value);
+      case BIG_INT -> new BigDecimal((BigInteger) value);
+      case BIG_DEC -> (BigDecimal) value;
+
+      default -> throw new RuntimeException(
+          "unaccounted type %s for value %s"
+          .formatted(type, value));
+    };
   }
   
   

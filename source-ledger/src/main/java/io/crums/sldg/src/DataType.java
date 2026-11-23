@@ -51,9 +51,15 @@ public enum DataType {
    * Scale must be within the range [-128, 127], inclusive.
    */
   BIG_DEC(0, 2),
-  /** UTC. This is a qualified {@linkplain #LONG}. */
+  /**
+   * UTC millis. A qualified {@linkplain #LONG} that does not count as a number.
+   * @see #isNumber()
+   */
   DATE(8),
-  /** Boolean value. 1 byte.  */
+  /**
+   * Boolean value. 1 byte. Does not quailfy as a number.
+   * @see #isNumber()
+   */
   BOOL(1),
   /** Blob of bytes. (Untyped). Variable size. */
   BYTES(0),
@@ -205,13 +211,12 @@ public enum DataType {
   }
   
   /**
-   * Returns {@code true} iff this type is a number. Note,
-   * {@linkplain #BOOL} is <em>not</em> considered a number.
+   * Returns {@code true} iff this type is a number. Note, neither
+   * {@linkplain #BOOL} nor {@linkplain #DATE} are considered numbers.
    */
   public boolean isNumber() {
     switch (this) {
       case LONG:
-      case DATE:
       case BIG_INT:
       case BIG_DEC:
         return true;
@@ -219,6 +224,13 @@ public enum DataType {
       default:
         return false;
     }
+  }
+
+  /**
+   * Returns {@code true} iff this is the {@linkplain #DATE} insstance.
+   */
+  public boolean isDate() {
+    return this == DATE;
   }
 
   /**
