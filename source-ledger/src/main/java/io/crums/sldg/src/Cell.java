@@ -13,6 +13,7 @@ import java.security.MessageDigest;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
+import io.crums.util.IntegralStrings;
 import io.crums.util.io.buffer.BufferUtils;
 import io.crums.sldg.salt.TableSalt;
 
@@ -411,13 +412,6 @@ public abstract class Cell {
       return true;
     }
 
-    void checkDataSize(DataType type, int dataSize) {
-      if (dataSize < type.minimumSize())
-        throw new IllegalArgumentException(
-            "data too small for %s: %d < minimum %d"
-            .formatted(type, dataSize, type.minimumSize()));
-    }
-
   }
   
   
@@ -558,7 +552,9 @@ public abstract class Cell {
       this.type = (byte) type.ordinal();
       this.saltData = saltData;
       assert saltData.remaining() == saltData.capacity();
-      checkDataSize(type, saltData.remaining() - HASH_WIDTH);
+      if (saltData.remaining() - HASH_WIDTH < 1)
+        throw new IllegalArgumentException("too few remaining bytes: " + saltData);
+      type.checkData(data());
     }
     
     /**
@@ -566,9 +562,6 @@ public abstract class Cell {
      */
     public SaltedCell(ByteBuffer saltData, DataType type) {
       this(type, saltData.slice(), false);
-      if (this.saltData.remaining() < HASH_WIDTH)
-        throw new IllegalArgumentException(
-            "too few remaining bytes: " + saltData);
     }
     
 
@@ -685,7 +678,7 @@ public abstract class Cell {
       this.data = data;
       this.type = (byte) type.ordinal();
       assert checkArgs(rowSalt, index, data);
-      checkDataSize(type, data.remaining());
+      type.checkData(data);
     }
     
     
@@ -755,7 +748,7 @@ public abstract class Cell {
       this.type = (byte) type.ordinal();
       this.data = data;
       assert data.remaining() == data.capacity();
-      checkDataSize(type, data.remaining());
+      type.checkData(data);
     }
     
     /**

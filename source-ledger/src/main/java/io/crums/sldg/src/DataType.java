@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Date;
 
+import io.crums.util.IntegralStrings;
 import io.crums.util.Strings;
 
 /**
@@ -184,11 +185,61 @@ public enum DataType {
   public int minimumSize() {
     return minimumSize;
   }
+
+  /**
+   * Returns {@code true} iff the given {@code data} is acceptable for this
+   * type. See {@link #checkData(ByteBuffer)} for the wrench throwing version
+   * of this method.
+   */
+  public boolean acceptsData(ByteBuffer data) {
+    int dataSize = data.remaining();
+    if (isFixedSize()) {
+      return this == NULL ?
+          Cell.UNSALTED_NULL.data().equals(data) : size == dataSize;
+    }
+    return dataSize >= minimumSize;
+  }
+
+
+  /**
+   * Checks the shape of the given {@code data} against this type
+   * and throws if it fails inspection.
+   * 
+   * @see #acceptsData(ByteBuffer)
+   * @throws IllegalArgumentException
+   *          if {@link #acceptsData(ByteBuffer) acceptsData(data)} returns
+   *          {@code false}
+   */
+  public void checkData(ByteBuffer data) throws IllegalArgumentException {
+    if (acceptsData(data))
+      return;
+    String msg;
+    if (this == NULL) {
+      int moreBytes = data.remaining() - size;
+      ByteBuffer dataHex = moreBytes > 0 ? data.slice().limit(size) : data;
+      msg =
+          "the NULL type's value is fixed (in hex: %s); actual given: %s%s"
+          .formatted(
+              IntegralStrings.toHex(Cell.UNSALTED_NULL.data()),
+              IntegralStrings.toHex(dataHex),
+              moreBytes > 0 ? ".. (" + moreBytes + " more)" : "");
+    } else {
+      int moreBytes = data.remaining() - 8;
+      ByteBuffer dataHex = moreBytes > 0 ? data.slice().limit(8) : data;
+      msg =
+          "data shape mismatch for type %s: %s%s"
+          .formatted(
+              this,
+              IntegralStrings.toHex(dataHex),
+              moreBytes > 0 ? ".. (" + moreBytes + " more)" : "");
+    }
+    throw new IllegalArgumentException(msg);
+  }
   
   
   /**
-   * Returns the type's byte-size, if fixed; zero, otherwise. The only exception
-   * to this rule is {@linkplain #NULL}.
+   * Returns the type's data-size (bytes), if fixed; zero, otherwise.
+   * Note {@linkplain #NULL}'s data-size is <em>5</em>, not zero.
    * 
    * @return &ge; 0
    */

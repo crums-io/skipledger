@@ -36,7 +36,7 @@ public class TableSalt implements AutoCloseable {
    * which is why this method is static.
    * 
    * @param rowSalt     computed from {@linkplain #rowSalt(long, MessageDigest)}
-   * @param cell        not bounds checked, usually 1-based
+   * @param cell        not bounds checked, zero-based
    * @param digest      not null
    * 
    * @return    hash of the concatenation of {@code [cell][rowSalt][~cell]}
@@ -56,7 +56,7 @@ public class TableSalt implements AutoCloseable {
    * 
    * @param rowSalt     computed from {@linkplain #rowSalt(long, MessageDigest)}.
    *                    <em>On return, contains no remaining bytes!</em>
-   * @param cell        not bounds checked, usually 1-based
+   * @param cell        not bounds checked, zero-based
    * @param digest      not null
    * 
    * @return    hash of the concatenation of {@code [cell][rowSalt][~cell]}
